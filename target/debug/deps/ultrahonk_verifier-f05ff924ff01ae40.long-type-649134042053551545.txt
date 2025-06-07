@@ -1,3 +1,0 @@
-&(&short_weierstrass::affine::Affine<ark_bn254::curves::g1::Config>, &short_weierstrass::affine::Affine<ark_bn254::curves::g2::Config>)
-ark_ec::bn::G1Prepared<ark_bn254::Config>: From<&(&ark_ec::short_weierstrass::Affine<ark_bn254::g1::Config>, &ark_ec::short_weierstrass::Affine<ark_bn254::g2::Config>)>
-&(&ark_ec::short_weierstrass::Affine<ark_bn254::g1::Config>, &ark_ec::short_weierstrass::Affine<ark_bn254::g2::Config>)
