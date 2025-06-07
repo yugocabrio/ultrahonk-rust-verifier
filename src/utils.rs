@@ -8,11 +8,20 @@ use std::fs::File;
 use std::io::Read;
 use num_bigint::BigUint;
 use num_traits::Num;
+use ark_ff::PrimeField;
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
     Fr::from_bytes(bytes)
 }
+
+/// Big-Endian 32 byte → Fq （mod p で受け入れる）
+fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
+    let mut bytes_le = *bytes_be;   // 32-byte copy
+    bytes_le.reverse();             // BE → LE
+    Fq::from_le_bytes_mod_order(&bytes_le)
+}
+
 
 /// Convert 128 bytes into a G1Point.
 /// The layout is four consecutive 32‐byte chunks: x_low, x_high, y_low, y_high.
@@ -35,12 +44,12 @@ fn bytes_to_g1_point(bytes: &[u8]) -> G1Point {
     let x_bytes = big_x.to_bytes_be();
     let mut x_arr = [0u8; 32];
     x_arr[32 - x_bytes.len()..].copy_from_slice(&x_bytes);
-    let fq_x = Fq::deserialize_uncompressed(&x_arr[..]).unwrap();
+    let fq_x = fq_from_be_bytes(&x_arr);
 
     let y_bytes = big_y.to_bytes_be();
     let mut y_arr = [0u8; 32];
     y_arr[32 - y_bytes.len()..].copy_from_slice(&y_bytes);
-    let fq_y = Fq::deserialize_uncompressed(&y_arr[..]).unwrap();
+    let fq_y = fq_from_be_bytes(&y_arr);
 
     G1Point { x: fq_x, y: fq_y }
 }
@@ -179,10 +188,10 @@ pub fn load_vk(path: &str) -> VerificationKey {
 
     // Helper to convert combined BigUint into an Fq
     fn biguint_to_fq(x: BigUint) -> Fq {
-        let be_bytes = x.to_bytes_be();
+        let be = x.to_bytes_be();
         let mut arr = [0u8; 32];
-        arr[32 - be_bytes.len()..].copy_from_slice(&be_bytes);
-        Fq::deserialize_uncompressed(&arr[..]).unwrap()
+        arr[32 - be.len()..].copy_from_slice(&be);
+        fq_from_be_bytes(&arr)
     }
 
     // Starting index for G1 points: 20
