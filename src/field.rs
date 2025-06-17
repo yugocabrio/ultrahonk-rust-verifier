@@ -1,7 +1,7 @@
 //! Finite-field wrapper for BN254 Fr, compatible with Arkworks 0.5.
 
 use ark_bn254::Fr as ArkFr;
-use ark_ff::{Field, Zero, BigInteger256};
+use ark_ff::{Field, Zero, BigInteger256, PrimeField, BigInteger, FpConfig};
 use ark_serialize::{CanonicalSerialize};
 use std::ops::{Add, Mul, Neg, Sub};
 
@@ -25,31 +25,24 @@ impl Fr {
     }
 
     /// Convert to 32-byte big-endian representation.
+    #[inline(always)]
     pub fn to_bytes(&self) -> [u8; 32] {
-        let mut out = [0u8; 32];
-        // Convert Arkworks field element to Montgomery form BigInteger256
-        let bigint: BigInteger256 = self.0.into();
-
-        // Convert LE limbs to BE bytes by reversing and concatenating
-        for (i, limb) in bigint.0.iter().rev().enumerate() {
-            out[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_be_bytes());
-        }
-        out
+        let mut le = self.0.into_bigint().to_bytes_le(); // 最低限の長さ
+        le.resize(32, 0);                                // 32 byte 埋め
+        le.reverse();                                    // LE → BE
+        let mut be = [0u8; 32];
+        be.copy_from_slice(&le);
+        be
     }
 
     /// Construct from a 32-byte big-endian array.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        // limbs[0] が最下位 64bit になるように並べる
-        let mut limbs = [0u64; 4];
-        for i in 0..4 {
-            let start = 24 - i * 8;          // 24,16,8,0
-            limbs[i] = u64::from_be_bytes(
-                bytes[start..start + 8].try_into().unwrap(),
-            );
-        }
-        Fr(ArkFr::new(ark_ff::BigInt::new(limbs)))
+        // ark-ff は LE で `from_le_bytes_mod_order` を提供しているので
+        // BE → LE へ並べ替えて呼び出す
+        let mut tmp = *bytes;
+        tmp.reverse();                           // BE → LE
+        Fr(ArkFr::from_le_bytes_mod_order(&tmp)) // 常に Some を返し mod p 還元も行う
     }
-    
 
 
     /// Return multiplicative inverse.

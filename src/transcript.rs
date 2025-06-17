@@ -1,11 +1,24 @@
-//! Fiat–Shamir transcript for UltraHonk
+//! Fiat–Shamir transcript for UltraHonk  (Rust ⇔ TS 完全一致)
 
-use crate::crypto::keccak256;
-use crate::field::Fr;
-use crate::types::{Proof, Transcript, RelationParameters};
-use ark_serialize::CanonicalSerialize;
+use crate::{
+    crypto::keccak256,
+    field::Fr,
+    types::{Proof, RelationParameters, Transcript},
+    utils::fq_to_halves_be,
+};
+use ark_bn254::G1Affine;
 
-/// Split a 256-bit Fr into two 128-bit challenges.
+/* ───── helper ───── */
+
+fn push_point(buf: &mut Vec<u8>, pt: &G1Affine) {
+    let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
+    let (y_lo, y_hi) = fq_to_halves_be(&pt.y);
+    buf.extend_from_slice(&x_lo);
+    buf.extend_from_slice(&x_hi);
+    buf.extend_from_slice(&y_lo);
+    buf.extend_from_slice(&y_hi);
+}
+
 fn split(fr: Fr) -> (Fr, Fr) {
     let b = fr.to_bytes();
     let mut lo = [0u8; 32];
@@ -15,12 +28,19 @@ fn split(fr: Fr) -> (Fr, Fr) {
     (Fr::from_bytes(&lo), Fr::from_bytes(&hi))
 }
 
-/// Hash arbitrary bytes into an Fr.
+#[inline(always)]
 fn hash_to_fr(bytes: &[u8]) -> Fr {
     Fr::from_bytes(&keccak256(bytes))
 }
 
-/// Generate η-challenges.
+fn u64_to_be32(x: u64) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out[24..].copy_from_slice(&x.to_be_bytes());
+    out
+}
+
+/* ───── ① η ───── */
+
 fn gen_eta(
     proof: &Proof,
     pub_inputs: &[Vec<u8>],
@@ -29,78 +49,87 @@ fn gen_eta(
     offset: u64,
 ) -> (RelationParameters, Fr) {
     let mut data = Vec::new();
-    data.extend_from_slice(&cs.to_be_bytes());
-    data.extend_from_slice(&pis.to_be_bytes());
-    data.extend_from_slice(&offset.to_be_bytes());
-    for pi in pub_inputs { data.extend_from_slice(pi); }
-    for w in &[&proof.w1, &proof.w2, &proof.w3] {
-        let pt = w.to_affine();
-        let mut x_bytes = Vec::new();
-        let mut y_bytes = Vec::new();
-        pt.x.serialize_compressed(&mut x_bytes).unwrap();
-        pt.y.serialize_compressed(&mut y_bytes).unwrap();
-        data.extend_from_slice(&x_bytes);
-        data.extend_from_slice(&y_bytes);
+    data.extend_from_slice(&u64_to_be32(cs));
+    data.extend_from_slice(&u64_to_be32(pis));
+    data.extend_from_slice(&u64_to_be32(offset));
+    for pi in pub_inputs {
+        data.extend_from_slice(pi);
     }
+    for w in &[&proof.w1, &proof.w2, &proof.w3] {
+        push_point(&mut data, &w.to_affine());
+    }
+
     let h = hash_to_fr(&data);
     let (eta, eta_two) = split(h);
     let h2 = hash_to_fr(&h.to_bytes());
     let (eta_three, _) = split(h2);
-    (RelationParameters {
-        eta, eta_two, eta_three,
-        beta: Fr::zero(),
-        gamma: Fr::zero(),
-        public_inputs_delta: Fr::zero(),
-    }, h2)
+
+    (
+        RelationParameters {
+            eta,
+            eta_two,
+            eta_three,
+            beta: Fr::zero(),
+            gamma: Fr::zero(),
+            public_inputs_delta: Fr::zero(),
+        },
+        h2,
+    )
 }
 
-/// Generate β, γ.
+/* ───── ② β, γ ───── */
+
 fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
     for w in &[&proof.lookup_read_counts, &proof.lookup_read_tags, &proof.w4] {
-        let pt = w.to_affine();
-        let mut x_bytes = Vec::new();
-        let mut y_bytes = Vec::new();
-        pt.x.serialize_compressed(&mut x_bytes).unwrap();
-        pt.y.serialize_compressed(&mut y_bytes).unwrap();
-        data.extend_from_slice(&x_bytes);
-        data.extend_from_slice(&y_bytes);
+        push_point(&mut data, &w.to_affine());
     }
     let h = hash_to_fr(&data);
     let (beta, gamma) = split(h);
     (beta, gamma, h)
 }
 
-/// Generate α's.
-fn gen_alphas(prev: Fr) -> (Vec<Fr>, Fr) {
-    let mut alphas = Vec::with_capacity(25);
-    let mut cur = prev;
-    for _ in 0..12 {
-        let (a_lo, a_hi) = split(cur);
-        alphas.push(a_lo);
-        alphas.push(a_hi);
-        cur = hash_to_fr(&cur.to_bytes());
+/* ───── ③ α’s  (修正ポイント) ───── */
+
+fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
+    // α₀, α₁ 用のハッシュ入力
+    let mut data = prev.to_bytes().to_vec();
+    for w in &[&proof.lookup_inverses, &proof.z_perm] {
+        push_point(&mut data, &w.to_affine());
     }
-    if alphas.len() < 25 {
-        let (last, _) = split(cur);
-        alphas.push(last);
+    let mut cur = hash_to_fr(&data);
+
+    let mut alphas = Vec::with_capacity(25);
+    // α₀, α₁
+    let (a0, a1) = split(cur);
+    alphas.push(a0);
+    alphas.push(a1);
+
+    // α₂ … α₂₄
+    while alphas.len() < 25 {
+        cur = hash_to_fr(&cur.to_bytes());
+        let (lo, hi) = split(cur);
+        alphas.push(lo);
+        if alphas.len() < 25 {
+            alphas.push(hi);
+        }
     }
     (alphas, cur)
 }
 
-/// Generate vector of challenges by hashing sequentially.
-fn gen_challenges(prev: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
-    let mut v = Vec::with_capacity(rounds);
-    let mut cur = prev;
+/* ───── ④ gate / u challenges ───── */
+
+fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
+    let mut out = Vec::with_capacity(rounds);
     for _ in 0..rounds {
         cur = hash_to_fr(&cur.to_bytes());
-        let (r, _) = split(cur);
-        v.push(r);
+        out.push(split(cur).0);
     }
-    (v, cur)
+    (out, cur)
 }
 
-/// Generate transcript fully.
+/* ───── transcript ───── */
+
 pub fn generate_transcript(
     proof: &Proof,
     pub_inputs: &[Vec<u8>],
@@ -110,75 +139,72 @@ pub fn generate_transcript(
 ) -> Transcript {
     // 1) η
     let (mut rp, mut cur) = gen_eta(proof, pub_inputs, cs, pis, offset);
+
     // 2) β, γ
-    let (b, g, cur2) = gen_beta_gamma(cur, proof);
-    rp.beta = b; rp.gamma = g; cur = cur2;
-    // 3) α's
-    let (alphas, cur3) = gen_alphas(cur);
-    cur = cur3;
+    let (beta, gamma, tmp) = gen_beta_gamma(cur, proof);
+    rp.beta = beta;
+    rp.gamma = gamma;
+    cur = tmp;
+
+    // 3) α’s   ← 修正した関数を使用
+    let (alphas, tmp) = gen_alphas(cur, proof);
+    cur = tmp;
+
     // 4) gate challenges
     let log_n = (cs as f64).log2() as usize;
-    let (gates, cur4) = gen_challenges(cur, log_n);
-    cur = cur4;
-    // 5) sumcheck u's
-    let (us, cur5) = {
-        let mut tmp = cur;
+    let (gate_chals, tmp) = gen_challenges(cur, log_n);
+    cur = tmp;
+
+    // 5) sumcheck u challenges
+    let (u_chals, tmp) = {
+        let mut t = cur;
         let mut vs = Vec::with_capacity(log_n);
         for r in 0..log_n {
-            let mut data = tmp.to_bytes().to_vec();
-            for &coeff in proof.sumcheck_univariates[r].iter() {
-                data.extend_from_slice(&coeff.to_bytes());
+            let mut d = t.to_bytes().to_vec();
+            for &c in &proof.sumcheck_univariates[r] {
+                d.extend_from_slice(&c.to_bytes());
             }
-            tmp = hash_to_fr(&data);
-            let (u, _) = split(tmp);
-            vs.push(u);
+            t = hash_to_fr(&d);
+            vs.push(split(t).0);
         }
-        (vs, tmp)
+        (vs, t)
     };
-    cur = cur5;
+    cur = tmp;
+
     // 6) ρ
     let mut data = cur.to_bytes().to_vec();
-    for &e in proof.sumcheck_evaluations.iter() {
+    for &e in &proof.sumcheck_evaluations {
         data.extend_from_slice(&e.to_bytes());
     }
     let rho = split(hash_to_fr(&data)).0;
     cur = hash_to_fr(&data);
+
     // 7) gemini_r
     let mut data = cur.to_bytes().to_vec();
-    for pt in proof.gemini_fold_comms.iter() {
-        let a = pt.to_affine();
-        let mut x_bytes = Vec::new();
-        let mut y_bytes = Vec::new();
-        a.x.serialize_compressed(&mut x_bytes).unwrap();
-        a.y.serialize_compressed(&mut y_bytes).unwrap();
-        data.extend_from_slice(&x_bytes);
-        data.extend_from_slice(&y_bytes);
+    for pt in &proof.gemini_fold_comms {
+        push_point(&mut data, &pt.to_affine());
     }
     let gemini_r = split(hash_to_fr(&data)).0;
     cur = hash_to_fr(&data);
+
     // 8) shplonk_nu
     let mut data = cur.to_bytes().to_vec();
-    for &a in proof.gemini_a_evaluations.iter() {
+    for &a in &proof.gemini_a_evaluations {
         data.extend_from_slice(&a.to_bytes());
     }
     let shplonk_nu = split(hash_to_fr(&data)).0;
     cur = hash_to_fr(&data);
+
     // 9) shplonk_z
     let mut data = cur.to_bytes().to_vec();
-    let a = proof.shplonk_q.to_affine();
-    let mut x_bytes = Vec::new();
-    let mut y_bytes = Vec::new();
-    a.x.serialize_compressed(&mut x_bytes).unwrap();
-    a.y.serialize_compressed(&mut y_bytes).unwrap();
-    data.extend_from_slice(&x_bytes);
-    data.extend_from_slice(&y_bytes);
+    push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
     Transcript {
         rel_params: rp,
         alphas,
-        gate_challenges: gates,
-        sumcheck_u_challenges: us,
+        gate_challenges: gate_chals,
+        sumcheck_u_challenges: u_chals,
         rho,
         gemini_r,
         shplonk_nu,
