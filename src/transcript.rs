@@ -7,6 +7,7 @@ use crate::{
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
+use hex;                               // ←★追加
 
 /* ───── helper ───── */
 
@@ -37,6 +38,19 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
     let mut out = [0u8; 32];
     out[24..].copy_from_slice(&x.to_be_bytes());
     out
+}
+
+/* ───── (★) デバッグ用ユーティリティ ───── */
+
+#[inline(always)]
+fn dbg_fr(tag: &str, x: &Fr) {
+    println!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
+}
+#[inline(always)]
+fn dbg_vec(tag: &str, xs: &[Fr]) {
+    for (i, v) in xs.iter().enumerate() {
+        println!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
+    }
 }
 
 /* ───── ① η ───── */
@@ -89,10 +103,9 @@ fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     (beta, gamma, h)
 }
 
-/* ───── ③ α’s  (修正ポイント) ───── */
+/* ───── ③ α’s (修正ポイント) ───── */
 
 fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
-    // α₀, α₁ 用のハッシュ入力
     let mut data = prev.to_bytes().to_vec();
     for w in &[&proof.lookup_inverses, &proof.z_perm] {
         push_point(&mut data, &w.to_affine());
@@ -100,12 +113,10 @@ fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     let mut cur = hash_to_fr(&data);
 
     let mut alphas = Vec::with_capacity(25);
-    // α₀, α₁
     let (a0, a1) = split(cur);
     alphas.push(a0);
     alphas.push(a1);
 
-    // α₂ … α₂₄
     while alphas.len() < 25 {
         cur = hash_to_fr(&cur.to_bytes());
         let (lo, hi) = split(cur);
@@ -128,7 +139,7 @@ fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
     (out, cur)
 }
 
-/* ───── transcript ───── */
+/* ───── transcript main ───── */
 
 pub fn generate_transcript(
     proof: &Proof,
@@ -146,7 +157,7 @@ pub fn generate_transcript(
     rp.gamma = gamma;
     cur = tmp;
 
-    // 3) α’s   ← 修正した関数を使用
+    // 3) α’s
     let (alphas, tmp) = gen_alphas(cur, proof);
     cur = tmp;
 
@@ -199,6 +210,22 @@ pub fn generate_transcript(
     let mut data = cur.to_bytes().to_vec();
     push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
+
+    /* ───── (★) DEBUG DUMP ───── */
+    println!("===== TRANSCRIPT (Rust) =====");
+    dbg_fr ("eta"      , &rp.eta);
+    dbg_fr ("eta_two"  , &rp.eta_two);
+    dbg_fr ("eta_three", &rp.eta_three);
+    dbg_fr ("beta"     , &rp.beta);
+    dbg_fr ("gamma"    , &rp.gamma);
+    dbg_vec("alpha"    , &alphas);
+    dbg_vec("gate_ch"  , &gate_chals);
+    dbg_vec("u_ch"     , &u_chals);
+    dbg_fr ("rho"         , &rho);
+    dbg_fr ("gemini_r"    , &gemini_r);
+    dbg_fr ("shplonk_nu"  , &shplonk_nu);
+    dbg_fr ("shplonk_z"   , &shplonk_z);
+    println!("=============================");
 
     Transcript {
         rel_params: rp,
