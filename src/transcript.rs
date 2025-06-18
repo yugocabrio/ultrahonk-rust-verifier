@@ -3,7 +3,7 @@
 use crate::{
     crypto::keccak256,
     field::Fr,
-    types::{Proof, RelationParameters, Transcript},
+    types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
@@ -162,15 +162,14 @@ pub fn generate_transcript(
     cur = tmp;
 
     // 4) gate challenges
-    let log_n = (cs as f64).log2() as usize;
-    let (gate_chals, tmp) = gen_challenges(cur, log_n);
+    let (gate_chals, tmp) = gen_challenges(cur, CONST_PROOF_SIZE_LOG_N);
     cur = tmp;
 
     // 5) sumcheck u challenges
     let (u_chals, tmp) = {
         let mut t = cur;
-        let mut vs = Vec::with_capacity(log_n);
-        for r in 0..log_n {
+        let mut vs = Vec::with_capacity(CONST_PROOF_SIZE_LOG_N);
+        for r in 0..CONST_PROOF_SIZE_LOG_N {
             let mut d = t.to_bytes().to_vec();
             for &c in &proof.sumcheck_univariates[r] {
                 d.extend_from_slice(&c.to_bytes());

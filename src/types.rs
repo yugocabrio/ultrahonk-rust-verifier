@@ -3,6 +3,7 @@ use ark_bn254::{Fq, G1Affine};
 
 /// Number of subrelations in the Ultra Honk protocol.
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
+pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
 
 /// Wire indices for the Ultra Honk protocol.
 #[derive(Copy, Clone, Debug)]
