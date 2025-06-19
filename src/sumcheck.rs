@@ -1,77 +1,84 @@
-//! Sumcheck verification
+//! Sum-check verifier ― Ultra-/Plonk‐Honk compatible
+//! -------------------------------------------------
 
-use crate::field::Fr;
-use crate::relations::accumulate_relation_evaluations;
-use crate::types::{Transcript, VerificationKey};
-use lazy_static::lazy_static;
+use crate::{
+    field::Fr,
+    relations::accumulate_relation_evaluations,
+    types::{Transcript, VerificationKey},
+};
 
-lazy_static! {
-    /// Barycentric Lagrange denominators for 8‐point domain (from TS).
-    static ref BARYCENTRIC_LAGRANGE_DENOMINATORS: [Fr; 8] = [
-        Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51"),
-        Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000002d0"),
-        Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11"),
-        Fr::from_str("0x0000000000000000000000000000000000000000000000000000000000000090"),
-        Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff71"),
-        Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000000f0"),
-        Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31"),
-        Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000013b0"),
-    ];
+/// 8-point barycentricラグランジュ係数（TS と byte-perfect 同一）
+const BARYCENTRIC: [&str; 8] = [
+    "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51",
+    "0x00000000000000000000000000000000000000000000000000000000000002d0",
+    "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11",
+    "0x0000000000000000000000000000000000000000000000000000000000000090",
+    "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff71",
+    "0x00000000000000000000000000000000000000000000000000000000000000f0",
+    "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31",
+    "0x00000000000000000000000000000000000000000000000000000000000013b0",
+];
+
+lazy_static::lazy_static! {
+    static ref BARY: [Fr; 8] = BARYCENTRIC.map(Fr::from_str);
 }
 
-/// Check that round_univar[0] + round_univar[1] == target.
-fn check_sum(round_univar: &[Fr], target: Fr) -> bool {
-    let sum = round_univar[0] + round_univar[1];
-    sum == target
+/// --- helpers -------------------------------------------------------------
+
+/// u₀+u₁ が target と一致するか
+#[inline(always)]
+fn check_round_sum(u: &[Fr], target: Fr) -> bool {
+    u[0] + u[1] == target
 }
 
-/// Compute next sumcheck target via barycentric formula.
-fn compute_next_target(round_univar: &[Fr], challenge: Fr) -> Fr {
-    // numerator = ∏_{i=0..7}(challenge − i)
-    let mut numerator = Fr::one();
+/// 次ラウンドの target を計算（barycentric 補間）
+fn next_target(u: &[Fr], χ: Fr) -> Fr {
+    // B(χ)  = ∏(χ-i)
+    let mut b = Fr::one();
     for i in 0..8 {
-        numerator = numerator * (challenge - Fr::from_u64(i));
+        b = b * (χ - Fr::from_u64(i as u64));
     }
 
-    // Σ u_i / (D_i · (challenge − i))  =  Σ u_i · ((D_i · (challenge − i))⁻¹)
-    let mut accumulator = Fr::zero();
-    for i in 0..8u64 {
-        let denom = BARYCENTRIC_LAGRANGE_DENOMINATORS[i as usize] * (challenge - Fr::from_u64(i));
-        let inv   = denom.inverse();                    // 1 / (D_i · (challenge − i))
-        accumulator = accumulator + round_univar[i as usize] * inv;
+    // Σ u_i / (D_i·(χ-i))
+    let mut acc = Fr::zero();
+    for i in 0..8 {
+        let inv = (BARY[i] * (χ - Fr::from_u64(i as u64))).inverse();
+        acc = acc + u[i] * inv;
     }
-
-    numerator * accumulator
+    b * acc
 }
 
-/// Update running "pow_partial_eval" for each round.
-fn update_pow_partial(eval: Fr, gate_ch: Fr, challenge: Fr) -> Fr {
-    let term = Fr::one() + (challenge * (gate_ch - Fr::one()));
-    eval * term
+/// POW の部分評価を 1 ラウンド進める
+#[inline(always)]
+fn update_pow(pow: Fr, gate_ch: Fr, χ: Fr) -> Fr {
+    pow * (Fr::one() + χ * (gate_ch - Fr::one()))
 }
 
-/// Verify the sumcheck phase. Returns Err(msg) on failure.
+/// --- public API ----------------------------------------------------------
+
+/// Returns `Ok(())` if the sum-check passes, otherwise `Err(msg)`.
 pub fn verify_sumcheck(
     proof: &crate::types::Proof,
     tx: &Transcript,
     vk: &VerificationKey,
 ) -> Result<(), String> {
-    let mut target = Fr::zero();
-    let mut pow_partial = Fr::one();
     let log_n = vk.log_circuit_size as usize;
+    let mut target     = Fr::zero();
+    let mut pow_partial = Fr::one();
 
-    // 1) Check each round's low-degree sum and prepare next target
-    for round in 0..log_n {
-        let univar = &proof.sumcheck_univariates[round];
-        if !check_sum(univar, target) {
-            return Err(format!("Sumcheck first-pass failed at round {}", round));
+    // ── (1) round reductions ────────────────────────────────────────────
+    for r in 0..log_n {
+        let uni = &proof.sumcheck_univariates[r];
+
+        if !check_round_sum(uni, target) {
+            return Err(format!("sum-check round {r}: linear check failed"));
         }
-        let challenge = tx.sumcheck_u_challenges[round];
-        target = compute_next_target(univar, challenge);
-        pow_partial = update_pow_partial(pow_partial, tx.gate_challenges[round], challenge);
+        let χ = tx.sumcheck_u_challenges[r];
+        target      = next_target(uni, χ);
+        pow_partial = update_pow(pow_partial, tx.gate_challenges[r], χ);
     }
 
-    // 2) Accumulate all relation evaluations and compare with target
+    // ── (2) relation evaluations ────────────────────────────────────────
     let grand = accumulate_relation_evaluations(
         &proof.sumcheck_evaluations,
         &tx.rel_params,
@@ -79,9 +86,9 @@ pub fn verify_sumcheck(
         pow_partial,
     );
 
-    if grand != target {
-        Err("Final relation aggregate ≠ sumcheck target".into())
-    } else {
+    if grand == target {
         Ok(())
+    } else {
+        Err("Final relation aggregate ≠ sumcheck target".into())
     }
 }

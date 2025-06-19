@@ -1,3 +1,4 @@
+// crypto.rs
 //! Keccak-256 hashing utilities.
 
 use sha3::{Digest, Keccak256};
@@ -12,87 +13,111 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
     out
 }
 
+// field.rs
 //! Finite-field wrapper for BN254 Fr, compatible with Arkworks 0.5.
 
 use ark_bn254::Fr as ArkFr;
-use ark_ff::{Field, Zero, BigInteger256, PrimeField, BigInteger, FpConfig};
-use ark_serialize::{CanonicalSerialize};
+use ark_ff::{Field, Zero, PrimeField};
+use ark_serialize::CanonicalSerialize;
+use hex;
 use std::ops::{Add, Mul, Neg, Sub};
+use ark_ff::BigInteger256;
+
+/*────────────────────────────  OddLength を回避するヘルパ  ──────────────────────────*/
+/// "0x…" を剥がし、奇数桁なら先頭に '0' を付けて **必ず偶数桁** にする。
+#[inline(always)]
+fn normalize_hex(s: &str) -> String {
+    let raw = s.trim_start_matches("0x");
+    if raw.len() & 1 == 1 {
+        let mut out = String::with_capacity(raw.len() + 1);
+        out.push('0');
+        out.push_str(raw);
+        out
+    } else {
+        raw.to_owned()
+    }
+}
+
+/*────────────────────────────  Fr wrapper  ──────────────────────────*/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Fr(pub ArkFr);
 
 impl Fr {
+    /*--------- constructors ---------*/
+
     /// Construct from u64.
     pub fn from_u64(x: u64) -> Self {
         Fr(ArkFr::from(x))
     }
 
     /// Construct from hex string (with or without 0x prefix).
+    /// 偶数桁に正規化してから `hex::decode` するので OddLength 例外は起こさない。
     pub fn from_str(s: &str) -> Self {
-        let without_prefix = s.strip_prefix("0x").unwrap_or(s);
-        let bytes = hex::decode(without_prefix).expect("Invalid hex string");
+        let bytes = hex::decode(normalize_hex(s)).expect("hex decode failed");
         let mut padded = [0u8; 32];
         let offset = 32 - bytes.len();
         padded[offset..].copy_from_slice(&bytes);
         Self::from_bytes(&padded)
     }
 
+    /// Construct from a 32-byte big-endian array.
+    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        // ark-ff は LE を取るので BE → LE
+        let mut tmp = *bytes;
+        tmp.reverse();
+        Fr(ArkFr::from_le_bytes_mod_order(&tmp))
+    }
+
+    /*--------- conversions ---------*/
+
     /// Convert to 32-byte big-endian representation.
     #[inline(always)]
     pub fn to_bytes(&self) -> [u8; 32] {
-        let mut le = self.0.into_bigint().to_bytes_le(); // 最低限の長さ
-        le.resize(32, 0);                                // 32 byte 埋め
-        le.reverse();                                    // LE → BE
-        let mut be = [0u8; 32];
-        be.copy_from_slice(&le);
-        be
+        let bi: BigInteger256 = self.0.into_bigint();
+        let mut out = [0u8; 32];
+        for (i, limb) in bi.0.iter().rev().enumerate() {
+            out[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_be_bytes());
+        }
+        out
     }
 
-    /// Construct from a 32-byte big-endian array.
-    pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        // ark-ff は LE で `from_le_bytes_mod_order` を提供しているので
-        // BE → LE へ並べ替えて呼び出す
-        let mut tmp = *bytes;
-        tmp.reverse();                           // BE → LE
-        Fr(ArkFr::from_le_bytes_mod_order(&tmp)) // 常に Some を返し mod p 還元も行う
+    /// Convert to "0x…" hex string（常に 64 桁）— デバッグ用。
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.to_bytes()))
     }
 
+    /*--------- math helpers ---------*/
 
-    /// Return multiplicative inverse.
     pub fn inverse(&self) -> Self {
         Fr(self.0.inverse().unwrap())
     }
 
-    /// Return zero.
     pub fn zero() -> Self {
         Fr(ArkFr::zero())
     }
 
-    /// Return one.
     pub fn one() -> Self {
         Fr(ArkFr::ONE)
     }
 
-    /// Exponentiation.
     pub fn pow(&self, exp: u128) -> Self {
         let mut bits = [0u64; 4];
         bits[0] = exp as u64;
         Fr(self.0.pow(bits))
     }
 
-    /// Check if zero.
     pub fn is_zero(&self) -> bool {
         self.0.is_zero()
     }
 
-    /// Divide by another Fr.
     pub fn div(&self, rhs: &Fr) -> Self {
         Fr(self.0 * rhs.0.inverse().unwrap())
     }
 }
 
-// Arithmetic ops
+/*────────────────────────────  Operators / Serialize  ──────────────────────────*/
+
 impl Add for Fr {
     type Output = Fr;
     fn add(self, rhs: Fr) -> Fr {
@@ -125,7 +150,7 @@ impl CanonicalSerialize for Fr {
     fn serialize_with_mode<W: std::io::Write>(
         &self,
         mut writer: W,
-        _compress: ark_serialize::Compress
+        _compress: ark_serialize::Compress,
     ) -> Result<(), ark_serialize::SerializationError> {
         self.0.serialize_compressed(&mut writer)
     }
@@ -185,7 +210,7 @@ mod tests {
     }
 }
 
-
+// relations.rs
 //! Relation evaluation accumulation for UltraHonk.
 //!
 //! This module accumulates all of the UltraHonk relations (arithmetic, permutation,
@@ -533,7 +558,6 @@ pub fn accumulate_relation_evaluations(
     batch_subrelations(&out, alphas)
 }
 
-
 // src/shplonk.rs
 
 use crate::field::Fr;
@@ -817,16 +841,16 @@ pub fn verify_sumcheck(
     }
 }
 
-
 //! Fiat–Shamir transcript for UltraHonk  (Rust ⇔ TS 完全一致)
 
 use crate::{
     crypto::keccak256,
     field::Fr,
-    types::{Proof, RelationParameters, Transcript},
+    types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
+use hex;                               // ←★追加
 
 /* ───── helper ───── */
 
@@ -857,6 +881,19 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
     let mut out = [0u8; 32];
     out[24..].copy_from_slice(&x.to_be_bytes());
     out
+}
+
+/* ───── (★) デバッグ用ユーティリティ ───── */
+
+#[inline(always)]
+fn dbg_fr(tag: &str, x: &Fr) {
+    println!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
+}
+#[inline(always)]
+fn dbg_vec(tag: &str, xs: &[Fr]) {
+    for (i, v) in xs.iter().enumerate() {
+        println!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
+    }
 }
 
 /* ───── ① η ───── */
@@ -909,10 +946,9 @@ fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     (beta, gamma, h)
 }
 
-/* ───── ③ α’s  (修正ポイント) ───── */
+/* ───── ③ α’s (修正ポイント) ───── */
 
 fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
-    // α₀, α₁ 用のハッシュ入力
     let mut data = prev.to_bytes().to_vec();
     for w in &[&proof.lookup_inverses, &proof.z_perm] {
         push_point(&mut data, &w.to_affine());
@@ -920,12 +956,10 @@ fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     let mut cur = hash_to_fr(&data);
 
     let mut alphas = Vec::with_capacity(25);
-    // α₀, α₁
     let (a0, a1) = split(cur);
     alphas.push(a0);
     alphas.push(a1);
 
-    // α₂ … α₂₄
     while alphas.len() < 25 {
         cur = hash_to_fr(&cur.to_bytes());
         let (lo, hi) = split(cur);
@@ -948,7 +982,7 @@ fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
     (out, cur)
 }
 
-/* ───── transcript ───── */
+/* ───── transcript main ───── */
 
 pub fn generate_transcript(
     proof: &Proof,
@@ -966,20 +1000,19 @@ pub fn generate_transcript(
     rp.gamma = gamma;
     cur = tmp;
 
-    // 3) α’s   ← 修正した関数を使用
+    // 3) α’s
     let (alphas, tmp) = gen_alphas(cur, proof);
     cur = tmp;
 
     // 4) gate challenges
-    let log_n = (cs as f64).log2() as usize;
-    let (gate_chals, tmp) = gen_challenges(cur, log_n);
+    let (gate_chals, tmp) = gen_challenges(cur, CONST_PROOF_SIZE_LOG_N);
     cur = tmp;
 
     // 5) sumcheck u challenges
     let (u_chals, tmp) = {
         let mut t = cur;
-        let mut vs = Vec::with_capacity(log_n);
-        for r in 0..log_n {
+        let mut vs = Vec::with_capacity(CONST_PROOF_SIZE_LOG_N);
+        for r in 0..CONST_PROOF_SIZE_LOG_N {
             let mut d = t.to_bytes().to_vec();
             for &c in &proof.sumcheck_univariates[r] {
                 d.extend_from_slice(&c.to_bytes());
@@ -1020,6 +1053,22 @@ pub fn generate_transcript(
     push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
+    /* ───── (★) DEBUG DUMP ───── */
+    println!("===== TRANSCRIPT (Rust) =====");
+    dbg_fr ("eta"      , &rp.eta);
+    dbg_fr ("eta_two"  , &rp.eta_two);
+    dbg_fr ("eta_three", &rp.eta_three);
+    dbg_fr ("beta"     , &rp.beta);
+    dbg_fr ("gamma"    , &rp.gamma);
+    dbg_vec("alpha"    , &alphas);
+    dbg_vec("gate_ch"  , &gate_chals);
+    dbg_vec("u_ch"     , &u_chals);
+    dbg_fr ("rho"         , &rho);
+    dbg_fr ("gemini_r"    , &gemini_r);
+    dbg_fr ("shplonk_nu"  , &shplonk_nu);
+    dbg_fr ("shplonk_z"   , &shplonk_z);
+    println!("=============================");
+
     Transcript {
         rel_params: rp,
         alphas,
@@ -1033,11 +1082,13 @@ pub fn generate_transcript(
 }
 
 
+//type.rs
 use crate::field::Fr;
 use ark_bn254::{Fq, G1Affine};
 
 /// Number of subrelations in the Ultra Honk protocol.
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
+pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
 
 /// Wire indices for the Ultra Honk protocol.
 #[derive(Copy, Clone, Debug)]
@@ -1199,7 +1250,7 @@ pub struct Transcript {
     pub shplonk_z: Fr,
 }
 
-
+// utils.rs
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
@@ -1635,3 +1686,4 @@ impl HonkVerifier {
         num.div(&den)
     }
 }
+
