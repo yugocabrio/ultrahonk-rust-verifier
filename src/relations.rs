@@ -182,7 +182,7 @@ fn accumulate_elliptic(vals: &[Fr], out: &mut [Fr], d: Fr) {
 /// Accumulate auxiliary subrelations (indices 12..17).
 fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     fn limb_size() -> Fr {
-        Fr::from_str("0x10000000000000000")
+        Fr::from_str("0x100000000000000000")
     }
     fn sublimb_shift() -> Fr {
         Fr::from_u64(1 << 14)
@@ -257,7 +257,7 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     out[17] = (next_gate * next_gate - next_gate) * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
 
     let rom_consistency = mr * wire(vals, Wire::Ql) * wire(vals, Wire::Qr);
-    let ram_timestamp = (Fr::one() - idx_delta + idx_delta)
+    let ram_timestamp = (Fr::one() - idx_delta)
         * (wire(vals, Wire::WrShift) - wire(vals, Wire::Wr))
         - wire(vals, Wire::Wo);
     let ram_consistency = access_check * wire(vals, Wire::QArith);
