@@ -275,14 +275,11 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
 /// Accumulate Poseidon external (18..21) and internal (22..25) subrelations.
 fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let s1 = wire(vals, Wire::Wl) + wire(vals, Wire::Ql);
-    let s2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qr);
-    let s3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qo);
-    let s4 = wire(vals, Wire::W4) + wire(vals, Wire::Q4);
 
     let u1 = s1.pow(5);
-    let u2 = s2.pow(5);
-    let u3 = s3.pow(5);
-    let u4 = s4.pow(5);
+    let u2 = wire(vals, Wire::Wr);
+    let u3 = wire(vals, Wire::Wo);
+    let u4 = wire(vals, Wire::W4);
 
     let t0 = u1 + u2;
     let t1 = u3 + u4;
