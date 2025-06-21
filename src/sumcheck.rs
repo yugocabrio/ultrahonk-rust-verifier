@@ -2,6 +2,7 @@
 //! -------------------------------------------------
 
 use crate::{
+    debug::{dbg_fr, dbg_vec},
     field::Fr,
     relations::accumulate_relation_evaluations,
     types::{Transcript, VerificationKey},
@@ -102,6 +103,26 @@ pub fn verify_sumcheck(
         &tx.alphas,
         pow_par,
     );
+
+
+    {
+        use crate::relations::dump_subrelations;
+        println!("---- DEBUG SUMMARY ---------------------------------");
+        println!("beta               = 0x{}", hex::encode(tx.rel_params.beta.to_bytes()));
+        println!("gamma              = 0x{}", hex::encode(tx.rel_params.gamma.to_bytes()));
+        println!("public_inputs_delta= 0x{}", hex::encode(tx.rel_params.public_inputs_delta.to_bytes()));
+        println!("pow_partial        = 0x{}", hex::encode(pow_par.to_bytes()));
+        println!("grand_relation_sum = 0x{}", hex::encode(grand.to_bytes()));
+        println!("target             = 0x{}", hex::encode(target.to_bytes()));
+        dump_subrelations(
+            &proof.sumcheck_evaluations,
+            &tx.rel_params,
+            &tx.alphas,
+            pow_par,
+        );
+        println!("----------------------------------------------------");
+    }
+    
 
     println!("==== FINAL ====");
     dbg_fr("grand_relation", &grand);

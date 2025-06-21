@@ -345,3 +345,30 @@ pub fn accumulate_relation_evaluations(
 
     batch_subrelations(&out, alphas)
 }
+
+pub fn dump_subrelations(
+    vals: &[Fr],
+    rp: &RelationParameters,
+    alphas: &[Fr],
+    pow_partial: Fr,
+) -> Fr {
+    const NUM: usize = 26;
+    let mut out = vec![Fr::zero(); NUM];
+    let d = pow_partial;
+
+    accumulate_arithmetic(vals, &mut out, d);
+    accumulate_permutation(vals, rp, &mut out, d);
+    accumulate_lookup(vals, rp, &mut out, d);
+    accumulate_range(vals, &mut out, d);
+    accumulate_elliptic(vals, &mut out, d);
+    accumulate_aux(vals, rp, &mut out, d);
+    accumulate_poseidon(vals, &mut out, d);
+
+    println!("===== SUBRELATIONS (Rust) =====");
+    for (i, v) in out.iter().enumerate() {
+        println!("rel[{i:02}] = 0x{}", hex::encode(v.to_bytes()));
+    }
+    println!("===============================");
+
+    batch_subrelations(&out, alphas)
+}
