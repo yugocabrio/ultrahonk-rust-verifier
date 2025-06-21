@@ -7,7 +7,7 @@ use crate::{
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
-use hex;                               // ←★追加
+use crate::debug::{dbg_fr, dbg_vec};
 
 /* ───── helper ───── */
 
@@ -40,18 +40,6 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
     out
 }
 
-/* ───── (★) デバッグ用ユーティリティ ───── */
-
-#[inline(always)]
-fn dbg_fr(tag: &str, x: &Fr) {
-    println!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
-}
-#[inline(always)]
-fn dbg_vec(tag: &str, xs: &[Fr]) {
-    for (i, v) in xs.iter().enumerate() {
-        println!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
-    }
-}
 
 /* ───── ① η ───── */
 

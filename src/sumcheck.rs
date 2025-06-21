@@ -62,33 +62,51 @@ pub fn verify_sumcheck(
     tx: &Transcript,
     vk: &VerificationKey,
 ) -> Result<(), String> {
-    let log_n = vk.log_circuit_size as usize;
-    let mut target     = Fr::zero();
-    let mut pow_partial = Fr::one();
 
-    // ── (1) round reductions ────────────────────────────────────────────
+    use crate::debug::{dbg_fr, dbg_vec};   // ① 先ほどのユーティリティをインポート
+
+    let log_n       = vk.log_circuit_size as usize;
+    let mut target  = Fr::zero();
+    let mut pow_par = Fr::one();
+
+    println!("===== SUMCHECK (Rust) =====");
+    dbg_fr ("initial_target" , &target);
+    dbg_fr ("initial_pow_par", &pow_par);
+
+    // ──── 1) round reductions ─────────────────────────────
     for r in 0..log_n {
         let uni = &proof.sumcheck_univariates[r];
+
+        dbg_vec(&format!("u[{r}]"), uni);             // ② 各ラウンドの多項式係数
+        dbg_fr ("target_before" , &target);
 
         if !check_round_sum(uni, target) {
             return Err(format!("sum-check round {r}: linear check failed"));
         }
+
         let χ = tx.sumcheck_u_challenges[r];
-        target      = next_target(uni, χ);
-        pow_partial = update_pow(pow_partial, tx.gate_challenges[r], χ);
+        dbg_fr ("χ" , &χ);
+
+        target   = next_target(uni, χ);
+        pow_par  = update_pow(pow_par, tx.gate_challenges[r], χ);
+
+        dbg_fr ("target_after"  , &target);
+        dbg_fr ("pow_partial"   , &pow_par);
+        println!("------------------------------------------");
     }
 
-    // ── (2) relation evaluations ────────────────────────────────────────
+    // ──── 2) terminal relation check ─────────────────────
     let grand = accumulate_relation_evaluations(
         &proof.sumcheck_evaluations,
         &tx.rel_params,
         &tx.alphas,
-        pow_partial,
+        pow_par,
     );
 
-    if grand == target {
-        Ok(())
-    } else {
-        Err("Final relation aggregate ≠ sumcheck target".into())
-    }
+    println!("==== FINAL ====");
+    dbg_fr("grand_relation", &grand);
+    dbg_fr("target"        , &target);
+    println!("==============================");
+
+    if grand == target { Ok(()) } else { Err("Final relation ≠ target".into()) }
 }
