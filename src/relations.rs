@@ -275,16 +275,24 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
 /// Accumulate Poseidon external (18..21) and internal (22..25) subrelations.
 fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let s1 = wire(vals, Wire::Wl) + wire(vals, Wire::Ql);
+    let s2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qr);
+    let s3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qo);
+    let s4 = wire(vals, Wire::W4) + wire(vals, Wire::Q4);
 
-    let u1 = s1.pow(5);
-    let u2 = wire(vals, Wire::Wr);
-    let u3 = wire(vals, Wire::Wo);
-    let u4 = wire(vals, Wire::W4);
+    let u1_ext = s1.pow(5);
+    let u2_ext = s2.pow(5);
+    let u3_ext = s3.pow(5);
+    let u4_ext = s4.pow(5);
 
-    let t0 = u1 + u2;
-    let t1 = u3 + u4;
-    let t2 = u2 + u2 + t1;
-    let t3 = u4 + u4 + t0;
+    let u1_int = u1_ext;            // s1^5 그대로 재사용
+    let u2_int = wire(vals, Wire::Wr); // *S-box 없음*, *Q_R 없음*
+    let u3_int = wire(vals, Wire::Wo);
+    let u4_int = wire(vals, Wire::W4);
+
+    let t0 = u1_ext + u2_ext;
+    let t1 = u3_ext + u4_ext;
+    let t2 = u2_ext + u2_ext + t1;
+    let t3 = u4_ext + u4_ext + t0;
 
     let v4 = t1 + t1 + t1 + t1 + t3;
     let v2 = t0 + t0 + t0 + t0 + t2;
@@ -298,13 +306,13 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     out[21] = (v4 - wire(vals, Wire::W4Shift)) * qpos * d;
 
     let ipos = wire(vals, Wire::QPoseidon2Internal);
-    let u_sum = u1 + u2 + u3 + u4;
+    let u_sum = u1_int + u2_int + u3_int + u4_int;
     let diag = internal_matrix_diagonal();
 
-    let w1 = u1 * diag[0] + u_sum;
-    let w2 = u2 * diag[1] + u_sum;
-    let w3 = u3 * diag[2] + u_sum;
-    let w4 = u4 * diag[3] + u_sum;
+    let w1 = u1_int * diag[0] + u_sum;
+    let w2 = u2_int * diag[1] + u_sum;
+    let w3 = u3_int * diag[2] + u_sum;
+    let w4 = u4_int * diag[3] + u_sum;
 
     out[22] = (w1 - wire(vals, Wire::WlShift)) * ipos * d;
     out[23] = (w2 - wire(vals, Wire::WrShift)) * ipos * d;
