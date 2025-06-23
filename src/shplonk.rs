@@ -157,6 +157,15 @@ pub fn verify_shplonk(
     let unshifted = pos0 + tx.shplonk_nu * neg0;
     let shifted   = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
 
+    #[cfg(not(feature = "no-trace"))]
+    {
+        dbg_fr("pos0"      , &pos0);
+        dbg_fr("neg0"      , &neg0);
+        dbg_fr("unshifted" , &unshifted);
+        dbg_fr("shifted"   , &shifted);
+    }
+
+
     /*── 4) shplonk_Q ───────────────────────────────────*/
     scalars[0] = Fr::one();
     coms[0]    = proof.shplonk_q.clone();
@@ -169,6 +178,14 @@ pub fn verify_shplonk(
         scalars[1 + idx] = scalar;
         eval_acc = eval_acc + *eval * rho_pow;
         rho_pow = rho_pow * tx.rho;
+    }
+
+    #[cfg(not(feature = "no-trace"))]
+    {
+        for i in 0..4 {     // 0〜3 だけ例示
+            dbg_fr(&format!("scalar[{i}]"), &scalars[1+i]);
+        }
+        dbg_fr("eval_acc_end", &eval_acc);
     }
 
     /*── 6) VK commitmentsをロード ───────────────────────*/
@@ -214,10 +231,22 @@ pub fn verify_shplonk(
         fold_pos[j - 1] = cur;
     }
 
+    #[cfg(not(feature = "no-trace"))]
+    {
+        dbg_fr("fold_pos_end", &fold_pos[0]);
+    }
+
+
     /*── 8) 定数項の蓄積 ────────────────────────────────*/
     let mut const_acc = fold_pos[0] * pos0
         + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
     let mut v_pow = tx.shplonk_nu * tx.shplonk_nu;
+
+    #[cfg(not(feature = "no-trace"))]
+    {
+        dbg_fr("const_acc_final", &const_acc);
+    }
+
 
     /*── 9) fold commitments ───────────────────────────*/
     let base = 1 + n_sum + 40;
