@@ -250,14 +250,42 @@ pub fn verify_shplonk(
 
     /*── 9) fold commitments ───────────────────────────*/
     let base = 1 + n_sum + 40;
+
     for j in 1..log_n {
+        #[cfg(not(feature = "no-trace"))]
+        {
+            println!("── fold round {j} ──────────────");
+            dbg_fr("v_pow (before)", &v_pow);
+        }
+
         let pos_inv = (tx.shplonk_z - r_pows[j]).inverse();
         let neg_inv = (tx.shplonk_z + r_pows[j]).inverse();
         let sp = v_pow * pos_inv;
         let sn = v_pow * tx.shplonk_nu * neg_inv;
+
+        #[cfg(not(feature = "no-trace"))]
+        {
+            dbg_fr("pos_inv", &pos_inv);
+            dbg_fr("neg_inv", &neg_inv);
+            dbg_fr("scPos  ", &sp);
+            dbg_fr("scNeg  ", &sn);
+            dbg_fr("fold_pos[j]", &fold_pos[j]);
+            dbg_fr("A_eval ", &proof.gemini_a_evaluations[j]);
+        }
+
         scalars[base + j - 1] = -(sp + sn);
-        const_acc = const_acc + proof.gemini_a_evaluations[j] * sn + fold_pos[j] * sp;
+        const_acc = const_acc
+            + proof.gemini_a_evaluations[j] * sn
+            + fold_pos[j] * sp;
+
         v_pow = v_pow * tx.shplonk_nu * tx.shplonk_nu;
+
+        #[cfg(not(feature = "no-trace"))]
+        {
+            dbg_fr("const_acc", &const_acc);
+            dbg_fr("v_pow (after)", &v_pow);
+        }
+
         coms[base + j - 1] = proof.gemini_fold_comms[j - 1].clone();
     }
 
