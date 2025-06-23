@@ -185,7 +185,7 @@ pub fn verify_shplonk(
 
     /*── 6) VK commitmentsをロード ───────────────────────*/
     {
-        let mut j = 1 + n_sum;
+        let mut j = 1;
         macro_rules! push { ($f:ident) => {{ coms[j] = vk.$f.clone(); j += 1; }}}
         push!(qm); push!(qc); push!(ql); push!(qr);
         push!(qo); push!(q4);
