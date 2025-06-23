@@ -142,12 +142,7 @@ pub fn verify_shplonk(
     
 
     /*── 2) 配列サイズを確保 ─────────────────────────────*/
-    let total = 1           // shplonk_Q
-        + n_sum            // 40 eval scalars
-        + 40               // VK + proof commitments
-        + log_n            // fold commitments
-        + 1                // constant term [1]₁
-        + 1;               // quotient commitment
+    let total = 1 + n_sum + 40 + log_n + 1 + 1;
     let mut scalars = vec![Fr::zero(); total];
     let mut coms    = vec![G1Point { x: Fq::zero(), y: Fq::zero() }; total];
 
@@ -194,8 +189,8 @@ pub fn verify_shplonk(
         macro_rules! push { ($f:ident) => {{ coms[j] = vk.$f.clone(); j += 1; }}}
         push!(qm); push!(qc); push!(ql); push!(qr);
         push!(qo); push!(q4);
-        push!(q_lookup); push!(q_arith); push!(q_range); push!(q_aux);
-        push!(q_elliptic); push!(q_poseidon2_external); push!(q_poseidon2_internal);
+        push!(q_lookup); push!(q_arith); push!(q_range); push!(q_elliptic);
+        push!(q_aux); push!(q_poseidon2_external); push!(q_poseidon2_internal);
         push!(s1); push!(s2); push!(s3); push!(s4);
         push!(id1); push!(id2); push!(id3); push!(id4);
         push!(t1); push!(t2); push!(t3); push!(t4);
