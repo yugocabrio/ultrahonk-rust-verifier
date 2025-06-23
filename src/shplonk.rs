@@ -1,7 +1,7 @@
 //! Shplonk batch-opening verifier for BN254
 use crate::field::Fr;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey};
-
+use crate::debug::{dbg_fr, dbg_vec};
 use ark_bn254::{Bn254, G1Affine, G1Projective, G2Affine, G2Projective, Fq, Fq2};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
 use ark_ff::{Field, One, Zero, PrimeField, BigInteger256};
@@ -131,11 +131,15 @@ pub fn verify_shplonk(
     }
 
     /*── 可視化ブロック ────────────────────────────────*/
-    eprintln!("===== Step-1 parameters =====");
-    for (i, p) in r_pows.iter().enumerate() {
-        eprintln!("r^(2^{}) = {:?}", i, p);
+    #[cfg(not(feature = "no-trace"))]
+    {
+    
+        println!("===== Step-1 parameters =====");
+        dbg_fr("gemini_r", &tx.gemini_r);
+        dbg_vec("r_pow", &r_pows);
+        println!("==============================");
     }
-    eprintln!("==============================");
+    
 
     /*── 2) 配列サイズを確保 ─────────────────────────────*/
     let total = 1           // shplonk_Q
