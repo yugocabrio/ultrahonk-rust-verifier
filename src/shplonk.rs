@@ -116,7 +116,7 @@ pub fn verify_shplonk(
     }
 
     /*── 2) 配列確保 ───────────────────────────────*/
-    let total = 1 + n_sum + 40 + log_n + 1 + 1;
+    let total = 1 + n_sum + log_n + 1 + 1;
     let mut scalars = vec![Fr::zero(); total];
     let mut coms    = vec![G1Point { x: Fq::zero(), y: Fq::zero() }; total];
 
