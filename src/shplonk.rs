@@ -209,7 +209,7 @@ pub fn verify_shplonk(
         dbg_fr("const_acc_final", &const_acc);
     }
 
-    let base = 1 + n_sum + 40;
+    let base = 1 + n_sum;
     for j in 1..log_n {
         #[cfg(not(feature = "no-trace"))]
         {
@@ -255,7 +255,7 @@ pub fn verify_shplonk(
 
     let q_idx      = one_idx + 1;
     coms[q_idx]    = proof.kzg_quotient.clone();
-    scalars[q_idx] = tx.shplonk_z;
+    scalars[q_idx] = -tx.shplonk_z;
 
     #[cfg(not(feature = "no-trace"))]
     {
