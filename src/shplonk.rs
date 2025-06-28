@@ -75,36 +75,38 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
 
     // 固定 vk_G2（TS verifier と同値）
     let vk_g2 = {
-        let x = Fq2::new(
-            Fq::from_bigint(BigInteger256::new([
-                0x260e_01b2_51f6_f1c7,
-                0xe7ff_4e58_0791_dee8,
-                0xea51_d87a_358e_038b,
-                0x4efe_30fa_c093_83c1,
-            ])).unwrap(),
-            Fq::from_bigint(BigInteger256::new([
-                0x1800_deef_121f_1e76,
-                0x426a_0066_5e5c_4479,
-                0x6743_22d4_f75e_dadd,
-                0x46de_bd5c_d992_f6ed,
-            ])).unwrap(),
-        );
-        let y = Fq2::new(
-            Fq::from_bigint(BigInteger256::new([
-                0x0906_89d0_585f_f075,
-                0xec9e_99ad_690c_3395,
-                0xbc4b_3133_70b3_8ef3,
-                0x55ac_dadc_d122_975b,
-            ])).unwrap(),
-            Fq::from_bigint(BigInteger256::new([
-                0x12c8_5ea5_db8c_6deb,
-                0x4aab_7180_8dcb_408f,
-                0xe3d1_e769_0c43_d37b,
-                0x4ce6_cc01_66fa_7daa,
-            ])).unwrap(),
-        );
-        G2Affine::new_unchecked(x, y)
+        // 0x260e…83c1 を little-endian limb 順に並べ替える
+        let x_c0 = Fq::from_bigint(BigInteger256::new([
+            0x4efe_30fa_c093_83c1,   // 0 番目（LSB）
+            0xea51_d87a_358e_038b,
+            0xe7ff_4e58_0791_dee8,
+            0x260e_01b2_51f6_f1c7,   // 3 番目（MSB）
+        ])).unwrap();
+    
+        let x_c1 = Fq::from_bigint(BigInteger256::new([
+            0x46de_bd5c_d992_f6ed,
+            0x6743_22d4_f75e_dadd,
+            0x426a_0066_5e5c_4479,
+            0x1800_deef_121f_1e76,
+        ])).unwrap();
+    
+        let y_c0 = Fq::from_bigint(BigInteger256::new([
+            0x55ac_dadc_d122_975b,
+            0xbc4b_3133_70b3_8ef3,
+            0xec9e_99ad_690c_3395,
+            0x0906_89d0_585f_f075,
+        ])).unwrap();
+    
+        let y_c1 = Fq::from_bigint(BigInteger256::new([
+            0x4ce6_cc01_66fa_7daa,
+            0xe3d1_e769_0c43_d37b,
+            0x4aab_7180_8dcb_408f,
+            0x12c8_5ea5_db8c_6deb,
+        ])).unwrap();
+    
+        G2Affine::new_unchecked(Fq2::new(x_c0, x_c1), Fq2::new(y_c0, y_c1))
     };
+    
 
     let e1 = Bn254::pairing(*p0, g2_gen);
     let e2 = Bn254::pairing(*p1, vk_g2);
