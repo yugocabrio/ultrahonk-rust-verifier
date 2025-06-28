@@ -210,6 +210,7 @@ pub fn verify_shplonk(
     }
 
     let base = 1 + n_sum;
+    println!("baseの数={}", base);
     for j in 1..log_n {
         #[cfg(not(feature = "no-trace"))]
         {
@@ -249,11 +250,13 @@ pub fn verify_shplonk(
     }
 
     let one_idx = base + log_n;
+    println!("one_idxの数={}", one_idx);
     let gen = G1Projective::generator().into_affine();
     coms[one_idx]   = G1Point { x: gen.x, y: gen.y };
     scalars[one_idx] = const_acc;
 
     let q_idx      = one_idx + 1;
+    println!("q_idxの数={}", q_idx);
     coms[q_idx]    = proof.kzg_quotient.clone();
     scalars[q_idx] = -tx.shplonk_z;
 
@@ -268,6 +271,15 @@ pub fn verify_shplonk(
         }
         println!("============================");
     }
+    // println!("coms={:?}", coms);
+    // println!("scalars={:?}", scalars);
+
+    use crate::debug::dump_pairs;
+
+    println!("========= FULL LIST =========");
+    dump_pairs(&coms, &scalars, usize::MAX);
+    println!("=============================");
+
 
     /*── 12) MSM + pairing ───────────────────*/
     let p0 = batch_mul(&coms, &scalars)?;
