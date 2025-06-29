@@ -71,10 +71,8 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
         println!("  Point (y): 0x{}", hex::encode(&y_bytes));
         println!("  Scalar: 0x{}", hex::encode(&s_bytes));
         
-        // 곱셈 수행
         acc += G1Projective::from(aff).mul_bigint(s.0.into_bigint());
         
-        // 디버깅: 현재 acc 값을 affine 좌표로 변환하여 출력
         let acc_affine = acc.into_affine();
         
         let mut acc_x_bytes = Vec::new();
