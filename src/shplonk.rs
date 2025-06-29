@@ -86,43 +86,66 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
 /*──────────────── pairing 定数 ───────────────*/
 
 fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
-    let g2_gen = G2Projective::generator().into_affine();
-
-    // 固定 vk_G2（TS 側と一致）
-    let vk_g2 = {
+    // 고정된 rhsG2 포인트 (TypeScript의 inputValues[2-5]와 일치)
+    let rhs_g2 = {
         let x = Fq2::new(
-            Fq::from_bigint(BigInteger256::new([
-                0x4efe_30fa_c093_83c1,
-                0xea51_d87a_358e_038b,
-                0xe7ff_4e58_0791_dee8,
-                0x260e_01b2_51f6_f1c7,
-            ])).unwrap(),
-            Fq::from_bigint(BigInteger256::new([
-                0x46de_bd5c_d992_f6ed,
-                0x6743_22d4_f75e_dadd,
-                0x426a_0066_5e5c_4479,
-                0x1800_deef_121f_1e76,
-            ])).unwrap(),
+            // c0: inputValues[3] = 0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed
+            Fq::from_le_bytes_mod_order(&[
+                0xed, 0xf6, 0x92, 0xd9, 0x5c, 0xbd, 0xde, 0x46, 0xdd, 0xda, 0x5e, 0xf7, 0xd4, 0x22, 0x43, 0x67,
+                0x79, 0x44, 0x5c, 0x5e, 0x66, 0x00, 0x6a, 0x42, 0x76, 0x1e, 0x1f, 0x12, 0xef, 0xde, 0x00, 0x18,
+            ]),
+            // c1: inputValues[2] = 0x198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2
+            Fq::from_le_bytes_mod_order(&[
+                0xc2, 0x12, 0xf3, 0xae, 0xb7, 0x85, 0xe4, 0x97, 0x12, 0xe7, 0xa9, 0x35, 0x33, 0x49, 0xaa, 0xf1,
+                0x25, 0x5d, 0xfb, 0x31, 0xb7, 0xbf, 0x60, 0x72, 0x3a, 0x48, 0x0d, 0x92, 0x93, 0x93, 0x8e, 0x19,
+            ]),
         );
         let y = Fq2::new(
-            Fq::from_bigint(BigInteger256::new([
-                0x55ac_dadc_d122_975b,
-                0xbc4b_3133_70b3_8ef3,
-                0xec9e_99ad_690c_3395,
-                0x0906_89d0_585f_f075,
-            ])).unwrap(),
-            Fq::from_bigint(BigInteger256::new([
-                0x4ce6_cc01_66fa_7daa,
-                0xe3d1_e769_0c43_d37b,
-                0x4aab_7180_8dcb_408f,
-                0x12c8_5ea5_db8c_6deb,
-            ])).unwrap(),
+            // c0: inputValues[5] = 0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa
+            Fq::from_le_bytes_mod_order(&[
+                0xaa, 0x7d, 0xfa, 0x66, 0x01, 0xcc, 0xe6, 0x4c, 0x7b, 0xd3, 0x43, 0x0c, 0x69, 0xe7, 0xd1, 0xe3,
+                0x8f, 0x40, 0xcb, 0x8d, 0x80, 0x71, 0xab, 0x4a, 0xeb, 0x6d, 0x8c, 0xdb, 0xa5, 0x5e, 0xc8, 0x12,
+            ]),
+            // c1: inputValues[4] = 0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b
+            Fq::from_le_bytes_mod_order(&[
+                0x5b, 0x97, 0x22, 0xd1, 0xdc, 0xda, 0xac, 0x55, 0xf3, 0x8e, 0xb3, 0x70, 0x33, 0x31, 0x4b, 0xbc,
+                0x95, 0x33, 0x0c, 0x69, 0xad, 0x99, 0x9e, 0xec, 0x75, 0xf0, 0x5f, 0x58, 0xd0, 0x89, 0x06, 0x09,
+            ]),
         );
         G2Affine::new_unchecked(x, y)
     };
 
-    let e1 = Bn254::pairing(*p0, g2_gen);
-    let e2 = Bn254::pairing(*p1, vk_g2);
+    // 고정된 lhsG2 (VK에서)
+    let lhs_g2 = {
+        let x = Fq2::new(
+            // c0: inputValues[9] = 0x0118c4d5b837bcc2bc89b5b398b5974e9f5944073b32078b7e231fec938883b0
+            Fq::from_le_bytes_mod_order(&[
+                0xb0, 0x83, 0x88, 0x93, 0xec, 0x1f, 0x23, 0x7e, 0x8b, 0x07, 0x32, 0x3b, 0x07, 0x44, 0x59, 0x9f,
+                0x4e, 0x97, 0xb5, 0x98, 0xb3, 0xb5, 0x89, 0xbc, 0xc2, 0xbc, 0x37, 0xb8, 0xd5, 0xc4, 0x18, 0x01,
+            ]),
+            // c1: inputValues[8] = 0x260e01b251f6f1c7e7ff4e580791dee8ea51d87a358e038b4efe30fac09383c1
+            Fq::from_le_bytes_mod_order(&[
+                0xc1, 0x83, 0x93, 0xc0, 0xfa, 0x30, 0xfe, 0x4e, 0x8b, 0x03, 0x8e, 0x35, 0x7a, 0xd8, 0x51, 0xea,
+                0xe8, 0xde, 0x91, 0x07, 0x58, 0x4e, 0xff, 0xe7, 0xc7, 0xf1, 0xf6, 0x51, 0xb2, 0x01, 0x0e, 0x26,
+            ]),
+        );
+        let y = Fq2::new(
+            // c0: inputValues[11] = 0x22febda3c0c0632a56475b4214e5615e11e6dd3f96e6cea2854a87d4dacc5e55
+            Fq::from_le_bytes_mod_order(&[
+                0x55, 0x5e, 0xcc, 0xda, 0xd4, 0x87, 0x4a, 0x85, 0xa2, 0xce, 0xe6, 0x96, 0x3f, 0xdd, 0xe6, 0x11,
+                0x5e, 0x61, 0xe5, 0x14, 0x42, 0x5b, 0x47, 0x56, 0x2a, 0x63, 0xc0, 0xc0, 0xa3, 0xbd, 0xfe, 0x22,
+            ]),
+            // c1: inputValues[10] = 0x04fc6369f7110fe3d25156c1bb9a72859cf2a04641f99ba4ee413c80da6a5fe4
+            Fq::from_le_bytes_mod_order(&[
+                0xe4, 0x5f, 0x6a, 0xda, 0x80, 0x3c, 0x41, 0xee, 0xa4, 0x9b, 0xf9, 0x41, 0x46, 0xa0, 0xf2, 0x9c,
+                0x85, 0x72, 0x9a, 0xbb, 0xc1, 0x56, 0x51, 0xd2, 0xe3, 0x0f, 0x11, 0xf7, 0x69, 0x63, 0xfc, 0x04,
+            ]),
+        );
+        G2Affine::new_unchecked(x, y)
+    };
+
+    let e1 = Bn254::pairing(*p0, rhs_g2);
+    let e2 = Bn254::pairing(*p1, lhs_g2);
     e1.0 * e2.0 == <Bn254 as Pairing>::TargetField::one()
 }
 
@@ -195,8 +218,8 @@ pub fn verify_shplonk(
         macro_rules! push { ($f:ident) => {{ coms[j] = vk.$f.clone(); j += 1; }}}
         push!(qm); push!(qc); push!(ql); push!(qr);
         push!(qo); push!(q4);
-        push!(q_lookup); push!(q_arith); push!(q_range); push!(q_elliptic);
-        push!(q_aux); push!(q_poseidon2_external); push!(q_poseidon2_internal);
+        push!(q_lookup); push!(q_arith); push!(q_range); push!(q_aux);
+        push!(q_elliptic); push!(q_poseidon2_external); push!(q_poseidon2_internal);
         push!(s1); push!(s2); push!(s3); push!(s4);
         push!(id1); push!(id2); push!(id3); push!(id4);
         push!(t1); push!(t2); push!(t3); push!(t4);
