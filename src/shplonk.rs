@@ -260,7 +260,7 @@ pub fn verify_shplonk(
     let q_idx      = one_idx + 1;
     println!("q_idxの数={}", q_idx);
     coms[q_idx]    = proof.kzg_quotient.clone();
-    scalars[q_idx] = -tx.shplonk_z;
+    scalars[q_idx] = tx.shplonk_z;
 
     #[cfg(not(feature = "no-trace"))]
     {
