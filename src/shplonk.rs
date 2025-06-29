@@ -6,7 +6,7 @@ use ark_bn254::{Bn254, G1Affine, G1Projective, G2Affine, G2Projective, Fq, Fq2};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
 use ark_serialize::CanonicalSerialize;
 use ark_ff::ark_ff_macros::to_sign_and_limbs;
-use ark_ff::{Field, One, Zero, PrimeField, BigInteger256};
+use ark_ff::{BigInteger, BigInteger256, Field, One, PrimeField, Zero};
 
 /// # 定数
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
@@ -58,46 +58,27 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
         // 현재 포인트와 스칼라 정보 출력
         println!("Iteration {}: Processing point", i);
         
-        // x, y 좌표를 바이트로 변환하여 16진수로 출력
-        let mut x_bytes = Vec::new();
-        let mut y_bytes = Vec::new();
-        let mut s_bytes = Vec::new();
-        
-        c.x.serialize_uncompressed(&mut x_bytes).unwrap();
-        c.y.serialize_uncompressed(&mut y_bytes).unwrap();
-        s.serialize_uncompressed(&mut s_bytes).unwrap();
-        
-        println!("  Point (x): 0x{}", hex::encode(&x_bytes));
-        println!("  Point (y): 0x{}", hex::encode(&y_bytes));
-        println!("  Scalar: 0x{}", hex::encode(&s_bytes));
+        println!("  Point (x): 0x{}", hex::encode(c.x.into_bigint().to_bytes_be()));
+        println!("  Point (y): 0x{}", hex::encode(c.y.into_bigint().to_bytes_be()));
+        println!("  Scalar: 0x{}", hex::encode(s.to_bytes()));
         
         acc += G1Projective::from(aff).mul_bigint(s.0.into_bigint());
-        
+
         let acc_affine = acc.into_affine();
         
-        let mut acc_x_bytes = Vec::new();
-        let mut acc_y_bytes = Vec::new();
-        acc_affine.x.serialize_uncompressed(&mut acc_x_bytes).unwrap();
-        acc_affine.y.serialize_uncompressed(&mut acc_y_bytes).unwrap();
-        
         println!("  Accumulated result:");
-        println!("    x: 0x{}", hex::encode(&acc_x_bytes));
-        println!("    y: 0x{}", hex::encode(&acc_y_bytes));
+        println!("    x: 0x{}", hex::encode(acc_affine.x.into_bigint().to_bytes_be()));
+        println!("    y: 0x{}", hex::encode(acc_affine.y.into_bigint().to_bytes_be()));
         
-        // acc를 다시 projective로 변환 (다음 반복을 위해)
         acc = G1Projective::from(acc_affine);
         println!();
     }
     
     let final_result = acc.into_affine();
-    let mut final_x_bytes = Vec::new();
-    let mut final_y_bytes = Vec::new();
-    final_result.x.serialize_uncompressed(&mut final_x_bytes).unwrap();
-    final_result.y.serialize_uncompressed(&mut final_y_bytes).unwrap();
     
     println!("Final result:");
-    println!("  x: 0x{}", hex::encode(&final_x_bytes));
-    println!("  y: 0x{}", hex::encode(&final_y_bytes));
+    println!("  x: 0x{}", hex::encode(final_result.x.into_bigint().to_bytes_be()));
+    println!("  y: 0x{}", hex::encode(final_result.y.into_bigint().to_bytes_be()));
     
     Ok(final_result)
 }
