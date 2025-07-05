@@ -1,4 +1,4 @@
-//! Fiat–Shamir transcript for UltraHonk  (Rust ⇔ TS 完全一致)
+//! Fiat–Shamir transcript for UltraHonk
 
 use crate::{
     crypto::keccak256,
@@ -8,6 +8,7 @@ use crate::{
 };
 use ark_bn254::G1Affine;
 use crate::debug::{dbg_fr, dbg_vec};
+use crate::trace;
 
 /* ───── helper ───── */
 
@@ -90,8 +91,6 @@ fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     let (beta, gamma) = split(h);
     (beta, gamma, h)
 }
-
-/* ───── ③ α’s (修正ポイント) ───── */
 
 fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     let mut data = prev.to_bytes().to_vec();
@@ -199,7 +198,7 @@ pub fn generate_transcript(
     let shplonk_z = split(hash_to_fr(&data)).0;
 
     /* ───── (★) DEBUG DUMP ───── */
-    println!("===== TRANSCRIPT (Rust) =====");
+    trace!("===== TRANSCRIPT (Rust) =====");
     dbg_fr ("eta"      , &rp.eta);
     dbg_fr ("eta_two"  , &rp.eta_two);
     dbg_fr ("eta_three", &rp.eta_three);
@@ -212,7 +211,7 @@ pub fn generate_transcript(
     dbg_fr ("gemini_r"    , &gemini_r);
     dbg_fr ("shplonk_nu"  , &shplonk_nu);
     dbg_fr ("shplonk_z"   , &shplonk_z);
-    println!("=============================");
+    trace!("=============================");
 
     Transcript {
         rel_params: rp,

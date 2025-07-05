@@ -43,7 +43,7 @@ mod tests {
             inp_bytes.push(b.to_vec());
         }
         verifier.verify(&proof_bytes, &inp_bytes)?;
-        println!("✅ Verification succeeded");
+        trace!("✅ Verification succeeded");
         Ok(())
     }
 }
