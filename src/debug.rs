@@ -1,38 +1,39 @@
-use crate::field::Fr;
-use hex;
-use ark_ff::{BigInteger256, PrimeField};
-use crate::types::G1Point;
+// src/debug.rs
 
-#[inline(always)]
-pub fn dbg_fr(tag: &str, x: &Fr) {
-    println!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
+use crate::field::Fr;
+use crate::types::G1Point;
+use ark_ff::{BigInteger256, PrimeField};
+
+/// trace! macro is a lightweight debug print macro that only outputs when the `trace` feature is enabled.
+/// you can use it like this: cargo test --features trace -- --nocapture / cargo run --features trace
+#[macro_export]
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "trace")]
+        {
+            println!($($arg)*);
+        }
+    };
 }
-#[inline(always)]
-pub fn dbg_vec(tag: &str, xs: &[Fr]) {
-    for (i, v) in xs.iter().enumerate() {
-        println!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
-    }
-}
-/// BigInteger256 → 0x プレフィクス付き 64byte 固定幅 16進文字列
+
+/// BigInteger256 → BE fixed-width hex (0x + 64 nibbles)
+/// This is used to convert the internal representation of Fr to a hex string.
 #[inline(always)]
 fn bigint256_to_hex(b: &BigInteger256) -> String {
-    // ark_ff の BigInteger256 は 4×u64 little-endian
-    // ここでは BE 表示に揃える
-    let limbs_be = b.0.iter().rev();                      // 逆順で BE
     let mut s = String::from("0x");
-    for limb in limbs_be {
+    for limb in b.0.iter().rev() {
         s.push_str(&format!("{:016x}", limb));
     }
     s
 }
 
-/// ark_bn254::Fr → 16進文字列
+/// ark_bn254::Fr → BE fixed-width hex (0x + 64 nibbles)
 #[inline(always)]
 pub fn fr_to_hex(fr: &Fr) -> String {
     bigint256_to_hex(&fr.0.into_bigint())
 }
 
-/// G1Point → (x,y)16進文字列
+/// G1Point → (x_hex, y_hex)
 #[inline(always)]
 pub fn g1_to_hex(pt: &G1Point) -> (String, String) {
     (
@@ -41,11 +42,7 @@ pub fn g1_to_hex(pt: &G1Point) -> (String, String) {
     )
 }
 
-/// coms / scalars を "TS ログ互換" フォーマットで全部出す
-///
-/// * `head_tail` : 省略せず全部出したい場合は `usize::MAX` を渡す
-///                 それ以外は「先頭 `head_tail` 件＋末尾 `head_tail` 件」を出力し
-///                 中央部は "..." 行で畳みます。
+/// Outputs commitment/scalar pairs
 pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
     assert_eq!(
         coms.len(),
@@ -54,23 +51,34 @@ pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
     );
 
     let len = coms.len();
-    println!("========= FULL LIST =========");
+    trace!("========= FULL LIST =========");
     for i in 0..len {
-        // 範囲外は折り畳み
         if head_tail != usize::MAX && i >= head_tail && i < len - head_tail {
             if i == head_tail {
-                println!("    ..."); // ここだけ一度だけ出力
+                trace!("    ...");
             }
             continue;
         }
-
         let (x_hex, y_hex) = g1_to_hex(&coms[i]);
         let s_hex = fr_to_hex(&scalars[i]);
-
-        println!(
+        trace!(
             "[#{:02}]  s = {:>66}  C.x = {:>66}  C.y = {:>66}",
             i, s_hex, x_hex, y_hex
         );
     }
-    println!("================================");
+    trace!("================================");
+}
+
+/// Debug Fr vector with hex output
+#[inline(always)]
+pub fn dbg_vec(tag: &str, xs: &[Fr]) {
+    for (i, v) in xs.iter().enumerate() {
+        trace!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
+    }
+}
+
+/// Debug Fr with hex output
+#[inline(always)]
+pub fn dbg_fr(tag: &str, x: &Fr) {
+    trace!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
 }
