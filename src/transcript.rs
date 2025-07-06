@@ -1,5 +1,7 @@
-//! Fiat–Shamir transcript for UltraHonk  (Rust ⇔ TS 完全一致)
+//! Fiat–Shamir transcript for UltraHonk
 
+use crate::debug::{dbg_fr, dbg_vec};
+use crate::trace;
 use crate::{
     crypto::keccak256,
     field::Fr,
@@ -7,7 +9,6 @@ use crate::{
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
-use crate::debug::{dbg_fr, dbg_vec};
 
 /* ───── helper ───── */
 
@@ -39,7 +40,6 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
     out[24..].copy_from_slice(&x.to_be_bytes());
     out
 }
-
 
 /* ───── ① η ───── */
 
@@ -83,15 +83,17 @@ fn gen_eta(
 
 fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
-    for w in &[&proof.lookup_read_counts, &proof.lookup_read_tags, &proof.w4] {
+    for w in &[
+        &proof.lookup_read_counts,
+        &proof.lookup_read_tags,
+        &proof.w4,
+    ] {
         push_point(&mut data, &w.to_affine());
     }
     let h = hash_to_fr(&data);
     let (beta, gamma) = split(h);
     (beta, gamma, h)
 }
-
-/* ───── ③ α’s (修正ポイント) ───── */
 
 fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     let mut data = prev.to_bytes().to_vec();
@@ -199,20 +201,20 @@ pub fn generate_transcript(
     let shplonk_z = split(hash_to_fr(&data)).0;
 
     /* ───── (★) DEBUG DUMP ───── */
-    println!("===== TRANSCRIPT (Rust) =====");
-    dbg_fr ("eta"      , &rp.eta);
-    dbg_fr ("eta_two"  , &rp.eta_two);
-    dbg_fr ("eta_three", &rp.eta_three);
-    dbg_fr ("beta"     , &rp.beta);
-    dbg_fr ("gamma"    , &rp.gamma);
-    dbg_vec("alpha"    , &alphas);
-    dbg_vec("gate_ch"  , &gate_chals);
-    dbg_vec("u_ch"     , &u_chals);
-    dbg_fr ("rho"         , &rho);
-    dbg_fr ("gemini_r"    , &gemini_r);
-    dbg_fr ("shplonk_nu"  , &shplonk_nu);
-    dbg_fr ("shplonk_z"   , &shplonk_z);
-    println!("=============================");
+    trace!("===== TRANSCRIPT (Rust) =====");
+    dbg_fr("eta", &rp.eta);
+    dbg_fr("eta_two", &rp.eta_two);
+    dbg_fr("eta_three", &rp.eta_three);
+    dbg_fr("beta", &rp.beta);
+    dbg_fr("gamma", &rp.gamma);
+    dbg_vec("alpha", &alphas);
+    dbg_vec("gate_ch", &gate_chals);
+    dbg_vec("u_ch", &u_chals);
+    dbg_fr("rho", &rho);
+    dbg_fr("gemini_r", &gemini_r);
+    dbg_fr("shplonk_nu", &shplonk_nu);
+    dbg_fr("shplonk_z", &shplonk_z);
+    trace!("=============================");
 
     Transcript {
         rel_params: rp,

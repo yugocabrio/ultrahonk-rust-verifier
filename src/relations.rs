@@ -51,15 +51,9 @@ fn accumulate_arithmetic(vals: &[Fr], out: &mut [Fr], d: Fr) {
     // Subrelation 1: indicator for q_m
     {
         let q = wire(vals, Wire::QArith);
-        let mut acc = wire(vals, Wire::Wl)
-            + wire(vals, Wire::W4)
-            - wire(vals, Wire::WlShift)
+        let mut acc = wire(vals, Wire::Wl) + wire(vals, Wire::W4) - wire(vals, Wire::WlShift)
             + wire(vals, Wire::Qm);
-        acc = acc
-            * (q - Fr::from_u64(2))
-            * (q - Fr::from_u64(1))
-            * q
-            * d;
+        acc = acc * (q - Fr::from_u64(2)) * (q - Fr::from_u64(1)) * q * d;
         out[1] = acc;
     }
 }
@@ -93,25 +87,23 @@ fn accumulate_lookup(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr
         + wire(vals, Wire::Table3) * rp.eta_two
         + wire(vals, Wire::Table4) * rp.eta_three;
 
-    let derived_entry_2 =
-        wire(vals, Wire::Wr) + wire(vals, Wire::Qm) * wire(vals, Wire::WrShift);
-    let derived_entry_3 =
-        wire(vals, Wire::Wo) + wire(vals, Wire::Qc) * wire(vals, Wire::WoShift);
-    
-    let read_term = wire(vals, Wire::Wl) + rp.gamma
+    let derived_entry_2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qm) * wire(vals, Wire::WrShift);
+    let derived_entry_3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qc) * wire(vals, Wire::WoShift);
+
+    let read_term = wire(vals, Wire::Wl)
+        + rp.gamma
         + wire(vals, Wire::Qr) * wire(vals, Wire::WlShift)
         + derived_entry_2 * rp.eta
         + derived_entry_3 * rp.eta_two
         + wire(vals, Wire::Qo) * rp.eta_three;
 
     let inv = wire(vals, Wire::LookupInverses);
-    let inv_exists = wire(vals, Wire::LookupReadTags)
-        + wire(vals, Wire::QLookup)
+    let inv_exists = wire(vals, Wire::LookupReadTags) + wire(vals, Wire::QLookup)
         - wire(vals, Wire::LookupReadTags) * wire(vals, Wire::QLookup);
 
     out[4] = (read_term * write_term * inv - inv_exists) * d;
     out[5] = wire(vals, Wire::QLookup) * (write_term * inv)
-         - wire(vals, Wire::LookupReadCounts) * (read_term * inv);
+        - wire(vals, Wire::LookupReadCounts) * (read_term * inv);
 }
 
 /// Accumulate the four range‐check subrelations (indices 6..9).
@@ -122,7 +114,11 @@ fn accumulate_range(vals: &[Fr], out: &mut [Fr], d: Fr) {
         wire(vals, Wire::W4) - wire(vals, Wire::Wo),
         wire(vals, Wire::WlShift) - wire(vals, Wire::W4),
     ];
-    let negs = [Fr::from_u64(1).neg(), Fr::from_u64(2).neg(), Fr::from_u64(3).neg()];
+    let negs = [
+        Fr::from_u64(1).neg(),
+        Fr::from_u64(2).neg(),
+        Fr::from_u64(3).neg(),
+    ];
     for i in 0..4 {
         let mut acc = deltas[i];
         for &n in &negs {
@@ -197,11 +193,11 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     gate2 = gate2 * limb_size() - wire(vals, Wire::W4Shift) + limb_subproduct;
     gate2 = gate2 * wire(vals, Wire::Q4);
 
-    limb_subproduct = limb_subproduct * limb_size()
-        + wire(vals, Wire::WlShift) * wire(vals, Wire::WrShift);
+    limb_subproduct =
+        limb_subproduct * limb_size() + wire(vals, Wire::WlShift) * wire(vals, Wire::WrShift);
 
-    let gate1 = (limb_subproduct - (wire(vals, Wire::Wo) + wire(vals, Wire::W4)))
-        * wire(vals, Wire::Qo);
+    let gate1 =
+        (limb_subproduct - (wire(vals, Wire::Wo) + wire(vals, Wire::W4))) * wire(vals, Wire::Qo);
 
     let gate3 = (limb_subproduct + wire(vals, Wire::W4)
         - (wire(vals, Wire::WoShift) + wire(vals, Wire::W4Shift)))
@@ -234,7 +230,7 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     let rec_delta = wire(vals, Wire::W4Shift) - wire(vals, Wire::W4);
 
     let idx_inc = idx_delta * idx_delta - idx_delta;
-    let adj_match  = (Fr::one() - idx_delta) * rec_delta;
+    let adj_match = (Fr::one() - idx_delta) * rec_delta;
 
     out[13] = adj_match * wire(vals, Wire::Ql) * wire(vals, Wire::Qr) * wire(vals, Wire::QAux) * d;
     out[14] = idx_inc * wire(vals, Wire::Ql) * wire(vals, Wire::Qr) * wire(vals, Wire::QAux) * d;
@@ -248,13 +244,12 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     next_gate = wire(vals, Wire::W4Shift) - next_gate;
 
     let val_delta = wire(vals, Wire::WoShift) - wire(vals, Wire::Wo);
-    let adj_match2 = (Fr::one() - idx_delta)
-        * val_delta
-        * (Fr::one() - next_gate);
+    let adj_match2 = (Fr::one() - idx_delta) * val_delta * (Fr::one() - next_gate);
 
     out[15] = adj_match2 * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
     out[16] = idx_inc * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
-    out[17] = (next_gate * next_gate - next_gate) * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
+    out[17] =
+        (next_gate * next_gate - next_gate) * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
 
     let rom_consistency = mr * wire(vals, Wire::Ql) * wire(vals, Wire::Qr);
     let ram_timestamp = (Fr::one() - idx_delta)
@@ -284,7 +279,7 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let u3_ext = s3.pow(5);
     let u4_ext = s4.pow(5);
 
-    let u1_int = u1_ext;            // s1^5 그대로 재사용
+    let u1_int = u1_ext; // s1^5 그대로 재사용
     let u2_int = wire(vals, Wire::Wr); // *S-box 없음*, *Q_R 없음*
     let u3_int = wire(vals, Wire::Wo);
     let u4_int = wire(vals, Wire::W4);

@@ -1,190 +1,400 @@
 // src/shplonk.rs
 
+//! Shplonk batch-opening verifier for BN254
+
+use crate::debug::dbg_fr;
+use crate::debug::dbg_vec;
+use crate::debug::dump_pairs;
 use crate::field::Fr;
-use crate::types::{G1Point, VerificationKey, Proof, Transcript};
-use ark_bn254::{Bn254, G1Affine, G1Projective, G2Projective, Fq, Fq2};
-use ark_ec::{CurveGroup, PrimeGroup};
-use ark_ec::pairing::Pairing;
-use ark_ff::{Zero, One};
-use std::str::FromStr;
-use std::ops::Mul;
+use crate::trace;
+use crate::types::{G1Point, Proof, Transcript, VerificationKey};
+use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
+use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
+use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
 
-pub const NUMBER_UNSHIFTED: usize = 35;
-pub const NUMBER_SHIFTED:   usize = 5;   // = 40 - 35
+pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
+pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted
 
-/// Negate a G1 point (needed for moving quotient commitment to the other side).
-fn negate(pt: &G1Point) -> G1Point {
-    let proj = G1Projective::from(G1Affine::new_unchecked(pt.x, pt.y));
-    let neg_affine = (-proj).into_affine();
-    G1Point { x: neg_affine.x, y: neg_affine.y }
-}
-
-/// Multi‐scalar‐multiply on G1: ∑ scalars[i] * coms[i].
-fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> G1Point {
-    let mut acc = G1Projective::zero();
-    for (c, s) in coms.iter().zip(scalars.iter()) {
-        if !s.is_zero() {
-            let pg = G1Affine::new_unchecked(c.x, c.y);
-            acc += pg.mul(s.0);
-        }
+#[inline(always)]
+fn affine_checked(pt: &G1Point) -> Result<G1Affine, String> {
+    let aff = G1Affine::new_unchecked(pt.x, pt.y);
+    if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+        Ok(aff)
+    } else {
+        Err("invalid G1 point (not on curve)".into())
     }
-    let a = acc.into_affine();
-    G1Point { x: a.x, y: a.y }
 }
 
-/// Perform the final pairing check e(P0, G2)·e(P1, vk_g2) == 1.
-fn pairing_check(p0: &G1Point, p1: &G1Point) -> bool {
-    // standard BN254 G2 generator
-    let g2 = G2Projective::generator().into_affine();
-    // hardcoded second G2 from TS verifier
-    let vk_g2 = G2Projective::new(
-        Fq2::new(
-            Fq::from_str("0x260e01b251f6f1c7e7ff4e580791dee8ea51d87a358e038b4efe30fac09383c1").unwrap(),
-            Fq::from_str("0x1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed").unwrap(),
-        ),
-        Fq2::new(
-            Fq::from_str("0x090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b").unwrap(),
-            Fq::from_str("0x12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa").unwrap(),
-        ),
-        Fq2::one(),
-    )
-    .into_affine();
+#[inline(always)]
+fn negate(pt: &G1Point) -> G1Point {
+    G1Point { x: pt.x, y: -pt.y }
+}
 
-    let g1_p0 = G1Affine::new_unchecked(p0.x, p0.y);
-    let g1_p1 = G1Affine::new_unchecked(p1.x, p1.y);
-    let e1 = Bn254::pairing(g1_p0, g2);
-    let e2 = Bn254::pairing(g1_p1, vk_g2);
+#[inline(always)]
+fn is_dummy(pt: &G1Point) -> bool {
+    pt.x.is_zero() && pt.y.is_zero()
+}
+
+/// ∑ sᵢ·Cᵢ
+fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
+    if coms.len() != scalars.len() {
+        return Err("commitments / scalars length mismatch".into());
+    }
+    let mut acc = G1Projective::zero();
+    trace!("Initial acc: {:?}", acc);
+
+    for (i, (c, s)) in coms.iter().zip(scalars.iter()).enumerate() {
+        if s.is_zero() || is_dummy(c) {
+            trace!("Iteration {}: Skipping (zero scalar or dummy)", i);
+            continue;
+        }
+        let aff = G1Affine::new_unchecked(c.x, c.y);
+        if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
+            return Err("invalid G1 point".into());
+        }
+
+        trace!("Iteration {}: Processing point", i);
+        trace!(
+            "  Point (x): 0x{}",
+            hex::encode(c.x.into_bigint().to_bytes_be())
+        );
+        trace!(
+            "  Point (y): 0x{}",
+            hex::encode(c.y.into_bigint().to_bytes_be())
+        );
+        trace!("  Scalar     : 0x{}", hex::encode(s.to_bytes()));
+
+        acc += G1Projective::from(aff).mul_bigint(s.0.into_bigint());
+        let acc_aff = acc.into_affine();
+        trace!("  Accumulated result:");
+        trace!(
+            "    x: 0x{}",
+            hex::encode(acc_aff.x.into_bigint().to_bytes_be())
+        );
+        trace!(
+            "    y: 0x{}",
+            hex::encode(acc_aff.y.into_bigint().to_bytes_be())
+        );
+        acc = G1Projective::from(acc_aff);
+        trace!();
+    }
+
+    let final_aff = acc.into_affine();
+    trace!("Final result:");
+    trace!(
+        "  x: 0x{}",
+        hex::encode(final_aff.x.into_bigint().to_bytes_be())
+    );
+    trace!(
+        "  y: 0x{}",
+        hex::encode(final_aff.y.into_bigint().to_bytes_be())
+    );
+    Ok(final_aff)
+}
+
+/// pairing check
+/// This function checks the pairing condition for the given G1 points.
+fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
+    // fixed RHS G2 (TS inputValues[2-5])
+    let rhs_g2 = {
+        let x = Fq2::new(
+            Fq::from_le_bytes_mod_order(&[
+                0xed, 0xf6, 0x92, 0xd9, 0x5c, 0xbd, 0xde, 0x46, 0xdd, 0xda, 0x5e, 0xf7, 0xd4, 0x22,
+                0x43, 0x67, 0x79, 0x44, 0x5c, 0x5e, 0x66, 0x00, 0x6a, 0x42, 0x76, 0x1e, 0x1f, 0x12,
+                0xef, 0xde, 0x00, 0x18,
+            ]),
+            Fq::from_le_bytes_mod_order(&[
+                0xc2, 0x12, 0xf3, 0xae, 0xb7, 0x85, 0xe4, 0x97, 0x12, 0xe7, 0xa9, 0x35, 0x33, 0x49,
+                0xaa, 0xf1, 0x25, 0x5d, 0xfb, 0x31, 0xb7, 0xbf, 0x60, 0x72, 0x3a, 0x48, 0x0d, 0x92,
+                0x93, 0x93, 0x8e, 0x19,
+            ]),
+        );
+        let y = Fq2::new(
+            Fq::from_le_bytes_mod_order(&[
+                0xaa, 0x7d, 0xfa, 0x66, 0x01, 0xcc, 0xe6, 0x4c, 0x7b, 0xd3, 0x43, 0x0c, 0x69, 0xe7,
+                0xd1, 0xe3, 0x8f, 0x40, 0xcb, 0x8d, 0x80, 0x71, 0xab, 0x4a, 0xeb, 0x6d, 0x8c, 0xdb,
+                0xa5, 0x5e, 0xc8, 0x12,
+            ]),
+            Fq::from_le_bytes_mod_order(&[
+                0x5b, 0x97, 0x22, 0xd1, 0xdc, 0xda, 0xac, 0x55, 0xf3, 0x8e, 0xb3, 0x70, 0x33, 0x31,
+                0x4b, 0xbc, 0x95, 0x33, 0x0c, 0x69, 0xad, 0x99, 0x9e, 0xec, 0x75, 0xf0, 0x5f, 0x58,
+                0xd0, 0x89, 0x06, 0x09,
+            ]),
+        );
+        G2Affine::new_unchecked(x, y)
+    };
+    // fixed LHS G2 (VK)
+    let lhs_g2 = {
+        let x = Fq2::new(
+            Fq::from_le_bytes_mod_order(&[
+                0xb0, 0x83, 0x88, 0x93, 0xec, 0x1f, 0x23, 0x7e, 0x8b, 0x07, 0x32, 0x3b, 0x07, 0x44,
+                0x59, 0x9f, 0x4e, 0x97, 0xb5, 0x98, 0xb3, 0xb5, 0x89, 0xbc, 0xc2, 0xbc, 0x37, 0xb8,
+                0xd5, 0xc4, 0x18, 0x01,
+            ]),
+            Fq::from_le_bytes_mod_order(&[
+                0xc1, 0x83, 0x93, 0xc0, 0xfa, 0x30, 0xfe, 0x4e, 0x8b, 0x03, 0x8e, 0x35, 0x7a, 0xd8,
+                0x51, 0xea, 0xe8, 0xde, 0x91, 0x07, 0x58, 0x4e, 0xff, 0xe7, 0xc7, 0xf1, 0xf6, 0x51,
+                0xb2, 0x01, 0x0e, 0x26,
+            ]),
+        );
+        let y = Fq2::new(
+            Fq::from_le_bytes_mod_order(&[
+                0x55, 0x5e, 0xcc, 0xda, 0xd4, 0x87, 0x4a, 0x85, 0xa2, 0xce, 0xe6, 0x96, 0x3f, 0xdd,
+                0xe6, 0x11, 0x5e, 0x61, 0xe5, 0x14, 0x42, 0x5b, 0x47, 0x56, 0x2a, 0x63, 0xc0, 0xc0,
+                0xa3, 0xbd, 0xfe, 0x22,
+            ]),
+            Fq::from_le_bytes_mod_order(&[
+                0xe4, 0x5f, 0x6a, 0xda, 0x80, 0x3c, 0x41, 0xee, 0xa4, 0x9b, 0xf9, 0x41, 0x46, 0xa0,
+                0xf2, 0x9c, 0x85, 0x72, 0x9a, 0xbb, 0xc1, 0x56, 0x51, 0xd2, 0xe3, 0x0f, 0x11, 0xf7,
+                0x69, 0x63, 0xfc, 0x04,
+            ]),
+        );
+        G2Affine::new_unchecked(x, y)
+    };
+
+    let e1 = Bn254::pairing(*p0, rhs_g2);
+    let e2 = Bn254::pairing(*p1, lhs_g2);
     e1.0 * e2.0 == <Bn254 as Pairing>::TargetField::one()
 }
 
-/// Verify Shplonk: batch all checks into one MSM+pairing.
-pub fn verify_shplonk(
-    proof: &Proof,
-    vk: &VerificationKey,
-    tx: &Transcript,
-) -> Result<(), String> {
+/// Shplonk verification
+pub fn verify_shplonk(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
+    // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
-    let n_sum = proof.sumcheck_evaluations.len(); // should be 40
-
-    // 1) Precompute r^(2^i)
-    let mut powers = Vec::with_capacity(log_n);
-    powers.push(tx.gemini_r);
+    let n_sum = proof.sumcheck_evaluations.len();
+    let mut r_pows = Vec::with_capacity(log_n);
+    r_pows.push(tx.gemini_r);
     for i in 1..log_n {
-        powers.push(powers[i - 1] * powers[i - 1]);
+        r_pows.push(r_pows[i - 1] * r_pows[i - 1]);
+    }
+    #[cfg(feature = "trace")]
+    {
+        trace!("===== Step-1 parameters =====");
+        dbg_fr("gemini_r", &tx.gemini_r);
+        dbg_vec("r_pow", &r_pows);
+        trace!("==============================");
     }
 
-    // 2) Prepare arrays: 1 Q, n_sum evals, VK+proof commitments (40), log_n folds, const, quotient
-    let total = 1 + n_sum + 40 + log_n + 1 + 1;
+    // 2) allocate arrays
+    let total = 1 + n_sum + log_n + 1 + 1;
+    trace!("total = {}", total);
     let mut scalars = vec![Fr::zero(); total];
-    let mut coms    = vec![G1Point { x: Fq::zero(), y: Fq::zero() }; total];
+    let mut coms = vec![
+        G1Point {
+            x: Fq::zero(),
+            y: Fq::zero()
+        };
+        total
+    ];
 
-    // 3) Compute the "unshifted" / "shifted" batching scalars (pos/neg inverses)
-    let pos0 = (tx.shplonk_z - powers[0]).inverse();
-    let neg0 = (tx.shplonk_z + powers[0]).inverse();
+    // 3) compute shplonk weights
+    let pos0 = (tx.shplonk_z - r_pows[0]).inverse();
+    let neg0 = (tx.shplonk_z + r_pows[0]).inverse();
     let unshifted = pos0 + tx.shplonk_nu * neg0;
-    let shifted   = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
+    let shifted = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
+    #[cfg(feature = "trace")]
+    {
+        dbg_fr("pos0", &pos0);
+        dbg_fr("neg0", &neg0);
+        dbg_fr("unshifted", &unshifted);
+        dbg_fr("shifted", &shifted);
+    }
 
-    // 4) Index 0 ← shplonk_Q
+    // 4) shplonk_Q
     scalars[0] = Fr::one();
-    coms[0]    = proof.shplonk_q.clone();
+    coms[0] = proof.shplonk_q.clone();
 
-    // 5) Batch sumcheck_evaluations with ρ–powers
-    let mut running = Fr::one();
-    let mut acc_eval = Fr::zero();
-    // unshifted over first half
-    for i in 0..NUMBER_UNSHIFTED {           // 0..34
-        let idx = 1 + i;
-        scalars[idx] = (-unshifted) * running;
-        acc_eval = acc_eval + proof.sumcheck_evaluations[i] * running;
-        running = running * tx.rho;
+    // 5) weight sumcheck evals
+    let mut rho_pow = Fr::one();
+    let mut eval_acc = Fr::zero();
+    for (idx, eval) in proof.sumcheck_evaluations.iter().enumerate() {
+        let scalar = if idx < NUMBER_UNSHIFTED {
+            -unshifted
+        } else {
+            -shifted
+        } * rho_pow;
+        scalars[1 + idx] = scalar;
+        eval_acc = eval_acc + (*eval * rho_pow);
+        rho_pow = rho_pow * tx.rho;
     }
-    // shifted over second half
-    for i in NUMBER_UNSHIFTED..n_sum {       // 35..39
-        let idx = 1 + i;
-        scalars[idx] = (-shifted) * running;
-        acc_eval = acc_eval + proof.sumcheck_evaluations[i] * running;
-        running = running * tx.rho;
+    #[cfg(feature = "trace")]
+    {
+        dbg_fr("eval_acc_end", &eval_acc);
     }
 
-    // 6) Load all VK commitments (selectors, wires, tables, Lagrange)
-    let mut i = 1 + n_sum;
-    macro_rules! load_vk { ($field:ident) => {
-        coms[i] = vk.$field.clone(); i += 1;
-    }}
-    load_vk!(qm); load_vk!(qc); load_vk!(ql); load_vk!(qr);
-    load_vk!(qo); load_vk!(q4); load_vk!(q_lookup); load_vk!(q_arith);
-    load_vk!(q_range); load_vk!(q_aux); load_vk!(q_elliptic);
-    load_vk!(q_poseidon2_external); load_vk!(q_poseidon2_internal);
-    load_vk!(s1); load_vk!(s2); load_vk!(s3); load_vk!(s4);
-    load_vk!(id1); load_vk!(id2); load_vk!(id3); load_vk!(id4);
-    load_vk!(t1); load_vk!(t2); load_vk!(t3); load_vk!(t4);
-    load_vk!(lagrange_first); load_vk!(lagrange_last);
+    // 6) load VK & proof
+    {
+        let mut j = 1;
+        macro_rules! push {
+            ($f:ident) => {{
+                coms[j] = vk.$f.clone();
+                j += 1;
+            }};
+        }
+        push!(qm);
+        push!(qc);
+        push!(ql);
+        push!(qr);
+        push!(qo);
+        push!(q4);
+        push!(q_lookup);
+        push!(q_arith);
+        push!(q_range);
+        push!(q_aux);
+        push!(q_elliptic);
+        push!(q_poseidon2_external);
+        push!(q_poseidon2_internal);
+        push!(s1);
+        push!(s2);
+        push!(s3);
+        push!(s4);
+        push!(id1);
+        push!(id2);
+        push!(id3);
+        push!(id4);
+        push!(t1);
+        push!(t2);
+        push!(t3);
+        push!(t4);
+        push!(lagrange_first);
+        push!(lagrange_last);
 
-    // 7) Load proof's wire & lookup commitments
-    coms[i] = proof.w1.clone(); i += 1;
-    coms[i] = proof.w2.clone(); i += 1;
-    coms[i] = proof.w3.clone(); i += 1;
-    coms[i] = proof.w4.clone(); i += 1;
-    coms[i] = proof.z_perm.clone(); i += 1;
-    coms[i] = proof.lookup_inverses.clone(); i += 1;
-    coms[i] = proof.lookup_read_counts.clone(); i += 1;
-    coms[i] = proof.lookup_read_tags.clone(); i += 1;
+        coms[j] = proof.w1.clone();
+        j += 1;
+        coms[j] = proof.w2.clone();
+        j += 1;
+        coms[j] = proof.w3.clone();
+        j += 1;
+        coms[j] = proof.w4.clone();
+        j += 1;
+        coms[j] = proof.z_perm.clone();
+        j += 1;
+        coms[j] = proof.lookup_inverses.clone();
+        j += 1;
+        coms[j] = proof.lookup_read_counts.clone();
+        j += 1;
+        coms[j] = proof.lookup_read_tags.clone();
+        j += 1;
 
-    // 8) Load "shifted" wire commitments (same order)
-    coms[i] = proof.w1.clone(); i += 1;
-    coms[i] = proof.w2.clone(); i += 1;
-    coms[i] = proof.w3.clone(); i += 1;
-    coms[i] = proof.w4.clone(); i += 1;
-    coms[i] = proof.z_perm.clone(); i += 1;
+        coms[j] = proof.w1.clone();
+        j += 1;
+        coms[j] = proof.w2.clone();
+        j += 1;
+        coms[j] = proof.w3.clone();
+        j += 1;
+        coms[j] = proof.w4.clone();
+        j += 1;
+        coms[j] = proof.z_perm.clone();
+        j += 1;
+    }
 
-    // 9) Gemini folding: compute fold‐position evaluations
+    // 7) folding rounds
     let mut fold_pos = vec![Fr::zero(); log_n];
-    let mut cur_acc  = acc_eval;
+    let mut cur = eval_acc;
     for j in (1..=log_n).rev() {
-        let r2 = powers[j - 1];
-        let u  = tx.sumcheck_u_challenges[j - 1];
-        let num = r2 * cur_acc * Fr::from_u64(2)
+        let r2 = r_pows[j - 1];
+        let u = tx.sumcheck_u_challenges[j - 1];
+        let num = r2 * cur * Fr::from_u64(2)
             - proof.gemini_a_evaluations[j - 1] * (r2 * (Fr::one() - u) - u);
         let den = r2 * (Fr::one() - u) + u;
-        let next = num * den.inverse();
-        fold_pos[j - 1] = next;
-        cur_acc = next;
+        cur = num * den.inverse();
+        fold_pos[j - 1] = cur;
+    }
+    #[cfg(feature = "trace")]
+    {
+        dbg_fr("fold_pos_end", &fold_pos[0]);
     }
 
-    // 10) Constant‐term accumulation
-    let mut const_acc = fold_pos[0] * pos0
-        + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
-    running = tx.shplonk_nu * tx.shplonk_nu;
+    // 8) accumulate constant term
+    let mut const_acc = fold_pos[0] * pos0 + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
+    let mut v_pow = tx.shplonk_nu * tx.shplonk_nu;
+    #[cfg(feature = "trace")]
+    {
+        dbg_fr("const_acc_final", &const_acc);
+    }
 
-    // 11) Fold commitments
-    let base = 1 + n_sum + 40;
+    // 9) further folding + commit
+    let base = 1 + n_sum;
+    trace!("base = {}", base);
     for j in 1..log_n {
-        let pi = powers[j];
-        let pos_i = (tx.shplonk_z - pi).inverse();
-        let neg_i = (tx.shplonk_z + pi).inverse();
-        let sp = running * pos_i;
-        let sn = running * tx.shplonk_nu * neg_i;
-        let idx = base + (j - 1);
-        scalars[idx] = (-sp) + (-sn);
+        #[cfg(feature = "trace")]
+        {
+            trace!("── fold round {} ──────────────", j);
+            dbg_fr("v_pow (before)", &v_pow);
+        }
+
+        let pos_inv = (tx.shplonk_z - r_pows[j]).inverse();
+        let neg_inv = (tx.shplonk_z + r_pows[j]).inverse();
+        let sp = v_pow * pos_inv;
+        let sn = v_pow * tx.shplonk_nu * neg_inv;
+
+        #[cfg(feature = "trace")]
+        {
+            dbg_fr("pos_inv", &pos_inv);
+            dbg_fr("neg_inv", &neg_inv);
+            dbg_fr("scPos", &sp);
+            dbg_fr("scNeg", &sn);
+            dbg_fr("fold_pos[j]", &fold_pos[j]);
+            dbg_fr("A_eval", &proof.gemini_a_evaluations[j]);
+        }
+
+        scalars[base + j - 1] = -(sp + sn);
         const_acc = const_acc + proof.gemini_a_evaluations[j] * sn + fold_pos[j] * sp;
-        running   = running * tx.shplonk_nu * tx.shplonk_nu;
-        coms[idx] = proof.gemini_fold_comms[j - 1].clone();
+
+        v_pow = v_pow * tx.shplonk_nu * tx.shplonk_nu;
+
+        #[cfg(feature = "trace")]
+        {
+            dbg_fr("const_acc", &const_acc);
+            dbg_fr("v_pow (after)", &v_pow);
+        }
+
+        coms[base + j - 1] = proof.gemini_fold_comms[j - 1].clone();
     }
 
-    // 12) "1‐point" at G1::one() and its scalar = const_acc
-    let const_idx = 1 + n_sum + 40 + log_n;
-    let gen = G1Projective::generator();
-    coms[const_idx]    = G1Point { x: gen.x, y: gen.y };
-    scalars[const_idx] = const_acc;
+    // 10) add generator
+    let one_idx = base + log_n;
+    trace!("one_idx = {}", one_idx);
+    let gen = G1Projective::generator().into_affine();
+    coms[one_idx] = G1Point { x: gen.x, y: gen.y };
+    scalars[one_idx] = const_acc;
 
-    // 13) Quotient commitment at last index, scalar = z
-    let q_idx = const_idx + 1;
-    coms[q_idx]    = proof.kzg_quotient.clone();
+    // 11) add quotient
+    let q_idx = one_idx + 1;
+    trace!("q_idx = {}", q_idx);
+    coms[q_idx] = proof.kzg_quotient.clone();
     scalars[q_idx] = tx.shplonk_z;
 
-    // 14) Run MSM + pairing
-    let p0 = batch_mul(&coms, &scalars);
-    let p1 = negate(&proof.kzg_quotient);
+    // 12) pre-MSM debug
+    #[cfg(feature = "trace")]
+    {
+        trace!("===== Shplonk pre-MSM =====");
+        trace!("scalars.len() = {}", scalars.len());
+        trace!("coms.len()    = {}", coms.len());
+        let base_shift = 1 + NUMBER_UNSHIFTED;
+        for k in 0..NUMBER_SHIFTED {
+            dbg_fr(&format!("scalar_shifted[{}]", k), &scalars[base_shift + k]);
+        }
+        trace!("============================");
+    }
+
+    // 13) dump all pairs
+    dump_pairs(&coms, &scalars, usize::MAX);
+
+    // 14) MSM + pairing
+    let p0 = batch_mul(&coms, &scalars)?;
+    let p1 = affine_checked(&negate(&proof.kzg_quotient))?;
+    #[cfg(feature = "trace")]
+    {
+        trace!("===== PAIRING-DEBUG =====");
+        dbg_fr("scalar[z]", &scalars[q_idx]);
+        trace!("P0.x = 0x{}", hex::encode(p0.x.into_bigint().to_bytes_be()));
+        trace!("P0.y = 0x{}", hex::encode(p0.y.into_bigint().to_bytes_be()));
+        trace!("P1.x = 0x{}", hex::encode(p1.x.into_bigint().to_bytes_be()));
+        trace!("P1.y = 0x{}", hex::encode(p1.y.into_bigint().to_bytes_be()));
+        trace!("=========================");
+    }
+
     if pairing_check(&p0, &p1) {
         Ok(())
     } else {
