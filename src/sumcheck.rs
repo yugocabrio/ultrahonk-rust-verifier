@@ -5,7 +5,7 @@ use crate::trace;
 use crate::{
     debug::{dbg_fr, dbg_vec},
     field::Fr,
-    relations::accumulate_relation_evaluations,
+    relations::{accumulate_relation_evaluations, dump_subrelations},
     types::{Transcript, VerificationKey},
 };
 

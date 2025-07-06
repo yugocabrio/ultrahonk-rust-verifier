@@ -2,6 +2,8 @@
 
 //! Shplonk batch-opening verifier for BN254
 
+use crate::debug::dbg_fr;
+use crate::debug::dbg_vec;
 use crate::debug::dump_pairs;
 use crate::field::Fr;
 use crate::trace;
