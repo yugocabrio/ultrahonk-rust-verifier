@@ -2,18 +2,18 @@
 
 //! Shplonk batch-opening verifier for BN254
 
-use crate::trace;
 use crate::debug::{dbg_fr, dbg_vec, dump_pairs};
 use crate::field::Fr;
+use crate::trace;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey};
-use ark_bn254::{Bn254, G1Affine, G1Projective, G2Affine, Fq, Fq2};
+use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
-use ark_serialize::CanonicalSerialize;
 use ark_ff::{BigInteger, BigInteger256, Field, One, PrimeField, Zero};
+use ark_serialize::CanonicalSerialize;
 use hex;
 
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
-pub const NUMBER_SHIFTED: usize   = 5;  // Final 5 are shifted
+pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted
 
 #[inline(always)]
 fn affine_checked(pt: &G1Point) -> Result<G1Affine, String> {
@@ -54,23 +54,41 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
         }
 
         trace!("Iteration {}: Processing point", i);
-        trace!("  Point (x): 0x{}", hex::encode(c.x.into_bigint().to_bytes_be()));
-        trace!("  Point (y): 0x{}", hex::encode(c.y.into_bigint().to_bytes_be()));
+        trace!(
+            "  Point (x): 0x{}",
+            hex::encode(c.x.into_bigint().to_bytes_be())
+        );
+        trace!(
+            "  Point (y): 0x{}",
+            hex::encode(c.y.into_bigint().to_bytes_be())
+        );
         trace!("  Scalar     : 0x{}", hex::encode(s.to_bytes()));
 
         acc += G1Projective::from(aff).mul_bigint(s.0.into_bigint());
         let acc_aff = acc.into_affine();
         trace!("  Accumulated result:");
-        trace!("    x: 0x{}", hex::encode(acc_aff.x.into_bigint().to_bytes_be()));
-        trace!("    y: 0x{}", hex::encode(acc_aff.y.into_bigint().to_bytes_be()));
+        trace!(
+            "    x: 0x{}",
+            hex::encode(acc_aff.x.into_bigint().to_bytes_be())
+        );
+        trace!(
+            "    y: 0x{}",
+            hex::encode(acc_aff.y.into_bigint().to_bytes_be())
+        );
         acc = G1Projective::from(acc_aff);
         trace!();
     }
 
     let final_aff = acc.into_affine();
     trace!("Final result:");
-    trace!("  x: 0x{}", hex::encode(final_aff.x.into_bigint().to_bytes_be()));
-    trace!("  y: 0x{}", hex::encode(final_aff.y.into_bigint().to_bytes_be()));
+    trace!(
+        "  x: 0x{}",
+        hex::encode(final_aff.x.into_bigint().to_bytes_be())
+    );
+    trace!(
+        "  y: 0x{}",
+        hex::encode(final_aff.y.into_bigint().to_bytes_be())
+    );
     Ok(final_aff)
 }
 
@@ -81,22 +99,26 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
     let rhs_g2 = {
         let x = Fq2::new(
             Fq::from_le_bytes_mod_order(&[
-                0xed,0xf6,0x92,0xd9,0x5c,0xbd,0xde,0x46,0xdd,0xda,0x5e,0xf7,0xd4,0x22,0x43,0x67,
-                0x79,0x44,0x5c,0x5e,0x66,0x00,0x6a,0x42,0x76,0x1e,0x1f,0x12,0xef,0xde,0x00,0x18,
+                0xed, 0xf6, 0x92, 0xd9, 0x5c, 0xbd, 0xde, 0x46, 0xdd, 0xda, 0x5e, 0xf7, 0xd4, 0x22,
+                0x43, 0x67, 0x79, 0x44, 0x5c, 0x5e, 0x66, 0x00, 0x6a, 0x42, 0x76, 0x1e, 0x1f, 0x12,
+                0xef, 0xde, 0x00, 0x18,
             ]),
             Fq::from_le_bytes_mod_order(&[
-                0xc2,0x12,0xf3,0xae,0xb7,0x85,0xe4,0x97,0x12,0xe7,0xa9,0x35,0x33,0x49,0xaa,0xf1,
-                0x25,0x5d,0xfb,0x31,0xb7,0xbf,0x60,0x72,0x3a,0x48,0x0d,0x92,0x93,0x93,0x8e,0x19,
+                0xc2, 0x12, 0xf3, 0xae, 0xb7, 0x85, 0xe4, 0x97, 0x12, 0xe7, 0xa9, 0x35, 0x33, 0x49,
+                0xaa, 0xf1, 0x25, 0x5d, 0xfb, 0x31, 0xb7, 0xbf, 0x60, 0x72, 0x3a, 0x48, 0x0d, 0x92,
+                0x93, 0x93, 0x8e, 0x19,
             ]),
         );
         let y = Fq2::new(
             Fq::from_le_bytes_mod_order(&[
-                0xaa,0x7d,0xfa,0x66,0x01,0xcc,0xe6,0x4c,0x7b,0xd3,0x43,0x0c,0x69,0xe7,0xd1,0xe3,
-                0x8f,0x40,0xcb,0x8d,0x80,0x71,0xab,0x4a,0xeb,0x6d,0x8c,0xdb,0xa5,0x5e,0xc8,0x12,
+                0xaa, 0x7d, 0xfa, 0x66, 0x01, 0xcc, 0xe6, 0x4c, 0x7b, 0xd3, 0x43, 0x0c, 0x69, 0xe7,
+                0xd1, 0xe3, 0x8f, 0x40, 0xcb, 0x8d, 0x80, 0x71, 0xab, 0x4a, 0xeb, 0x6d, 0x8c, 0xdb,
+                0xa5, 0x5e, 0xc8, 0x12,
             ]),
             Fq::from_le_bytes_mod_order(&[
-                0x5b,0x97,0x22,0xd1,0xdc,0xda,0xac,0x55,0xf3,0x8e,0xb3,0x70,0x33,0x31,0x4b,0xbc,
-                0x95,0x33,0x0c,0x69,0xad,0x99,0x9e,0xec,0x75,0xf0,0x5f,0x58,0xd0,0x89,0x06,0x09,
+                0x5b, 0x97, 0x22, 0xd1, 0xdc, 0xda, 0xac, 0x55, 0xf3, 0x8e, 0xb3, 0x70, 0x33, 0x31,
+                0x4b, 0xbc, 0x95, 0x33, 0x0c, 0x69, 0xad, 0x99, 0x9e, 0xec, 0x75, 0xf0, 0x5f, 0x58,
+                0xd0, 0x89, 0x06, 0x09,
             ]),
         );
         G2Affine::new_unchecked(x, y)
@@ -105,22 +127,26 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
     let lhs_g2 = {
         let x = Fq2::new(
             Fq::from_le_bytes_mod_order(&[
-                0xb0,0x83,0x88,0x93,0xec,0x1f,0x23,0x7e,0x8b,0x07,0x32,0x3b,0x07,0x44,0x59,0x9f,
-                0x4e,0x97,0xb5,0x98,0xb3,0xb5,0x89,0xbc,0xc2,0xbc,0x37,0xb8,0xd5,0xc4,0x18,0x01,
+                0xb0, 0x83, 0x88, 0x93, 0xec, 0x1f, 0x23, 0x7e, 0x8b, 0x07, 0x32, 0x3b, 0x07, 0x44,
+                0x59, 0x9f, 0x4e, 0x97, 0xb5, 0x98, 0xb3, 0xb5, 0x89, 0xbc, 0xc2, 0xbc, 0x37, 0xb8,
+                0xd5, 0xc4, 0x18, 0x01,
             ]),
             Fq::from_le_bytes_mod_order(&[
-                0xc1,0x83,0x93,0xc0,0xfa,0x30,0xfe,0x4e,0x8b,0x03,0x8e,0x35,0x7a,0xd8,0x51,0xea,
-                0xe8,0xde,0x91,0x07,0x58,0x4e,0xff,0xe7,0xc7,0xf1,0xf6,0x51,0xb2,0x01,0x0e,0x26,
+                0xc1, 0x83, 0x93, 0xc0, 0xfa, 0x30, 0xfe, 0x4e, 0x8b, 0x03, 0x8e, 0x35, 0x7a, 0xd8,
+                0x51, 0xea, 0xe8, 0xde, 0x91, 0x07, 0x58, 0x4e, 0xff, 0xe7, 0xc7, 0xf1, 0xf6, 0x51,
+                0xb2, 0x01, 0x0e, 0x26,
             ]),
         );
         let y = Fq2::new(
             Fq::from_le_bytes_mod_order(&[
-                0x55,0x5e,0xcc,0xda,0xd4,0x87,0x4a,0x85,0xa2,0xce,0xe6,0x96,0x3f,0xdd,0xe6,0x11,
-                0x5e,0x61,0xe5,0x14,0x42,0x5b,0x47,0x56,0x2a,0x63,0xc0,0xc0,0xa3,0xbd,0xfe,0x22,
+                0x55, 0x5e, 0xcc, 0xda, 0xd4, 0x87, 0x4a, 0x85, 0xa2, 0xce, 0xe6, 0x96, 0x3f, 0xdd,
+                0xe6, 0x11, 0x5e, 0x61, 0xe5, 0x14, 0x42, 0x5b, 0x47, 0x56, 0x2a, 0x63, 0xc0, 0xc0,
+                0xa3, 0xbd, 0xfe, 0x22,
             ]),
             Fq::from_le_bytes_mod_order(&[
-                0xe4,0x5f,0x6a,0xda,0x80,0x3c,0x41,0xee,0xa4,0x9b,0xf9,0x41,0x46,0xa0,0xf2,0x9c,
-                0x85,0x72,0x9a,0xbb,0xc1,0x56,0x51,0xd2,0xe3,0x0f,0x11,0xf7,0x69,0x63,0xfc,0x04,
+                0xe4, 0x5f, 0x6a, 0xda, 0x80, 0x3c, 0x41, 0xee, 0xa4, 0x9b, 0xf9, 0x41, 0x46, 0xa0,
+                0xf2, 0x9c, 0x85, 0x72, 0x9a, 0xbb, 0xc1, 0x56, 0x51, 0xd2, 0xe3, 0x0f, 0x11, 0xf7,
+                0x69, 0x63, 0xfc, 0x04,
             ]),
         );
         G2Affine::new_unchecked(x, y)
@@ -132,11 +158,7 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
 }
 
 /// Shplonk verification
-pub fn verify_shplonk(
-    proof: &Proof,
-    vk: &VerificationKey,
-    tx: &Transcript,
-) -> Result<(), String> {
+pub fn verify_shplonk(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
     let n_sum = proof.sumcheck_evaluations.len();
@@ -157,30 +179,43 @@ pub fn verify_shplonk(
     let total = 1 + n_sum + log_n + 1 + 1;
     trace!("total = {}", total);
     let mut scalars = vec![Fr::zero(); total];
-    let mut coms    = vec![G1Point { x: Fq::zero(), y: Fq::zero() }; total];
+    let mut coms = vec![
+        G1Point {
+            x: Fq::zero(),
+            y: Fq::zero()
+        };
+        total
+    ];
 
     // 3) compute shplonk weights
-    let pos0 = (tx.shplonk_z - r_pows[0]).inverse(); let neg0 = (tx.shplonk_z + r_pows[0]).inverse();
+    let pos0 = (tx.shplonk_z - r_pows[0]).inverse();
+    let neg0 = (tx.shplonk_z + r_pows[0]).inverse();
     let unshifted = pos0 + tx.shplonk_nu * neg0;
-    let shifted   = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
+    let shifted = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
     #[cfg(feature = "trace")]
     {
-        dbg_fr("pos0", &pos0); dbg_fr("neg0", &neg0);
-        dbg_fr("unshifted", &unshifted); dbg_fr("shifted", &shifted);
+        dbg_fr("pos0", &pos0);
+        dbg_fr("neg0", &neg0);
+        dbg_fr("unshifted", &unshifted);
+        dbg_fr("shifted", &shifted);
     }
 
     // 4) shplonk_Q
     scalars[0] = Fr::one();
-    coms[0]    = proof.shplonk_q.clone();
+    coms[0] = proof.shplonk_q.clone();
 
     // 5) weight sumcheck evals
     let mut rho_pow = Fr::one();
     let mut eval_acc = Fr::zero();
     for (idx, eval) in proof.sumcheck_evaluations.iter().enumerate() {
-        let scalar = if idx < NUMBER_UNSHIFTED { -unshifted } else { -shifted } * rho_pow;
+        let scalar = if idx < NUMBER_UNSHIFTED {
+            -unshifted
+        } else {
+            -shifted
+        } * rho_pow;
         scalars[1 + idx] = scalar;
         eval_acc = eval_acc + (*eval * rho_pow);
-        rho_pow  = rho_pow * tx.rho;
+        rho_pow = rho_pow * tx.rho;
     }
     #[cfg(feature = "trace")]
     {
@@ -190,38 +225,75 @@ pub fn verify_shplonk(
     // 6) load VK & proof
     {
         let mut j = 1;
-        macro_rules! push { ($f:ident) => {{ coms[j] = vk.$f.clone(); j += 1; }}}
-        push!(qm); push!(qc); push!(ql); push!(qr);
-        push!(qo); push!(q4); push!(q_lookup); push!(q_arith);
-        push!(q_range); push!(q_aux); push!(q_elliptic);
-        push!(q_poseidon2_external); push!(q_poseidon2_internal);
-        push!(s1); push!(s2); push!(s3); push!(s4);
-        push!(id1); push!(id2); push!(id3); push!(id4);
-        push!(t1); push!(t2); push!(t3); push!(t4);
-        push!(lagrange_first); push!(lagrange_last);
+        macro_rules! push {
+            ($f:ident) => {{
+                coms[j] = vk.$f.clone();
+                j += 1;
+            }};
+        }
+        push!(qm);
+        push!(qc);
+        push!(ql);
+        push!(qr);
+        push!(qo);
+        push!(q4);
+        push!(q_lookup);
+        push!(q_arith);
+        push!(q_range);
+        push!(q_aux);
+        push!(q_elliptic);
+        push!(q_poseidon2_external);
+        push!(q_poseidon2_internal);
+        push!(s1);
+        push!(s2);
+        push!(s3);
+        push!(s4);
+        push!(id1);
+        push!(id2);
+        push!(id3);
+        push!(id4);
+        push!(t1);
+        push!(t2);
+        push!(t3);
+        push!(t4);
+        push!(lagrange_first);
+        push!(lagrange_last);
 
-        coms[j] = proof.w1.clone(); j += 1;
-        coms[j] = proof.w2.clone(); j += 1;
-        coms[j] = proof.w3.clone(); j += 1;
-        coms[j] = proof.w4.clone(); j += 1;
-        coms[j] = proof.z_perm.clone(); j += 1;
-        coms[j] = proof.lookup_inverses.clone(); j += 1;
-        coms[j] = proof.lookup_read_counts.clone(); j += 1;
-        coms[j] = proof.lookup_read_tags.clone(); j += 1;
+        coms[j] = proof.w1.clone();
+        j += 1;
+        coms[j] = proof.w2.clone();
+        j += 1;
+        coms[j] = proof.w3.clone();
+        j += 1;
+        coms[j] = proof.w4.clone();
+        j += 1;
+        coms[j] = proof.z_perm.clone();
+        j += 1;
+        coms[j] = proof.lookup_inverses.clone();
+        j += 1;
+        coms[j] = proof.lookup_read_counts.clone();
+        j += 1;
+        coms[j] = proof.lookup_read_tags.clone();
+        j += 1;
 
-        coms[j] = proof.w1.clone(); j += 1;
-        coms[j] = proof.w2.clone(); j += 1;
-        coms[j] = proof.w3.clone(); j += 1;
-        coms[j] = proof.w4.clone(); j += 1;
-        coms[j] = proof.z_perm.clone(); j += 1;
+        coms[j] = proof.w1.clone();
+        j += 1;
+        coms[j] = proof.w2.clone();
+        j += 1;
+        coms[j] = proof.w3.clone();
+        j += 1;
+        coms[j] = proof.w4.clone();
+        j += 1;
+        coms[j] = proof.z_perm.clone();
+        j += 1;
     }
 
     // 7) folding rounds
     let mut fold_pos = vec![Fr::zero(); log_n];
     let mut cur = eval_acc;
     for j in (1..=log_n).rev() {
-        let r2  = r_pows[j - 1];
-        let u   = tx.sumcheck_u_challenges[j - 1];
+        let r2 = r_pows[j - 1];
+        let u = tx.sumcheck_u_challenges[j - 1];
         let num = r2 * cur * Fr::from_u64(2)
             - proof.gemini_a_evaluations[j - 1] * (r2 * (Fr::one() - u) - u);
         let den = r2 * (Fr::one() - u) + u;
@@ -234,8 +306,7 @@ pub fn verify_shplonk(
     }
 
     // 8) accumulate constant term
-    let mut const_acc = fold_pos[0] * pos0
-        + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
+    let mut const_acc = fold_pos[0] * pos0 + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
     let mut v_pow = tx.shplonk_nu * tx.shplonk_nu;
     #[cfg(feature = "trace")]
     {
@@ -268,9 +339,7 @@ pub fn verify_shplonk(
         }
 
         scalars[base + j - 1] = -(sp + sn);
-        const_acc = const_acc
-            + proof.gemini_a_evaluations[j] * sn
-            + fold_pos[j] * sp;
+        const_acc = const_acc + proof.gemini_a_evaluations[j] * sn + fold_pos[j] * sp;
 
         v_pow = v_pow * tx.shplonk_nu * tx.shplonk_nu;
 
@@ -287,14 +356,14 @@ pub fn verify_shplonk(
     let one_idx = base + log_n;
     trace!("one_idx = {}", one_idx);
     let gen = G1Projective::generator().into_affine();
-    coms[one_idx]    = G1Point { x: gen.x, y: gen.y };
+    coms[one_idx] = G1Point { x: gen.x, y: gen.y };
     scalars[one_idx] = const_acc;
 
     // 11) add quotient
     let q_idx = one_idx + 1;
     trace!("q_idx = {}", q_idx);
-    coms[q_idx]       = proof.kzg_quotient.clone();
-    scalars[q_idx]    = tx.shplonk_z;
+    coms[q_idx] = proof.kzg_quotient.clone();
+    scalars[q_idx] = tx.shplonk_z;
 
     // 12) pre-MSM debug
     #[cfg(feature = "trace")]

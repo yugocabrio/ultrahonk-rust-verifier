@@ -2,11 +2,11 @@
 //! Finite-field wrapper for BN254 Fr, compatible with Arkworks 0.5.
 
 use ark_bn254::Fr as ArkFr;
-use ark_ff::{Field, Zero, PrimeField};
+use ark_ff::BigInteger256;
+use ark_ff::{Field, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
 use hex;
 use std::ops::{Add, Mul, Neg, Sub};
-use ark_ff::BigInteger256;
 
 /*────────────────────────────  OddLength を回避するヘルパ  ──────────────────────────*/
 /// "0x…" を剥がし、奇数桁なら先頭に '0' を付けて **必ず偶数桁** にする。

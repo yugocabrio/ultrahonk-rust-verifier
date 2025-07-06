@@ -3,10 +3,10 @@
 
 use crate::{
     field::Fr,
+    shplonk::verify_shplonk,
     sumcheck::verify_sumcheck,
     transcript::generate_transcript,
     utils::{load_proof, load_vk},
-    shplonk::verify_shplonk,
 };
 
 pub struct HonkVerifier {
@@ -15,7 +15,9 @@ pub struct HonkVerifier {
 
 impl HonkVerifier {
     pub fn new(vk_path: &str) -> Self {
-        Self { vk: load_vk(vk_path) }
+        Self {
+            vk: load_vk(vk_path),
+        }
     }
 
     /// Top-level verify

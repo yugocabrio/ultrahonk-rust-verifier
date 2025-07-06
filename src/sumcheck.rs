@@ -1,13 +1,13 @@
 //! Sum-check verifier ― Ultra-/Plonk‐Honk compatible
 //! -------------------------------------------------
 
+use crate::trace;
 use crate::{
     debug::{dbg_fr, dbg_vec},
     field::Fr,
     relations::{accumulate_relation_evaluations, dump_subrelations},
     types::{Transcript, VerificationKey},
 };
-use crate::trace;
 use hex;
 
 lazy_static::lazy_static! {
@@ -59,20 +59,20 @@ pub fn verify_sumcheck(
     tx: &Transcript,
     vk: &VerificationKey,
 ) -> Result<(), String> {
-    let log_n       = vk.log_circuit_size as usize;
-    let mut target  = Fr::zero();
+    let log_n = vk.log_circuit_size as usize;
+    let mut target = Fr::zero();
     let mut pow_par = Fr::one();
 
     trace!("===== SUMCHECK (Rust) =====");
-    dbg_fr("initial_target" , &target);
+    dbg_fr("initial_target", &target);
     dbg_fr("initial_pow_par", &pow_par);
 
     // 1) 각 라운드 합산 검사 및 다음 target/pow 계산
     for r in 0..log_n {
         let uni = &proof.sumcheck_univariates[r];
 
-        dbg_vec(&format!("u[{r}]"     ), uni);
-        dbg_fr ("target_before"       , &target);
+        dbg_vec(&format!("u[{r}]"), uni);
+        dbg_fr("target_before", &target);
 
         if !check_round_sum(uni, target) {
             return Err(format!("sum-check round {r}: linear check failed"));
@@ -81,11 +81,11 @@ pub fn verify_sumcheck(
         let chi = tx.sumcheck_u_challenges[r];
         dbg_fr("chi", &chi);
 
-        target  = next_target(uni, chi);
+        target = next_target(uni, chi);
         pow_par = update_pow(pow_par, tx.gate_challenges[r], chi);
 
-        dbg_fr("target_after" , &target);
-        dbg_fr("pow_partial"  , &pow_par);
+        dbg_fr("target_after", &target);
+        dbg_fr("pow_partial", &pow_par);
         trace!("------------------------------------------");
     }
 
@@ -101,8 +101,14 @@ pub fn verify_sumcheck(
     #[cfg(feature = "trace")]
     {
         trace!("---- DEBUG SUMMARY ---------------------------------");
-        trace!("beta               = 0x{}", hex::encode(tx.rel_params.beta.to_bytes()));
-        trace!("gamma              = 0x{}", hex::encode(tx.rel_params.gamma.to_bytes()));
+        trace!(
+            "beta               = 0x{}",
+            hex::encode(tx.rel_params.beta.to_bytes())
+        );
+        trace!(
+            "gamma              = 0x{}",
+            hex::encode(tx.rel_params.gamma.to_bytes())
+        );
         trace!(
             "public_inputs_delta= 0x{}",
             hex::encode(tx.rel_params.public_inputs_delta.to_bytes())
@@ -121,7 +127,7 @@ pub fn verify_sumcheck(
 
     trace!("==== FINAL ====");
     dbg_fr("grand_relation", &grand);
-    dbg_fr("target"        , &target);
+    dbg_fr("target", &target);
     trace!("==============================");
 
     if grand == target {

@@ -67,10 +67,7 @@ pub struct G1Point {
 impl G1Point {
     /// Convert an ark_ec-affine point into our wrapper.
     pub fn from_affine(pt: &G1Affine) -> Self {
-        G1Point {
-            x: pt.x,
-            y: pt.y,
-        }
+        G1Point { x: pt.x, y: pt.y }
     }
 
     /// Convert back to ark_ec-affine for pairing.
@@ -135,8 +132,8 @@ pub struct Proof {
     pub sumcheck_univariates: Vec<Vec<Fr>>, // 28 × 8
     pub sumcheck_evaluations: Vec<Fr>,      // 40
     // Gemini fold commitments
-    pub gemini_fold_comms: Vec<G1Point>,    // 27
-    pub gemini_a_evaluations: Vec<Fr>,      // 28
+    pub gemini_fold_comms: Vec<G1Point>, // 27
+    pub gemini_a_evaluations: Vec<Fr>,   // 28
     // Shplonk
     pub shplonk_q: G1Point,
     pub kzg_quotient: G1Point,
@@ -157,8 +154,8 @@ pub struct RelationParameters {
 #[derive(Clone, Debug)]
 pub struct Transcript {
     pub rel_params: RelationParameters,
-    pub alphas: Vec<Fr>,            // 25
-    pub gate_challenges: Vec<Fr>,   // logN (28)
+    pub alphas: Vec<Fr>,                // 25
+    pub gate_challenges: Vec<Fr>,       // logN (28)
     pub sumcheck_u_challenges: Vec<Fr>, // 28
     pub rho: Fr,
     pub gemini_r: Fr,

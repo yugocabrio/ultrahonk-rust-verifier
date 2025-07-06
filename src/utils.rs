@@ -2,13 +2,13 @@
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
-use crate::types::{G1Point, VerificationKey, Proof};
+use crate::types::{G1Point, Proof, VerificationKey};
 use ark_bn254::Fq;
-use std::fs::File;
-use std::io::Read;
+use ark_ff::{BigInteger256, PrimeField};
 use num_bigint::BigUint;
 use num_traits::Num;
-use ark_ff::{PrimeField, BigInteger256};
+use std::fs::File;
+use std::io::Read;
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
@@ -17,16 +17,15 @@ fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
 
 /// Big-Endian 32 byte → Fq （mod p で受け入れる）
 fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
-    let mut bytes_le = *bytes_be;   // 32-byte copy
-    bytes_le.reverse();             // BE → LE
+    let mut bytes_le = *bytes_be; // 32-byte copy
+    bytes_le.reverse(); // BE → LE
     Fq::from_le_bytes_mod_order(&bytes_le)
 }
-
 
 /// Fq → 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
     let mut out = [0u8; 32];
-    let bi: BigInteger256 = (*f).into();          // 4 × 64-bit limbs (LE)
+    let bi: BigInteger256 = (*f).into(); // 4 × 64-bit limbs (LE)
     for (i, limb) in bi.0.iter().rev().enumerate() {
         out[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_be_bytes());
     }
@@ -37,9 +36,9 @@ pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
 pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     let be = fq_to_be_bytes(f);
     let big = BigUint::from_bytes_be(&be);
-    let mask = (BigUint::from(1u8) << 136) - 1u8;   // 2¹³⁶ − 1
-    let low = &big & &mask;                         // 下 136 bit
-    let high = &big >> 136;                         // 上 120 bit
+    let mask = (BigUint::from(1u8) << 136) - 1u8; // 2¹³⁶ − 1
+    let low = &big & &mask; // 下 136 bit
+    let high = &big >> 136; // 上 120 bit
 
     // biguint → 32-byte BE
     fn to_arr(x: BigUint) -> [u8; 32] {
@@ -200,19 +199,13 @@ pub fn load_vk(path: &str) -> VerificationKey {
     );
 
     // Parse circuit params:
-    let circuit_size = BigUint::from_str_radix(
-        vk_fields[0].trim_start_matches("0x"),
-        16,
-    )
-    .unwrap()
-    .to_u64_digits(); // But we know it's u64
+    let circuit_size = BigUint::from_str_radix(vk_fields[0].trim_start_matches("0x"), 16)
+        .unwrap()
+        .to_u64_digits(); // But we know it's u64
     let circuit_size_u64 = circuit_size[0];
-    let public_inputs_size = BigUint::from_str_radix(
-        vk_fields[1].trim_start_matches("0x"),
-        16,
-    )
-    .unwrap()
-    .to_u64_digits()[0];
+    let public_inputs_size = BigUint::from_str_radix(vk_fields[1].trim_start_matches("0x"), 16)
+        .unwrap()
+        .to_u64_digits()[0];
     let log_circuit_size = (circuit_size_u64 as f64).log2() as u64;
 
     // Helper to convert combined BigUint into an Fq

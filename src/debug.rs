@@ -63,7 +63,10 @@ pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
         let s_hex = fr_to_hex(&scalars[i]);
         trace!(
             "[#{:02}]  s = {:>66}  C.x = {:>66}  C.y = {:>66}",
-            i, s_hex, x_hex, y_hex
+            i,
+            s_hex,
+            x_hex,
+            y_hex
         );
     }
     trace!("================================");
@@ -73,7 +76,12 @@ pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
 #[inline(always)]
 pub fn dbg_vec(tag: &str, xs: &[Fr]) {
     for (i, v) in xs.iter().enumerate() {
-        trace!("{tag}[{i:02}] = 0x{}", hex::encode(v.to_bytes()), tag = tag, i = i);
+        trace!(
+            "{tag}[{i:02}] = 0x{}",
+            hex::encode(v.to_bytes()),
+            tag = tag,
+            i = i
+        );
     }
 }
 
