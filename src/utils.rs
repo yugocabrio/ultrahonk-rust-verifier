@@ -179,7 +179,7 @@ fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
     let high = BigUint::from_str_radix(high_hex, 16).unwrap();
 
     // high << (34*4) bits = high << 136
-    
+
     (high << 136) | low
 }
 
