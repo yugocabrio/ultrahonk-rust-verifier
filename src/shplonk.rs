@@ -2,15 +2,13 @@
 
 //! Shplonk batch-opening verifier for BN254
 
-use crate::debug::{dbg_fr, dbg_vec, dump_pairs};
+use crate::debug::dump_pairs;
 use crate::field::Fr;
 use crate::trace;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey};
 use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
-use ark_ff::{BigInteger, BigInteger256, Field, One, PrimeField, Zero};
-use ark_serialize::CanonicalSerialize;
-use hex;
+use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
 
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
 pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted

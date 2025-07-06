@@ -5,10 +5,9 @@ use crate::trace;
 use crate::{
     debug::{dbg_fr, dbg_vec},
     field::Fr,
-    relations::{accumulate_relation_evaluations, dump_subrelations},
+    relations::accumulate_relation_evaluations,
     types::{Transcript, VerificationKey},
 };
-use hex;
 
 lazy_static::lazy_static! {
     /// 8-point barycentric coefficients
