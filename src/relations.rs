@@ -279,8 +279,8 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let u3_ext = s3.pow(5);
     let u4_ext = s4.pow(5);
 
-    let u1_int = u1_ext; // s1^5 그대로 재사용
-    let u2_int = wire(vals, Wire::Wr); // *S-box 없음*, *Q_R 없음*
+    let u1_int = u1_ext; // s1^5 reused as-is
+    let u2_int = wire(vals, Wire::Wr); // *No S-box*, *No Q_R*
     let u3_int = wire(vals, Wire::Wo);
     let u4_int = wire(vals, Wire::W4);
 

@@ -8,8 +8,8 @@ use ark_serialize::CanonicalSerialize;
 use hex;
 use std::ops::{Add, Mul, Neg, Sub};
 
-/*────────────────────────────  OddLength を回避するヘルパ  ──────────────────────────*/
-/// "0x…" を剥がし、奇数桁なら先頭に '0' を付けて **必ず偶数桁** にする。
+/*────────────────────────────  Helper to avoid OddLength  ──────────────────────────*/
+/// Strip "0x..." and if odd digits, prepend '0' to **always make even digits**.
 #[inline(always)]
 fn normalize_hex(s: &str) -> String {
     let raw = s.trim_start_matches("0x");
@@ -37,7 +37,7 @@ impl Fr {
     }
 
     /// Construct from hex string (with or without 0x prefix).
-    /// 偶数桁に正規化してから `hex::decode` するので OddLength 例外は起こさない。
+    /// Normalize to even digits before `hex::decode` so OddLength exception won't occur.
     pub fn from_str(s: &str) -> Self {
         let bytes = hex::decode(normalize_hex(s)).expect("hex decode failed");
         let mut padded = [0u8; 32];
@@ -48,7 +48,7 @@ impl Fr {
 
     /// Construct from a 32-byte big-endian array.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-        // ark-ff は LE を取るので BE → LE
+        // ark-ff takes LE (little-endian) so BE → LE
         let mut tmp = *bytes;
         tmp.reverse();
         Fr(ArkFr::from_le_bytes_mod_order(&tmp))
@@ -67,7 +67,7 @@ impl Fr {
         out
     }
 
-    /// Convert to "0x…" hex string（常に 64 桁）— デバッグ用。
+    /// Convert to "0x..." hex string (always 64 digits) — for debugging.
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.to_bytes()))
     }
