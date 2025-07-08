@@ -157,7 +157,11 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
 }
 
 /// Shplemini verification
-pub fn verify_shplemini(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
+pub fn verify_shplemini(
+    proof: &Proof,
+    vk: &VerificationKey,
+    tx: &Transcript,
+) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
     let n_sum = proof.sumcheck_evaluations.len();

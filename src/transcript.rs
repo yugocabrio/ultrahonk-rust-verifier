@@ -4,8 +4,8 @@
 use crate::debug::{dbg_fr, dbg_vec};
 use crate::trace;
 use crate::{
-    hash::keccak256,
     field::Fr,
+    hash::keccak256,
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
     utils::fq_to_halves_be,
 };

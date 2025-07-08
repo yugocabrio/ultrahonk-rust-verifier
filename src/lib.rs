@@ -1,8 +1,8 @@
 // src/lib.rs
 
-pub mod hash;
 pub mod debug;
 pub mod field;
+pub mod hash;
 pub mod relations;
 pub mod shplemini;
 pub mod sumcheck;
