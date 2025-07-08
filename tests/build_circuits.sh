@@ -4,26 +4,42 @@ set -euo pipefail
 NOIR_VERSION="1.0.0-beta.3"
 BB_VERSION="v0.82.2"
 
-add_to_ci_path () {
-  [ -n "${GITHUB_PATH:-}" ] && echo "$1" >> "$GITHUB_PATH"
+install_nargo() {
+  if ! command -v nargo >/dev/null 2>&1; then
+    echo "• installing nargo $NOIR_VERSION"
+    curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | \
+      NOIR_VERSION="$NOIR_VERSION" bash
+    export PATH="$HOME/.nargo/bin:$PATH"
+    [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
+  fi
 }
 
-# ─── noirup ───
-if ! command -v nargo >/dev/null 2>&1; then
-  curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-  export PATH="$HOME/.nargo/bin:$PATH"
-  add_to_ci_path "$HOME/.nargo/bin"
-  NOIR_VERSION="$NOIR_VERSION" noirup
-fi
+install_bb() {
+  if command -v bb >/dev/null 2>&1; then return; fi
 
-# ─── bbup ───
-if ! command -v bb >/dev/null 2>&1; then
-  curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
+  echo "• installing bb $BB_VERSION"
+  mkdir -p "$HOME/.bb/bin"
+
+  # OS / Arch
+  uname_s=$(uname -s | tr '[:upper:]' '[:lower:]')
+  uname_m=$(uname -m)
+  case "${uname_s}_${uname_m}" in
+    linux_x86_64)  file="barretenberg-amd64-linux.tar.gz" ;;
+    darwin_arm64)  file="barretenberg-arm64-darwin.tar.gz" ;;
+    darwin_x86_64) file="barretenberg-amd64-darwin.tar.gz" ;;
+    *)             echo "unsupported platform"; exit 1 ;;
+  esac
+
+  url="https://github.com/AztecProtocol/aztec-packages/releases/download/${BB_VERSION}/${file}"
+  curl -L "$url" -o /tmp/bb.tar.gz
+  tar -xzf /tmp/bb.tar.gz -C "$HOME/.bb/bin"
+  chmod +x "$HOME/.bb/bin/bb"
   export PATH="$HOME/.bb/bin:$PATH"
-  add_to_ci_path "$HOME/.bb/bin"
-  hash -r
-  BB_VERSION="$BB_VERSION" bbup install "$BB_VERSION" --skip-compat-check
-fi
+  [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.bb/bin" >> "$GITHUB_PATH"
+}
+
+install_nargo
+install_bb
 
 # ─── build every circuit ───
 for dir in circuits/* ; do
@@ -39,9 +55,10 @@ for dir in circuits/* ; do
   gz="target/${name}.gz"
 
   bb prove -b "$json" -w "$gz" -o target \
-      --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+
   bb write_vk -b "$json" -o target \
-      --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
+    --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
   popd >/dev/null
 done
