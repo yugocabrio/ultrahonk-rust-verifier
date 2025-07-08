@@ -30,6 +30,7 @@ impl Fr {
     }
 
     /// Construct from hex string (with or without 0x prefix).
+    /// Normalize to even digits before `hex::decode` so OddLength exception won't occur.
     pub fn from_str(s: &str) -> Self {
         let bytes = hex::decode(normalize_hex(s)).expect("hex decode failed");
         let mut padded = [0u8; 32];
@@ -40,6 +41,7 @@ impl Fr {
 
     /// Construct from a 32-byte big-endian array.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+        // ark-ff takes LE (little-endian) so BE → LE
         let mut tmp = *bytes;
         tmp.reverse();
         Fr(ArkFr::from_le_bytes_mod_order(&tmp))
@@ -56,7 +58,6 @@ impl Fr {
         out
     }
 
-    /// Convert to "0x…" hex string
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.to_bytes()))
     }
