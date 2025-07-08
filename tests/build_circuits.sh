@@ -11,6 +11,8 @@ install_nargo() {
       NOIR_VERSION="$NOIR_VERSION" bash
     export PATH="$HOME/.nargo/bin:$PATH"
     [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
+
+    NOIR_VERSION="$NOIR_VERSION" noirup
   fi
 }
 
