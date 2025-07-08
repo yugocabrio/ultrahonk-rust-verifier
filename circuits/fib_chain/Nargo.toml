@@ -1,0 +1,6 @@
+[package]
+name = "fib_chain"
+type = "bin"
+authors = [""]
+
+[dependencies]
