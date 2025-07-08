@@ -21,8 +21,8 @@ if ! command -v bb >/dev/null 2>&1; then
   curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
   export PATH="$HOME/.bb/bin:$PATH"
   add_to_ci_path "$HOME/.bb/bin"
-  # install bb 本体
-  BB_VERSION="$BB_VERSION" "$HOME/.bb/bin/bbup" install "$BB_VERSION" --skip-compat-check
+  hash -r
+  BB_VERSION="$BB_VERSION" bbup install "$BB_VERSION" --skip-compat-check
 fi
 
 # ─── build every circuit ───
