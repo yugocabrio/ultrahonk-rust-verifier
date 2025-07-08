@@ -1,5 +1,4 @@
 // src/shplonk.rs
-
 //! Shplonk batch-opening verifier for BN254
 
 use crate::debug::dbg_fr;
@@ -157,8 +156,8 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
     e1.0 * e2.0 == <Bn254 as Pairing>::TargetField::one()
 }
 
-/// Shplonk verification
-pub fn verify_shplonk(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
+/// Shplemini verification
+pub fn verify_shplemini(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
     let n_sum = proof.sumcheck_evaluations.len();

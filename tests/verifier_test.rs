@@ -1,5 +1,5 @@
 use std::{fs, path::Path};
-use ultrahonk_rust_verifier::{load_proof_and_public_inputs, HonkVerifier};
+use ultrahonk_rust_verifier::{load_proof_and_public_inputs, UltraHonkVerifier};
 
 fn run(dir: &str) -> Result<(), String> {
     let path = Path::new(dir);
@@ -8,7 +8,7 @@ fn run(dir: &str) -> Result<(), String> {
     let (pub_inputs, proof_bytes) = load_proof_and_public_inputs(&proof_buf);
 
     let vk_path = path.join("vk_fields.json");
-    let verifier = HonkVerifier::new(vk_path.to_str().unwrap());
+    let verifier = UltraHonkVerifier::new(vk_path.to_str().unwrap());
 
     let pub_inputs_bytes: Vec<Vec<u8>> =
         pub_inputs.iter().map(|fr| fr.to_bytes().to_vec()).collect();

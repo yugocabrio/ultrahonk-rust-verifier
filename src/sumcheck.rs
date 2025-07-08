@@ -1,6 +1,5 @@
-//! Sum-check verifier ― Ultra-/Plonk‐Honk compatible
-//! -------------------------------------------------
-
+// sumcheck.rs
+//! Sum-check verifier
 use crate::trace;
 use crate::{
     debug::{dbg_fr, dbg_vec},
@@ -66,7 +65,6 @@ pub fn verify_sumcheck(
     dbg_fr("initial_target", &target);
     dbg_fr("initial_pow_par", &pow_par);
 
-    // 1) 각 라운드 합산 검사 및 다음 target/pow 계산
     for r in 0..log_n {
         let uni = &proof.sumcheck_univariates[r];
 
@@ -88,7 +86,6 @@ pub fn verify_sumcheck(
         trace!("------------------------------------------");
     }
 
-    // 2) 최종 relation 합산
     let grand = accumulate_relation_evaluations(
         &proof.sumcheck_evaluations,
         &tx.rel_params,

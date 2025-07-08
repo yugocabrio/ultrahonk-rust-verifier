@@ -168,7 +168,6 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
 }
 
 /// Combine two consecutive 256-bit field elements (each represented as hex string) into a single BigUint.
-/// TS logic: high_part (30 hex chars) ++ low_part (34 hex chars) = 64 hex chars total.
 fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
     // Both strings start with "0x", so strip that.
     let low_hex = low_str.trim_start_matches("0x");
