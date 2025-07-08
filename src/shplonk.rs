@@ -95,7 +95,7 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
 /// pairing check
 /// This function checks the pairing condition for the given G1 points.
 fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
-    // fixed RHS G2 (TS inputValues[2-5])
+    // fixed RHS G2 (inputValues[2-5])
     let rhs_g2 = {
         let x = Fq2::new(
             Fq::from_le_bytes_mod_order(&[

@@ -303,7 +303,7 @@ pub fn load_proof_and_public_inputs(bytes: &[u8]) -> (Vec<Fr>, Vec<u8>) {
     // First 4 bytes = total number of field elements (big-endian)
     let total_fields = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize;
 
-    // Proof is always 440 field elements (TS layout)
+    // Proof is always 440 field elements
     const PROOF_NUM_FIELDS: usize = 440;
     assert!(
         total_fields >= PROOF_NUM_FIELDS,
