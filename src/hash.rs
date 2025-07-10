@@ -1,5 +1,4 @@
-// crypto.rs
-//! Keccak-256 hashing utilities.
+// hash.rs
 
 use sha3::{Digest, Keccak256};
 

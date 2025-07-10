@@ -1,7 +1,11 @@
 [package]
-name = "ultrahonk_verifier"
+name = "ultrahonk_rust_verifier"
 version = "0.1.0"
 edition = "2021"
+
+license     = "MIT"
+description = "Rust verifier for UltraHonk proofs"
+repository  = "https://github.com/yugocabrio/ultrahonk-rust-verifier"
 
 [dependencies]
 sha3 = "0.10"

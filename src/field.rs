@@ -1,5 +1,4 @@
 // field.rs
-//! Finite-field wrapper for BN254 Fr, compatible with Arkworks 0.5.
 
 use ark_bn254::Fr as ArkFr;
 use ark_ff::BigInteger256;
@@ -8,8 +7,6 @@ use ark_serialize::CanonicalSerialize;
 use hex;
 use std::ops::{Add, Mul, Neg, Sub};
 
-/*────────────────────────────  Helper to avoid OddLength  ──────────────────────────*/
-/// Strip "0x..." and if odd digits, prepend '0' to **always make even digits**.
 #[inline(always)]
 fn normalize_hex(s: &str) -> String {
     let raw = s.trim_start_matches("0x");
@@ -23,14 +20,10 @@ fn normalize_hex(s: &str) -> String {
     }
 }
 
-/*────────────────────────────  Fr wrapper  ──────────────────────────*/
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Fr(pub ArkFr);
 
 impl Fr {
-    /*--------- constructors ---------*/
-
     /// Construct from u64.
     pub fn from_u64(x: u64) -> Self {
         Fr(ArkFr::from(x))
@@ -54,8 +47,6 @@ impl Fr {
         Fr(ArkFr::from_le_bytes_mod_order(&tmp))
     }
 
-    /*--------- conversions ---------*/
-
     /// Convert to 32-byte big-endian representation.
     #[inline(always)]
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -67,12 +58,9 @@ impl Fr {
         out
     }
 
-    /// Convert to "0x..." hex string (always 64 digits) — for debugging.
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.to_bytes()))
     }
-
-    /*--------- math helpers ---------*/
 
     pub fn inverse(&self) -> Self {
         Fr(self.0.inverse().unwrap())
@@ -100,8 +88,6 @@ impl Fr {
         Fr(self.0 * rhs.0.inverse().unwrap())
     }
 }
-
-/*────────────────────────────  Operators / Serialize  ──────────────────────────*/
 
 impl Add for Fr {
     type Output = Fr;

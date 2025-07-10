@@ -1,5 +1,4 @@
 // src/shplonk.rs
-
 //! Shplonk batch-opening verifier for BN254
 
 use crate::debug::dbg_fr;
@@ -95,7 +94,7 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
 /// pairing check
 /// This function checks the pairing condition for the given G1 points.
 fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
-    // fixed RHS G2 (TS inputValues[2-5])
+    // fixed RHS G2 (inputValues[2-5])
     let rhs_g2 = {
         let x = Fq2::new(
             Fq::from_le_bytes_mod_order(&[
@@ -157,8 +156,12 @@ fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
     e1.0 * e2.0 == <Bn254 as Pairing>::TargetField::one()
 }
 
-/// Shplonk verification
-pub fn verify_shplonk(proof: &Proof, vk: &VerificationKey, tx: &Transcript) -> Result<(), String> {
+/// Shplemini verification
+pub fn verify_shplemini(
+    proof: &Proof,
+    vk: &VerificationKey,
+    tx: &Transcript,
+) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
     let n_sum = proof.sumcheck_evaluations.len();

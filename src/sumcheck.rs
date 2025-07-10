@@ -1,6 +1,5 @@
-//! Sum-check verifier ― Ultra-/Plonk‐Honk compatible
-//! -------------------------------------------------
-
+// sumcheck.rs
+//! Sum-check verifier
 use crate::trace;
 use crate::{
     debug::{dbg_fr, dbg_vec},

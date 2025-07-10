@@ -1,16 +1,15 @@
+// transcript.rs
 //! Fiat–Shamir transcript for UltraHonk
 
 use crate::debug::{dbg_fr, dbg_vec};
 use crate::trace;
 use crate::{
-    crypto::keccak256,
     field::Fr,
+    hash::keccak256,
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
     utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
-
-/* ───── helper ───── */
 
 fn push_point(buf: &mut Vec<u8>, pt: &G1Affine) {
     let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
@@ -40,8 +39,6 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
     out[24..].copy_from_slice(&x.to_be_bytes());
     out
 }
-
-/* ───── ① η ───── */
 
 fn gen_eta(
     proof: &Proof,
@@ -78,8 +75,6 @@ fn gen_eta(
         h2,
     )
 }
-
-/* ───── ② β, γ ───── */
 
 fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
@@ -118,8 +113,6 @@ fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     (alphas, cur)
 }
 
-/* ───── ④ gate / u challenges ───── */
-
 fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
     let mut out = Vec::with_capacity(rounds);
     for _ in 0..rounds {
@@ -128,8 +121,6 @@ fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
     }
     (out, cur)
 }
-
-/* ───── transcript main ───── */
 
 pub fn generate_transcript(
     proof: &Proof,
@@ -200,7 +191,6 @@ pub fn generate_transcript(
     push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
-    /* ───── (★) DEBUG DUMP ───── */
     trace!("===== TRANSCRIPT (Rust) =====");
     dbg_fr("eta", &rp.eta);
     dbg_fr("eta_two", &rp.eta_two);

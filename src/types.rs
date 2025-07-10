@@ -115,7 +115,7 @@ pub struct VerificationKey {
     pub lagrange_last: G1Point,
 }
 
-/// The Proof structure, matching TS's Proof interface.
+/// The Proof structure
 #[derive(Clone, Debug)]
 pub struct Proof {
     // Wire commitments

@@ -1,19 +1,18 @@
-//! UltraHonk verifier – Rust port
-//! ------------------------------
+//! UltraHonk verifier
 
 use crate::{
     field::Fr,
-    shplonk::verify_shplonk,
+    shplemini::verify_shplemini,
     sumcheck::verify_sumcheck,
     transcript::generate_transcript,
     utils::{load_proof, load_vk},
 };
 
-pub struct HonkVerifier {
+pub struct UltraHonkVerifier {
     vk: crate::types::VerificationKey,
 }
 
-impl HonkVerifier {
+impl UltraHonkVerifier {
     pub fn new(vk_path: &str) -> Self {
         Self {
             vk: load_vk(vk_path),
@@ -60,12 +59,10 @@ impl HonkVerifier {
         verify_sumcheck(&proof, &tx, &self.vk)?;
 
         // 6) Shplonk (batch opening)
-        verify_shplonk(&proof, &self.vk, &tx)?;
+        verify_shplemini(&proof, &self.vk, &tx)?;
 
         Ok(())
     }
-
-    /*──────────────── private helpers ────────────────*/
 
     fn public_inputs_delta(
         public_inputs: &[Vec<u8>],
