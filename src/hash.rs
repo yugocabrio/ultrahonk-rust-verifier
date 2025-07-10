@@ -1,4 +1,4 @@
-// hash.rs
+// src/hash.rs
 
 use sha3::{Digest, Keccak256};
 

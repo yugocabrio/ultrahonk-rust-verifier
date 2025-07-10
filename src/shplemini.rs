@@ -1,5 +1,5 @@
-// src/shplonk.rs
-//! Shplonk batch-opening verifier for BN254
+// src/shplemini.rs
+//! Shplemini batch-opening verifier for BN254
 
 use crate::debug::dbg_fr;
 use crate::debug::dbg_vec;

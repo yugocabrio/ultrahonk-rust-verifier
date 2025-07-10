@@ -1,4 +1,4 @@
-// utils.rs
+// src/utils.rs
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
