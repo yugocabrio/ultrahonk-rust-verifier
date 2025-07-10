@@ -1,3 +1,4 @@
+// src/verifier.rs
 //! UltraHonk verifier
 
 use crate::{
