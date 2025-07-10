@@ -26,3 +26,8 @@ fn simple_circuit_proof_verifies() -> Result<(), String> {
 fn fib_chain_proof_verifies() -> Result<(), String> {
     run("circuits/fib_chain/target")
 }
+
+#[test]
+fn poseidon2_demo_proof_verifies() -> Result<(), String> {
+    run("circuits/poseidon2_demo/target")
+}
