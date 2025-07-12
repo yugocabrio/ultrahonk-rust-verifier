@@ -44,3 +44,9 @@ std = [
     "once_cell/std"
 ]
 trace = []
+
+alloc = [
+    "serde_json/alloc",
+    "hex/alloc",
+    "once_cell/alloc",
+]
