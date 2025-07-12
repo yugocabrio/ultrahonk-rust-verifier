@@ -7,8 +7,14 @@ use ark_bn254::Fq;
 use ark_ff::{BigInteger256, PrimeField};
 use num_bigint::BigUint;
 use num_traits::Num;
+
+#[cfg(feature = "std")]
 use std::fs::File;
+#[cfg(feature = "std")]
 use std::io::Read;
+
+#[cfg(not(feature = "std"))]
+use alloc::{vec::Vec, string::String};
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
@@ -183,6 +189,7 @@ fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
 }
 
 /// Load a VerificationKey from a JSON file containing an array of hex‐encoded field‐elements.
+#[cfg(feature = "std")]
 pub fn load_vk(path: &str) -> VerificationKey {
     // Read entire file as string
     let mut file = File::open(path).expect("VK JSON file not found");

@@ -2,6 +2,9 @@
 use crate::field::Fr;
 use ark_bn254::{Fq, G1Affine};
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 /// Number of subrelations in the Ultra Honk protocol.
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
 pub const CONST_PROOF_SIZE_LOG_N: usize = 28;

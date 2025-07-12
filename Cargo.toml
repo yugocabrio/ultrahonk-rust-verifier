@@ -8,25 +8,39 @@ description = "Rust verifier for UltraHonk proofs"
 repository  = "https://github.com/yugocabrio/ultrahonk-rust-verifier"
 
 [dependencies]
-sha3 = "0.10"
+sha3 = { version = "0.10", default-features = false }
 
-ark-ff = "0.5"
-ark-ec = "0.5"
-ark-serialize = "0.5"
-ark-std = { version = "0.5", features = ["std"] }
-ark-bn254 = { version = "0.5", features = ["std"] }
+ark-ff = { version = "0.5", default-features = false }
+ark-ec = { version = "0.5", default-features = false }
+ark-serialize = { version = "0.5", default-features = false }
+ark-std = { version = "0.5", default-features = false }
+ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }
 
-anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"], default-features = false, optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-hex = "0.4"
+num-bigint = { version = "0.4", default-features = false }
+num-traits = { version = "0.2", default-features = false }
 
-num-bigint = "0.4"
-num-traits = "0.2"
-
-lazy_static = "1.4"
+lazy_static = { version = "1.4", optional = true }
+once_cell = { version = "1.19", default-features = false, features = ["alloc", "race"] }
 
 [features]
-default = []
+default = ["std"]
+std = [
+    "sha3/std",
+    "ark-ff/std",
+    "ark-ec/std", 
+    "ark-serialize/std",
+    "ark-std/std",
+    "ark-bn254/std",
+    "serde",
+    "serde_json",
+    "hex/std",
+    "num-bigint/std",
+    "num-traits/std",
+    "lazy_static",
+    "once_cell/std"
+]
 trace = []

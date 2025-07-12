@@ -7,7 +7,20 @@
 
 use crate::field::Fr;
 use crate::types::{RelationParameters, Wire};
-use std::ops::Neg;
+use core::ops::Neg;
+
+#[cfg(not(feature = "std"))]
+use alloc::vec;
+
+#[cfg(feature = "std")]
+macro_rules! println {
+    ($($args:tt)*) => { std::println!($($args)*) };
+}
+
+#[cfg(not(feature = "std"))]
+macro_rules! println {
+    ($($args:tt)*) => {};
+}
 
 /// Precomputed NEG_HALF = (p - 1)/2 in BN254 scalar field.
 fn neg_half() -> Fr {

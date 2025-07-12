@@ -6,18 +6,29 @@ use crate::{
     shplemini::verify_shplemini,
     sumcheck::verify_sumcheck,
     transcript::generate_transcript,
-    utils::{load_proof, load_vk},
+    utils::load_proof,
 };
+
+#[cfg(feature = "std")]
+use crate::utils::load_vk;
+
+#[cfg(not(feature = "std"))]
+use alloc::{vec::Vec, string::String, format};
 
 pub struct UltraHonkVerifier {
     vk: crate::types::VerificationKey,
 }
 
 impl UltraHonkVerifier {
+    #[cfg(feature = "std")]
     pub fn new(vk_path: &str) -> Self {
         Self {
             vk: load_vk(vk_path),
         }
+    }
+
+    pub fn new_with_vk(vk: crate::types::VerificationKey) -> Self {
+        Self { vk }
     }
 
     /// Top-level verify
