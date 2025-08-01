@@ -7,8 +7,8 @@ fn run(dir: &str) -> Result<(), String> {
     let proof_buf = fs::read(path.join("proof")).map_err(|e| e.to_string())?;
     let (pub_inputs, proof_bytes) = load_proof_and_public_inputs(&proof_buf);
 
-    let vk_path = path.join("vk_fields.json");
-    let verifier = UltraHonkVerifier::new(vk_path.to_str().unwrap());
+    let vk_json = fs::read_to_string(path.join("vk_fields.json")).map_err(|e| e.to_string())?;
+    let verifier = UltraHonkVerifier::new_from_json(&vk_json);
 
     let pub_inputs_bytes: Vec<Vec<u8>> =
         pub_inputs.iter().map(|fr| fr.to_bytes().to_vec()).collect();

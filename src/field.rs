@@ -4,8 +4,11 @@ use ark_bn254::Fr as ArkFr;
 use ark_ff::BigInteger256;
 use ark_ff::{Field, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
+use core::ops::{Add, Mul, Neg, Sub};
 use hex;
-use std::ops::{Add, Mul, Neg, Sub};
+
+#[cfg(not(feature = "std"))]
+use alloc::{borrow::ToOwned, format, string::String};
 
 #[inline(always)]
 fn normalize_hex(s: &str) -> String {
@@ -118,7 +121,7 @@ impl Neg for Fr {
 }
 
 impl CanonicalSerialize for Fr {
-    fn serialize_with_mode<W: std::io::Write>(
+    fn serialize_with_mode<W: ark_serialize::Write>(
         &self,
         mut writer: W,
         _compress: ark_serialize::Compress,

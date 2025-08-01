@@ -2,21 +2,29 @@
 //! UltraHonk verifier
 
 use crate::{
-    field::Fr,
-    shplemini::verify_shplemini,
-    sumcheck::verify_sumcheck,
-    transcript::generate_transcript,
-    utils::{load_proof, load_vk},
+    field::Fr, shplemini::verify_shplemini, sumcheck::verify_sumcheck,
+    transcript::generate_transcript, utils::load_proof,
 };
+
+#[cfg(feature = "serde_json")]
+use crate::utils::load_vk_from_json;
+
+#[cfg(not(feature = "std"))]
+use alloc::{format, string::String, vec::Vec};
 
 pub struct UltraHonkVerifier {
     vk: crate::types::VerificationKey,
 }
 
 impl UltraHonkVerifier {
-    pub fn new(vk_path: &str) -> Self {
+    pub fn new_with_vk(vk: crate::types::VerificationKey) -> Self {
+        Self { vk }
+    }
+
+    #[cfg(feature = "serde_json")]
+    pub fn new_from_json(json_data: &str) -> Self {
         Self {
-            vk: load_vk(vk_path),
+            vk: load_vk_from_json(json_data),
         }
     }
 

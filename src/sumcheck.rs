@@ -8,7 +8,17 @@ use crate::{
     types::{Transcript, VerificationKey},
 };
 
-lazy_static::lazy_static! {
+#[cfg(not(feature = "std"))]
+use alloc::{boxed, format, string::String};
+
+#[cfg(feature = "std")]
+use lazy_static::lazy_static;
+
+#[cfg(not(feature = "std"))]
+use once_cell::race::OnceBox;
+
+#[cfg(feature = "std")]
+lazy_static! {
     /// 8-point barycentric coefficients
     static ref BARY: [Fr; 8] = [
         "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51",
@@ -20,6 +30,25 @@ lazy_static::lazy_static! {
         "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31",
         "0x00000000000000000000000000000000000000000000000000000000000013b0",
     ].map(Fr::from_str);
+}
+
+#[cfg(not(feature = "std"))]
+static BARY_BOX: OnceBox<[Fr; 8]> = OnceBox::new();
+
+#[cfg(not(feature = "std"))]
+fn get_bary() -> &'static [Fr; 8] {
+    BARY_BOX.get_or_init(|| {
+        alloc::boxed::Box::new([
+            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51"),
+            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000002d0"),
+            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11"),
+            Fr::from_str("0x0000000000000000000000000000000000000000000000000000000000000090"),
+            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff71"),
+            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000000f0"),
+            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31"),
+            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000013b0"),
+        ])
+    })
 }
 
 /// Check if the sum of two univariates equals the target value
@@ -40,7 +69,12 @@ fn next_target(u: &[Fr], chi: Fr) -> Fr {
     // Σ u_i / (BARY[i] * (χ - i))
     let mut acc = Fr::zero();
     for i in 0..8 {
-        let inv = (BARY[i] * (chi - Fr::from_u64(i as u64))).inverse();
+        #[cfg(feature = "std")]
+        let bary_val = BARY[i];
+        #[cfg(not(feature = "std"))]
+        let bary_val = get_bary()[i];
+
+        let inv = (bary_val * (chi - Fr::from_u64(i as u64))).inverse();
         acc = acc + (u[i] * inv);
     }
 

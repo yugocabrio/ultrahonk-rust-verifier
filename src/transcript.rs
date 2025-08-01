@@ -11,6 +11,9 @@ use crate::{
 };
 use ark_bn254::G1Affine;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 fn push_point(buf: &mut Vec<u8>, pt: &G1Affine) {
     let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
     let (y_lo, y_hi) = fq_to_halves_be(&pt.y);

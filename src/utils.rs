@@ -7,8 +7,9 @@ use ark_bn254::Fq;
 use ark_ff::{BigInteger256, PrimeField};
 use num_bigint::BigUint;
 use num_traits::Num;
-use std::fs::File;
-use std::io::Read;
+
+#[cfg(not(feature = "std"))]
+use alloc::{string::String, vec::Vec};
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
@@ -182,15 +183,11 @@ fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
     (high << 136) | low
 }
 
-/// Load a VerificationKey from a JSON file containing an array of hex‐encoded field‐elements.
-pub fn load_vk(path: &str) -> VerificationKey {
-    // Read entire file as string
-    let mut file = File::open(path).expect("VK JSON file not found");
-    let mut data = String::new();
-    file.read_to_string(&mut data).unwrap();
-
+/// Load a VerificationKey from a JSON string containing an array of hex‐encoded field‐elements.
+#[cfg(feature = "serde_json")]
+pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     // Parse JSON into Vec<String>
-    let vk_fields: Vec<String> = serde_json::from_str(&data).unwrap();
+    let vk_fields: Vec<String> = serde_json::from_str(json_data).unwrap();
     // Ensure we have at least the minimal length
     assert!(
         vk_fields.len() > 127,
@@ -205,7 +202,15 @@ pub fn load_vk(path: &str) -> VerificationKey {
     let public_inputs_size = BigUint::from_str_radix(vk_fields[1].trim_start_matches("0x"), 16)
         .unwrap()
         .to_u64_digits()[0];
-    let log_circuit_size = (circuit_size_u64 as f64).log2() as u64;
+    let log_circuit_size = {
+        let mut n = circuit_size_u64;
+        let mut log = 0;
+        while n > 1 {
+            n >>= 1;
+            log += 1;
+        }
+        log
+    };
 
     // Helper to convert combined BigUint into an Fq
     fn biguint_to_fq(x: BigUint) -> Fq {

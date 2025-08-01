@@ -2,6 +2,9 @@
 use crate::field::Fr;
 use ark_bn254::{Fq, G1Affine};
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 /// Number of subrelations in the Ultra Honk protocol.
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
 pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
@@ -76,7 +79,7 @@ impl G1Point {
     }
 }
 
-/// The verification key structure, matching TS's VerificationKey interface.
+/// The verification key structure
 #[derive(Clone, Debug)]
 pub struct VerificationKey {
     pub circuit_size: u64,
