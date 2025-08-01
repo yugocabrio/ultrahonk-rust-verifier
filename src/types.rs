@@ -79,7 +79,7 @@ impl G1Point {
     }
 }
 
-/// The verification key structure, matching TS's VerificationKey interface.
+/// The verification key structure
 #[derive(Clone, Debug)]
 pub struct VerificationKey {
     pub circuit_size: u64,

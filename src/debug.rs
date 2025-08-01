@@ -5,7 +5,7 @@ use crate::types::G1Point;
 use ark_ff::{BigInteger256, PrimeField};
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, format};
+use alloc::{format, string::String};
 
 /// trace! macro is a lightweight debug print macro that only outputs when the `trace` feature is enabled.
 /// you can use it like this: cargo test --features trace -- --nocapture / cargo run --features trace

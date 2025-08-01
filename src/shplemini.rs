@@ -12,7 +12,7 @@ use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
 use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
-use alloc::{vec::Vec, string::String, vec};
+use alloc::{string::String, vec, vec::Vec};
 
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
 pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted

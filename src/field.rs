@@ -4,11 +4,11 @@ use ark_bn254::Fr as ArkFr;
 use ark_ff::BigInteger256;
 use ark_ff::{Field, PrimeField, Zero};
 use ark_serialize::CanonicalSerialize;
-use hex;
 use core::ops::{Add, Mul, Neg, Sub};
+use hex;
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, borrow::ToOwned, format};
+use alloc::{borrow::ToOwned, format, string::String};
 
 #[inline(always)]
 fn normalize_hex(s: &str) -> String {

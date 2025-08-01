@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, format, boxed};
+use alloc::{boxed, format, string::String};
 
 #[cfg(feature = "std")]
 use lazy_static::lazy_static;
@@ -73,7 +73,7 @@ fn next_target(u: &[Fr], chi: Fr) -> Fr {
         let bary_val = BARY[i];
         #[cfg(not(feature = "std"))]
         let bary_val = get_bary()[i];
-        
+
         let inv = (bary_val * (chi - Fr::from_u64(i as u64))).inverse();
         acc = acc + (u[i] * inv);
     }
