@@ -9,8 +9,8 @@ use crate::{
     utils::load_proof,
 };
 
-#[cfg(feature = "std")]
-use crate::utils::load_vk;
+#[cfg(feature = "serde_json")]
+use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
 use alloc::{vec::Vec, string::String, format};
@@ -20,15 +20,15 @@ pub struct UltraHonkVerifier {
 }
 
 impl UltraHonkVerifier {
-    #[cfg(feature = "std")]
-    pub fn new(vk_path: &str) -> Self {
-        Self {
-            vk: load_vk(vk_path),
-        }
-    }
-
     pub fn new_with_vk(vk: crate::types::VerificationKey) -> Self {
         Self { vk }
+    }
+
+    #[cfg(feature = "serde_json")]
+    pub fn new_from_json(json_data: &str) -> Self {
+        Self {
+            vk: load_vk_from_json(json_data),
+        }
     }
 
     /// Top-level verify
