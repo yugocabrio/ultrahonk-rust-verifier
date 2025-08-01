@@ -9,7 +9,7 @@ use num_bigint::BigUint;
 use num_traits::Num;
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, vec::Vec};
+use alloc::{vec::Vec, string::String};
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
