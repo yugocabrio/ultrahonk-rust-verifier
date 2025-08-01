@@ -54,3 +54,11 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+      # ---------- Test alloc feature ----------
+      - name: Test alloc feature
+        run: cargo test alloc --verbose
+
+      # ---------- Test std feature ----------
+      - name: Test std feature
+        run: cargo test std --verbose
+
