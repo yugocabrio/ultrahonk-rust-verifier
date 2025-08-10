@@ -1,0 +1,6 @@
+[package]
+name = "simple_circuit"
+type = "bin"
+authors = [""]
+
+[dependencies]
