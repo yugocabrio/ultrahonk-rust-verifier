@@ -3,8 +3,8 @@ use ultrahonk_soroban_contract::{UltraHonkVerifierContract, UltraHonkVerifierCon
 
 #[test]
 fn verify_simple_circuit_proof_succeeds() {
-    let vk_fields_json: &str = include_str!("../simple_circuit/target/vk_fields.json");
-    let proof_bin: &[u8] = include_bytes!("../simple_circuit/target/proof");
+    let vk_fields_json: &str = include_str!("simple_circuit/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
 
     let env = Env::default();
     let contract_id = env.register(UltraHonkVerifierContract, ());
@@ -24,8 +24,8 @@ fn verify_simple_circuit_proof_succeeds() {
 
 #[test]
 fn verify_poseidon2_demo_proof_succeeds() {
-    let vk_fields_json: &str = include_str!("../poseidon2_demo/target/vk_fields.json");
-    let proof_bin: &[u8] = include_bytes!("../poseidon2_demo/target/proof");
+    let vk_fields_json: &str = include_str!("poseidon2_demo/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("poseidon2_demo/target/proof");
 
     let env = Env::default();
     let contract_id = env.register(UltraHonkVerifierContract, ());
@@ -45,8 +45,8 @@ fn verify_poseidon2_demo_proof_succeeds() {
 
 #[test]
 fn verify_fib_chain_proof_succeeds() {
-    let vk_fields_json: &str = include_str!("../fib_chain/target/vk_fields.json");
-    let proof_bin: &[u8] = include_bytes!("../fib_chain/target/proof");
+    let vk_fields_json: &str = include_str!("fib_chain/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("fib_chain/target/proof");
 
     let env = Env::default();
     let contract_id = env.register(UltraHonkVerifierContract, ());
