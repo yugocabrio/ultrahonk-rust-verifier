@@ -11,7 +11,6 @@ use ark_bn254::Fq;
 use ark_ff::PrimeField; // trait required so that from_be_bytes_mod_order is available. :contentReference[oaicite:0]{index=0}
 
 use num_bigint::BigUint;
-use num_traits::Zero;
 
 use ultrahonk_rust_verifier::{
     UltraHonkVerifier,
@@ -276,3 +275,4 @@ impl UltraHonkVerifierContract {
         env.storage().instance().get(&proof_id).unwrap_or(false)
     }
 }
+
