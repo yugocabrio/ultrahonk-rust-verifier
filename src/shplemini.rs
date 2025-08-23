@@ -245,8 +245,8 @@ pub fn verify_shplemini(
         push!(q4);
         push!(q_lookup);
         push!(q_arith);
-        push!(q_range);
-        push!(q_aux);
+        push!(q_delta_range);
+        push!(q_nnf);
         push!(q_elliptic);
         push!(q_poseidon2_external);
         push!(q_poseidon2_internal);

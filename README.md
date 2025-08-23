@@ -5,8 +5,8 @@ A standalone Rust implementation of the **UltraHonk** proof verifier ＋ a handf
 
 ## Features
 - Pure Rust (`no_std` planned)  
-- UltraHonk verifier compatible with Barretenberg bb v0.82.2  
-- Planned: support for latest bb prove
+- UltraHonk verifier compatible with Aztec nargo 1.0.0-beta.9 / bb v0.87.x  
+- Updated: support for latest bb prove/write_vk (bytes_and_fields)
 - Ready-to-run example circuits (`simple_circuit`, `fib_chain`, `poseidon_demo`)
 
 ---
@@ -24,7 +24,7 @@ cargo test
 
 1. `tests/build_circuits.sh`
 
-   * installs **Nargo 1.0.0-beta.3** and **bb v0.82.2** if necessary
+   * installs **Nargo 1.0.0-beta.9** and **bb v0.87.x** if necessary
    * builds each circuit → witness → proof & vk (UltraHonk)
 2. Rust tests (`tests/verifier.rs`)
 

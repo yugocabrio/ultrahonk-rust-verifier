@@ -1,0 +1,3 @@
+[submodule "solidity_verifier/simple_circuit/lib/forge-std"]
+	path = solidity_verifier/simple_circuit/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

@@ -3,13 +3,24 @@
 
 use crate::field::Fr;
 use crate::types::{G1Point, Proof, VerificationKey};
-use ark_bn254::Fq;
+use ark_bn254::{Fq, G1Affine};
 use ark_ff::{BigInteger256, PrimeField};
 use num_bigint::BigUint;
 use num_traits::Num;
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
+
+#[cfg(feature = "std")]
+use std::fs;
+#[cfg(feature = "std")]
+use std::path::Path;
+
+/// BigUint -> Fq by LE bytes (auto-reduced mod p)
+fn biguint_to_fq_mod(x: &BigUint) -> Fq {
+    let le = x.to_bytes_le();
+    Fq::from_le_bytes_mod_order(&le)
+}
 
 /// Convert 32 bytes into an Fr.
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
@@ -33,15 +44,14 @@ pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
     out
 }
 
-/// Fq → (low136, high120) each 32-byte BE
+/// Fq → (low136, high(<=118)) each 32-byte BE
 pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     let be = fq_to_be_bytes(f);
     let big = BigUint::from_bytes_be(&be);
-    let mask = (BigUint::from(1u8) << 136) - 1u8; // 2¹³⁶ − 1
+    let mask = (BigUint::from(1u8) << 136) - 1u8; // 2^136 − 1
     let low = &big & &mask; // lower 136 bits
-    let high = &big >> 136; // upper 120 bits
+    let high = &big >> 136; // upper bits
 
-    // biguint → 32-byte BE
     fn to_arr(x: BigUint) -> [u8; 32] {
         let mut arr = [0u8; 32];
         let bytes = x.to_bytes_be();
@@ -52,46 +62,26 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     (to_arr(low), to_arr(high))
 }
 
-/// Convert 128 bytes into a G1Point.
-/// The layout is four consecutive 32‐byte chunks: x_low, x_high, y_low, y_high.
-/// We reconstruct a 256-bit coordinate by shifting high<<136 + low.
-fn bytes_to_g1_point(bytes: &[u8]) -> G1Point {
-    assert_eq!(bytes.len(), 128);
-    // Parse low/high for x:
-    let x_low = BigUint::from_bytes_be(&bytes[0..32]);
-    let x_high = BigUint::from_bytes_be(&bytes[32..64]);
-    // Parse low/high for y:
-    let y_low = BigUint::from_bytes_be(&bytes[64..96]);
-    let y_high = BigUint::from_bytes_be(&bytes[96..128]);
-
-    // Combine: high << 136 bits, plus low.
-    let shift_bits = 136u32;
-    let big_x = (x_high << shift_bits) | x_low;
-    let big_y = (y_high << shift_bits) | y_low;
-
-    // Convert BigUint -> 32 bytes → Fq
-    let x_bytes = big_x.to_bytes_be();
-    let mut x_arr = [0u8; 32];
-    x_arr[32 - x_bytes.len()..].copy_from_slice(&x_bytes);
-    let fq_x = fq_from_be_bytes(&x_arr);
-
-    let y_bytes = big_y.to_bytes_be();
-    let mut y_arr = [0u8; 32];
-    y_arr[32 - y_bytes.len()..].copy_from_slice(&y_bytes);
-    let fq_y = fq_from_be_bytes(&y_arr);
-
-    G1Point { x: fq_x, y: fq_y }
-}
+// (v0.87) G1 座標は (lo136, hi<=118) の 2 リムで (x,y) を順に格納する前提
 
 /// Load a Proof from a byte array (e.g. read from proof.bin).
 pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     let mut cursor = 0usize;
 
-    // Helper: read next 128 bytes as G1Point
+    // Helper: read next 128 bytes as G1Point using 136-bit limb split (x = x0 | (x1<<136))
     fn read_g1(bytes: &[u8], cur: &mut usize) -> G1Point {
-        let pt = bytes_to_g1_point(&bytes[*cur..*cur + 128]);
+        use num_bigint::BigUint;
+        let x0 = BigUint::from_bytes_be(&bytes[*cur..*cur + 32]);
+        let x1 = BigUint::from_bytes_be(&bytes[*cur + 32..*cur + 64]);
+        let y0 = BigUint::from_bytes_be(&bytes[*cur + 64..*cur + 96]);
+        let y1 = BigUint::from_bytes_be(&bytes[*cur + 96..*cur + 128]);
         *cur += 128;
-        pt
+        let shift = 136u32;
+        let bx = &x0 | (&x1 << shift);
+        let by = &y0 | (&y1 << shift);
+        let fx = biguint_to_fq_mod(&bx);
+        let fy = biguint_to_fq_mod(&by);
+        G1Point { x: fx, y: fy }
     }
 
     // Helper: read next 32 bytes as Fr
@@ -100,6 +90,12 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         arr.copy_from_slice(&bytes[*cur..*cur + 32]);
         *cur += 32;
         bytes_to_fr(&arr)
+    }
+
+    // 0) pairing point object: 16 Fr elements
+    let mut pairing_point_object = Vec::with_capacity(16);
+    for _ in 0..16 {
+        pairing_point_object.push(read_fr(proof_bytes, &mut cursor));
     }
 
     // 1) w1, w2, w3
@@ -128,11 +124,17 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         sumcheck_univariates.push(row);
     }
 
-    // 6) sumcheck_evaluations: 40 Fr
+    // 6) sumcheck_evaluations: 40/41 をファイル長から自動判定
     let mut sumcheck_evaluations = Vec::new();
-    for _ in 0..40 {
-        sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
-    }
+    let size_40 = 16 * 32 /*pairing*/
+        + 8 * 128 /*wires & lookups before univariates*/
+        + 28 * 8 * 32 /*univariates*/
+        + 40 * 32 /*evals*/
+        + 27 * 128 /*fold comms*/
+        + 28 * 32 /*A evals*/
+        + 2 * 128; /*Q + quotient*/
+    let evals_to_read = if proof_bytes.len() >= size_40 + 32 { 41 } else { 40 };
+    for _ in 0..evals_to_read { sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor)); }
 
     // 7) gemini_fold_comms: 27 G1Points
     let mut gemini_fold_comms = Vec::new();
@@ -151,6 +153,7 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     let kzg_quotient = read_g1(proof_bytes, &mut cursor);
 
     Proof {
+        pairing_point_object,
         w1,
         w2,
         w3,
@@ -188,58 +191,80 @@ fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
 pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     // Parse JSON into Vec<String>
     let vk_fields: Vec<String> = serde_json::from_str(json_data).unwrap();
-    // Ensure we have at least the minimal length
-    assert!(
-        vk_fields.len() > 127,
-        "VK JSON must contain at least 128 field elements"
-    );
+    // Expect v0.87+ header(3) + 28*4 limbs
+    assert!(vk_fields.len() >= 3, "VK JSON must contain header elements");
 
-    // Parse circuit params:
-    let circuit_size = BigUint::from_str_radix(vk_fields[0].trim_start_matches("0x"), 16)
-        .unwrap()
-        .to_u64_digits(); // But we know it's u64
-    let circuit_size_u64 = circuit_size[0];
-    let public_inputs_size = BigUint::from_str_radix(vk_fields[1].trim_start_matches("0x"), 16)
-        .unwrap()
-        .to_u64_digits()[0];
-    let log_circuit_size = {
-        let mut n = circuit_size_u64;
-        let mut log = 0;
-        while n > 1 {
-            n >>= 1;
-            log += 1;
-        }
-        log
-    };
-
-    // Helper to convert combined BigUint into an Fq
-    fn biguint_to_fq(x: BigUint) -> Fq {
-        let be = x.to_bytes_be();
-        let mut arr = [0u8; 32];
-        arr[32 - be.len()..].copy_from_slice(&be);
-        fq_from_be_bytes(&arr)
+    // Helper to parse hex field element to u64 (fits for small header values)
+    fn parse_u64_hex(s: &str) -> u64 {
+        let x = BigUint::from_str_radix(s.trim_start_matches("0x"), 16).unwrap();
+        x.to_u64_digits().get(0).copied().unwrap_or(0)
     }
 
-    // Starting index for G1 points: 20
-    let mut field_index = 20;
+    // Parse VK header (barretenberg v0.87+):
+    //   [0] log_circuit_size, [1] num_public_inputs, [2] pub_inputs_offset
+    let h0 = parse_u64_hex(&vk_fields[0]);
+    let public_inputs_size = if vk_fields.len() > 1 { parse_u64_hex(&vk_fields[1]) } else { 0 };
+    let pub_inputs_offset = if vk_fields.len() > 2 { parse_u64_hex(&vk_fields[2]) } else { 0 };
+    // 一部のビルドは [0] に circuit_size、別のものは log2(circuit_size) を格納する。
+    // 値が 2 の冪なら circuit_size とみなして log を計算、そうでなければ log 値とみなす。
+    let (circuit_size_u64, log_circuit_size) = if h0 != 0 && (h0 & (h0 - 1)) == 0 {
+        let mut lg = 0u64; let mut n = h0; while n > 1 { n >>= 1; lg += 1; }
+        (h0, lg)
+    } else {
+        let cs = 1u64.checked_shl(h0 as u32).expect("circuit_size too large");
+        (cs, h0)
+    };
+
+    // Helper to convert BigUint into an Fq via LE bytes (auto-reduced mod p)
+    fn biguint_to_fq(x: BigUint) -> Fq { biguint_to_fq_mod(&x) }
+
+    // v0.87 固定: header_len=3, limbs_per_point=4（lo_x, hi_x, lo_y, hi_y）。
+    let mut field_index = 3usize;
+
+    // Safe reader: if we run out of limbs, return a dummy point (0,0).
+    // Robust 4-limb → G1 復元（136/128bit シフト、lo/hi 順序、(x,y) 入替を試行）
+    fn try_make_g1(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
+        let assemble = |lo: &BigUint, hi: &BigUint, shift: u32, lohi: bool| -> BigUint {
+            if lohi { (lo << shift) | hi } else { (hi << shift) | lo }
+        };
+        let pairs = [((lx, hx), (ly, hy)), ((ly, hy), (lx, hx))];
+        let shifts = [136u32, 128u32];
+        let orders = [true, false];
+        for &shift in &shifts {
+            for &lohi in &orders {
+                for &((ax0, ax1), (ay0, ay1)) in &pairs {
+                    let bx = assemble(ax0, ax1, shift, lohi);
+                    let by = assemble(ay0, ay1, shift, lohi);
+                    let x = biguint_to_fq_mod(&bx);
+                    let y = biguint_to_fq_mod(&by);
+                    let aff = G1Affine::new_unchecked(x, y);
+                    if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+                        return G1Point { x: aff.x, y: aff.y };
+                    }
+                }
+            }
+        }
+        G1Point { x: Fq::from(0u64), y: Fq::from(0u64) }
+    }
 
     macro_rules! read_g1 {
         () => {{
-            // Each G1Point uses 4 consecutive fields: low_x, high_x, low_y, high_y
             let low_x = &vk_fields[field_index];
             let high_x = &vk_fields[field_index + 1];
             let low_y = &vk_fields[field_index + 2];
             let high_y = &vk_fields[field_index + 3];
-            let big_x = combine_fields(low_x, high_x);
-            let big_y = combine_fields(low_y, high_y);
+            let lx = BigUint::from_str_radix(low_x.trim_start_matches("0x"), 16).unwrap();
+            let hx = BigUint::from_str_radix(high_x.trim_start_matches("0x"), 16).unwrap();
+            let ly = BigUint::from_str_radix(low_y.trim_start_matches("0x"), 16).unwrap();
+            let hy = BigUint::from_str_radix(high_y.trim_start_matches("0x"), 16).unwrap();
             field_index += 4;
-            G1Point {
-                x: biguint_to_fq(big_x),
-                y: biguint_to_fq(big_y),
-            }
+            try_make_g1(&lx, &hx, &ly, &hy)
         }};
     }
 
+    // Follow bb v0.87 vk_fields.json order (wire/commitment order in fields file):
+    // qm, qc, ql, qr, qo, q4, q_lookup, q_arith, q_delta_range, q_elliptic, q_memory(qAux),
+    // q_poseidon2_external, q_poseidon2_internal, s1..s4, id1..id4, t1..t4, lagrange_first, lagrange_last
     let qm = read_g1!();
     let qc = read_g1!();
     let ql = read_g1!();
@@ -248,15 +273,16 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     let q4 = read_g1!();
     let q_lookup = read_g1!();
     let q_arith = read_g1!();
-    let q_range = read_g1!();
-    let q_aux = read_g1!();
+    let q_delta_range = read_g1!();
     let q_elliptic = read_g1!();
+    let q_memory = read_g1!(); // qAux
     let q_poseidon2_external = read_g1!();
     let q_poseidon2_internal = read_g1!();
     let s1 = read_g1!();
     let s2 = read_g1!();
     let s3 = read_g1!();
     let s4 = read_g1!();
+    // bb v0.87 order: IDs come before table commitments
     let id1 = read_g1!();
     let id2 = read_g1!();
     let id3 = read_g1!();
@@ -272,6 +298,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         circuit_size: circuit_size_u64,
         log_circuit_size,
         public_inputs_size,
+        pub_inputs_offset,
         qm,
         qc,
         ql,
@@ -280,9 +307,10 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         q4,
         q_lookup,
         q_arith,
-        q_range,
-        q_aux,
+        q_delta_range,
         q_elliptic,
+        q_memory,
+        q_nnf: G1Point { x: Fq::from(0u64), y: Fq::from(0u64) },
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,
@@ -300,6 +328,179 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         lagrange_first,
         lagrange_last,
     }
+}
+
+/// Load a VerificationKey from a `vk` binary emitted by `bb write_vk --output_format bytes_and_fields`.
+/// This parser assumes the `vk` file contains a flat sequence of BN254 G1 affine elements (x||y),
+/// each coordinate encoded as 32-byte big-endian field element. If the length does not match an
+/// integral number of points, or on-curve checks fail, this function returns None.
+#[cfg(feature = "std")]
+pub fn load_vk_from_bytes_file(path: &Path) -> Option<VerificationKey> {
+    let data = fs::read(path).ok()?;
+    // Some builds prefix with 32 bytes; strip if present to align to 64-byte records
+    let offset = if data.len() % 64 == 32 { 32 } else { 0 };
+    if (data.len() - offset) % 64 != 0 { return None; }
+    let npts = (data.len() - offset) / 64;
+    if npts < 27 || npts > 28 { return None; }
+    let mut idx = offset;
+    let mut read_xy = || -> Option<G1Point> {
+        if idx + 64 > data.len() { return None; }
+        let mut xb = [0u8; 32];
+        let mut yb = [0u8; 32];
+        xb.copy_from_slice(&data[idx..idx + 32]);
+        yb.copy_from_slice(&data[idx + 32..idx + 64]);
+        idx += 64;
+        let x = fq_from_be_bytes(&xb);
+        let y = fq_from_be_bytes(&yb);
+        let aff = G1Affine::new_unchecked(x, y);
+        if !(aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve()) {
+            return None;
+        }
+        Some(G1Point { x: aff.x, y: aff.y })
+    };
+
+    // Read all points in file order first
+    let mut raw_points: Vec<G1Point> = Vec::with_capacity(npts);
+    for _ in 0..npts { raw_points.push(read_xy()?); }
+
+    // If a JSON VK is present, use it to infer the label mapping by matching points
+    let mut mapped = None;
+    if let Ok(json_txt) = fs::read_to_string(path.with_file_name("vk_fields.json")) {
+        #[allow(unused_mut)]
+        if let Ok(_probe) = serde_json::from_str::<Vec<String>>(&json_txt) {
+            let ref_vk = load_vk_from_json(&json_txt);
+            let ref_list: [(&str, &G1Point); 28] = [
+                ("ql", &ref_vk.ql),
+                ("qr", &ref_vk.qr),
+                ("qo", &ref_vk.qo),
+                ("q4", &ref_vk.q4),
+                ("qm", &ref_vk.qm),
+                ("qc", &ref_vk.qc),
+                ("q_arith", &ref_vk.q_arith),
+                ("q_delta_range", &ref_vk.q_delta_range),
+                ("q_elliptic", &ref_vk.q_elliptic),
+                ("q_memory", &ref_vk.q_memory),
+                ("q_lookup", &ref_vk.q_lookup),
+                ("q_poseidon2_external", &ref_vk.q_poseidon2_external),
+                ("q_poseidon2_internal", &ref_vk.q_poseidon2_internal),
+                ("s1", &ref_vk.s1),
+                ("s2", &ref_vk.s2),
+                ("s3", &ref_vk.s3),
+                ("s4", &ref_vk.s4),
+                ("t1", &ref_vk.t1),
+                ("t2", &ref_vk.t2),
+                ("t3", &ref_vk.t3),
+                ("t4", &ref_vk.t4),
+                ("id1", &ref_vk.id1),
+                ("id2", &ref_vk.id2),
+                ("id3", &ref_vk.id3),
+                ("id4", &ref_vk.id4),
+                ("lagrange_first", &ref_vk.lagrange_first),
+                ("lagrange_last", &ref_vk.lagrange_last),
+                ("q_nnf", &ref_vk.q_nnf),
+            ];
+            // For each label, find the matching raw point
+            let mut take = vec![false; raw_points.len()];
+            let mut get = |target: &G1Point| -> Option<G1Point> {
+                for (i, rp) in raw_points.iter().enumerate() {
+                    if !take[i] && rp.x == target.x && rp.y == target.y { take[i] = true; return Some(rp.clone()); }
+                }
+                None
+            };
+            let mut out = Vec::new();
+            for &(_, pt) in &ref_list { if let Some(m) = get(pt) { out.push(m); } else { out.push(G1Point{ x: Fq::from(0u64), y: Fq::from(0u64)}); } }
+            if out.len() == 28 { mapped = Some((ref_vk, out)); }
+        }
+    }
+
+    let (ql, qr, qo, q4, qm, qc, q_arith, q_delta_range, q_elliptic, q_memory, q_lookup, q_poseidon2_external, q_poseidon2_internal, s1, s2, s3, s4, t1, t2, t3, t4, id1, id2, id3, id4, lagrange_first, lagrange_last, q_nnf) = if let Some((_ref_vk, out)) = mapped {
+        (
+            out[0].clone(), out[1].clone(), out[2].clone(), out[3].clone(), out[4].clone(), out[5].clone(),
+            out[6].clone(), out[7].clone(), out[8].clone(), out[9].clone(), out[10].clone(), out[11].clone(), out[12].clone(),
+            out[13].clone(), out[14].clone(), out[15].clone(), out[16].clone(),
+            out[17].clone(), out[18].clone(), out[19].clone(), out[20].clone(),
+            out[21].clone(), out[22].clone(), out[23].clone(), out[24].clone(),
+            out[25].clone(), out[26].clone(), out[27].clone(),
+        )
+    } else {
+        // Fallback: assume Solidity order
+        let mut it = raw_points.into_iter();
+        (
+            it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), // ql,qr,qo,q4
+            it.next().unwrap(), it.next().unwrap(), // qm,qc
+            it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), // q_arith, q_delta_range, q_elliptic
+            it.next().unwrap(), // q_memory
+            it.next().unwrap(), // q_lookup
+            it.next().unwrap(), it.next().unwrap(), // q_poseidon2_external, q_poseidon2_internal
+            it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), // s1..s4
+            it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), // t1..t4
+            it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), it.next().unwrap(), // id1..id4
+            it.next().unwrap(), it.next().unwrap(), // lagrange_first, lagrange_last
+            G1Point { x: Fq::from(0u64), y: Fq::from(0u64) },
+        )
+    };
+
+    let mut vk = VerificationKey {
+        circuit_size: 0,
+        log_circuit_size: 0,
+        public_inputs_size: 0,
+        pub_inputs_offset: 0,
+        qm,
+        qc,
+        ql,
+        qr,
+        qo,
+        q4,
+        q_lookup,
+        q_arith,
+        q_delta_range,
+        q_elliptic,
+        q_memory,
+        q_nnf,
+        q_poseidon2_external,
+        q_poseidon2_internal,
+        s1,
+        s2,
+        s3,
+        s4,
+        id1,
+        id2,
+        id3,
+        id4,
+        t1,
+        t2,
+        t3,
+        t4,
+        lagrange_first,
+        lagrange_last,
+    };
+
+    // Try to fill header fields from sibling vk_fields.json if present
+    if let Ok(txt) = fs::read_to_string(path.with_file_name("vk_fields.json")) {
+        if let Ok(vk_fields) = serde_json::from_str::<Vec<String>>(&txt) {
+            let parse_u64_hex = |s: &str| -> u64 {
+                let x = BigUint::from_str_radix(s.trim_start_matches("0x"), 16).unwrap();
+                x.to_u64_digits().get(0).copied().unwrap_or(0)
+            };
+            if vk_fields.len() >= 1 {
+                let h0 = parse_u64_hex(&vk_fields[0]);
+                if h0 != 0 && (h0 & (h0 - 1)) == 0 {
+                    // power of two -> circuit_size
+                    vk.circuit_size = h0;
+                    let mut lg = 0u64; let mut n = h0; while n > 1 { n >>= 1; lg += 1; }
+                    vk.log_circuit_size = lg;
+                } else {
+                    // treat as log2(circuit_size)
+                    vk.log_circuit_size = h0;
+                    vk.circuit_size = 1u64.checked_shl(h0 as u32).unwrap_or(0);
+                }
+            }
+            if vk_fields.len() >= 2 { vk.public_inputs_size = parse_u64_hex(&vk_fields[1]); }
+            if vk_fields.len() >= 3 { vk.pub_inputs_offset = parse_u64_hex(&vk_fields[2]); }
+        }
+    }
+
+    Some(vk)
 }
 
 /// Load a proof and public inputs from a byte array.

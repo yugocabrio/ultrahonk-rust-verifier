@@ -130,32 +130,14 @@ pub fn verify_sumcheck(
     );
 
     // debug summary
-    #[cfg(feature = "trace")]
-    {
-        trace!("---- DEBUG SUMMARY ---------------------------------");
-        trace!(
-            "beta               = 0x{}",
-            hex::encode(tx.rel_params.beta.to_bytes())
-        );
-        trace!(
-            "gamma              = 0x{}",
-            hex::encode(tx.rel_params.gamma.to_bytes())
-        );
-        trace!(
-            "public_inputs_delta= 0x{}",
-            hex::encode(tx.rel_params.public_inputs_delta.to_bytes())
-        );
-        trace!("pow_partial        = 0x{}", hex::encode(pow_par.to_bytes()));
-        trace!("grand_relation_sum = 0x{}", hex::encode(grand.to_bytes()));
-        trace!("target             = 0x{}", hex::encode(target.to_bytes()));
-        dump_subrelations(
-            &proof.sumcheck_evaluations,
-            &tx.rel_params,
-            &tx.alphas,
-            pow_par,
-        );
-        trace!("----------------------------------------------------");
-    }
+    println!("===== SUMCHECK DEBUG SUMMARY =====");
+    println!("beta = 0x{}", hex::encode(tx.rel_params.beta.to_bytes()));
+    println!("gamma = 0x{}", hex::encode(tx.rel_params.gamma.to_bytes()));
+    println!("public_inputs_delta = 0x{}", hex::encode(tx.rel_params.public_inputs_delta.to_bytes()));
+    println!("pow_partial = 0x{}", hex::encode(pow_par.to_bytes()));
+    println!("grand_relation_sum = 0x{}", hex::encode(grand.to_bytes()));
+    println!("target = 0x{}", hex::encode(target.to_bytes()));
+    println!("==================================");
 
     trace!("==== FINAL ====");
     dbg_fr("grand_relation", &grand);
@@ -165,6 +147,11 @@ pub fn verify_sumcheck(
     if grand == target {
         Ok(())
     } else {
+        println!("===== SUMCHECK FINAL CHECK FAILED =====");
+        println!("grand_relation = 0x{}", hex::encode(grand.to_bytes()));
+        println!("target = 0x{}", hex::encode(target.to_bytes()));
+        println!("difference = 0x{}", hex::encode((grand - target).to_bytes()));
+        println!("======================================");
         Err("Final relation ≠ target".into())
     }
 }

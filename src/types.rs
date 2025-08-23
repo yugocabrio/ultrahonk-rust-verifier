@@ -85,6 +85,7 @@ pub struct VerificationKey {
     pub circuit_size: u64,
     pub log_circuit_size: u64,
     pub public_inputs_size: u64,
+    pub pub_inputs_offset: u64,
     // Selectors and wire commitments:
     pub qm: G1Point,
     pub qc: G1Point,
@@ -94,9 +95,10 @@ pub struct VerificationKey {
     pub q4: G1Point,
     pub q_lookup: G1Point,
     pub q_arith: G1Point,
-    pub q_range: G1Point,
-    pub q_aux: G1Point,
+    pub q_delta_range: G1Point,
     pub q_elliptic: G1Point,
+    pub q_memory: G1Point,
+    pub q_nnf: G1Point,
     pub q_poseidon2_external: G1Point,
     pub q_poseidon2_internal: G1Point,
     // Copy constraints:
@@ -121,6 +123,8 @@ pub struct VerificationKey {
 /// The Proof structure
 #[derive(Clone, Debug)]
 pub struct Proof {
+    // Pairing point object (16 Fr elements)
+    pub pairing_point_object: Vec<Fr>,
     // Wire commitments
     pub w1: G1Point,
     pub w2: G1Point,
@@ -133,7 +137,7 @@ pub struct Proof {
     pub z_perm: G1Point,
     // Sumcheck polynomials
     pub sumcheck_univariates: Vec<Vec<Fr>>, // 28 × 8
-    pub sumcheck_evaluations: Vec<Fr>,      // 40
+    pub sumcheck_evaluations: Vec<Fr>,      // 41 (NUMBER_OF_ENTITIES)
     // Gemini fold commitments
     pub gemini_fold_comms: Vec<G1Point>, // 27
     pub gemini_a_evaluations: Vec<Fr>,   // 28

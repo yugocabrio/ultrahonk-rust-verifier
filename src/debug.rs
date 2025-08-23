@@ -12,7 +12,7 @@ use alloc::{format, string::String};
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
-        #[cfg(feature = "trace")]
+        #[cfg(all(feature = "trace", feature = "std"))]
         {
             println!($($arg)*);
         }
@@ -73,6 +73,25 @@ pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
         );
     }
     trace!("================================");
+}
+
+/// Outputs a specific slice of commitment/scalar pairs, useful for
+/// cross-checking against Solidity's first 40 entities (1..=40).
+#[allow(dead_code)]
+pub fn dump_pairs_range(coms: &[G1Point], scalars: &[Fr], start: usize, end_inclusive: usize) {
+    assert_eq!(coms.len(), scalars.len(), "commitment / scalar length mismatch");
+    let end = end_inclusive.min(coms.len().saturating_sub(1));
+    let start = start.min(end);
+    trace!("========= RANGE LIST [{}..={}] =========", start, end);
+    for i in start..=end {
+        let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+        let s_hex = fr_to_hex(&scalars[i]);
+        trace!(
+            "[#{:02}]  s = {}  C.x = {}  C.y = {}",
+            i, s_hex, x_hex, y_hex
+        );
+    }
+    trace!("========================================");
 }
 
 /// Debug Fr vector with hex output

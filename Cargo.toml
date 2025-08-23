@@ -27,7 +27,7 @@ lazy_static = { version = "1.4", optional = true }
 once_cell = { version = "1.19", default-features = false, features = ["alloc", "race"] }
 
 [features]
-default = ["alloc"]
+default = ["std", "trace"]
 std = [
     "sha3/std",
     "ark-ff/std",
