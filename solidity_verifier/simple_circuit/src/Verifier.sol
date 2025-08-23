@@ -2045,11 +2045,11 @@ abstract contract BaseHonkVerifier is IVerifier {
             console2.log("Element");
             console2.log(i);
             console2.log("Commitment x:");
-            console2.log(base[i].x);
+            console2.logBytes32(bytes32(base[i].x));
             console2.log("Commitment y:");
-            console2.log(base[i].y);
+            console2.logBytes32(bytes32(base[i].y));
             console2.log("Scalar:");
-            console2.log(Fr.unwrap(scalars[i]));
+            console2.logBytes32(bytes32(Fr.unwrap(scalars[i])));
         }
         if (limit > 100) {
             console2.log("... and");
@@ -2093,9 +2093,9 @@ abstract contract BaseHonkVerifier is IVerifier {
         
         console2.log("=== batchMul completed ===");
         console2.log("Result x:");
-        console2.log(result.x);
+        console2.logBytes32(bytes32(result.x));
         console2.log("Result y:");
-        console2.log(result.y);
+        console2.logBytes32(bytes32(result.y));
     }
 }
 
