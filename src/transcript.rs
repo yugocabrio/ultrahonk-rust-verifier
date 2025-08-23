@@ -200,20 +200,20 @@ pub fn generate_transcript(
     push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
-    println!("===== TRANSCRIPT PARAMETERS =====");
-    println!("eta = 0x{}", hex::encode(rp.eta.to_bytes()));
-    println!("eta_two = 0x{}", hex::encode(rp.eta_two.to_bytes()));
-    println!("eta_three = 0x{}", hex::encode(rp.eta_three.to_bytes()));
-    println!("beta = 0x{}", hex::encode(rp.beta.to_bytes()));
-    println!("gamma = 0x{}", hex::encode(rp.gamma.to_bytes()));
-    println!("rho = 0x{}", hex::encode(rho.to_bytes()));
-    println!("gemini_r = 0x{}", hex::encode(gemini_r.to_bytes()));
-    println!("shplonk_nu = 0x{}", hex::encode(shplonk_nu.to_bytes()));
-    println!("shplonk_z = 0x{}", hex::encode(shplonk_z.to_bytes()));
-    println!("circuit_size = {}", cs);
-    println!("public_inputs_total = {}", pis_total);
-    println!("public_inputs_offset = {}", offset);
-    println!("=================================");
+    trace!("===== TRANSCRIPT PARAMETERS =====");
+    trace!("eta = 0x{}", hex::encode(rp.eta.to_bytes()));
+    trace!("eta_two = 0x{}", hex::encode(rp.eta_two.to_bytes()));
+    trace!("eta_three = 0x{}", hex::encode(rp.eta_three.to_bytes()));
+    trace!("beta = 0x{}", hex::encode(rp.beta.to_bytes()));
+    trace!("gamma = 0x{}", hex::encode(rp.gamma.to_bytes()));
+    trace!("rho = 0x{}", hex::encode(rho.to_bytes()));
+    trace!("gemini_r = 0x{}", hex::encode(gemini_r.to_bytes()));
+    trace!("shplonk_nu = 0x{}", hex::encode(shplonk_nu.to_bytes()));
+    trace!("shplonk_z = 0x{}", hex::encode(shplonk_z.to_bytes()));
+    trace!("circuit_size = {}", cs);
+    trace!("public_inputs_total = {}", pis_total);
+    trace!("public_inputs_offset = {}", offset);
+    trace!("=================================");
 
     Transcript {
         rel_params: rp,

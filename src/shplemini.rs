@@ -7,9 +7,11 @@ use crate::debug::dump_pairs;
 use crate::field::Fr;
 use crate::trace;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N};
+#[cfg(not(feature = "std"))]
+use alloc::format;
 use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
-use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
+use ark_ff::{BigInteger, One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec, vec::Vec};
@@ -33,10 +35,6 @@ fn negate(pt: &G1Point) -> G1Point {
     G1Point { x: pt.x, y: -pt.y }
 }
 
-#[inline(always)]
-fn is_dummy(pt: &G1Point) -> bool {
-    pt.x.is_zero() && pt.y.is_zero()
-}
 
 /// ∑ sᵢ·Cᵢ
 fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
@@ -409,7 +407,7 @@ pub fn verify_shplemini(
         trace!("============================");
     }
 
-    // 13) dump all pairs (range + full) for cross-checking with Solidity
+    // 13) dump all pairs (range + full) for cross-checking with Solidity (trace-only)
     #[cfg(feature = "trace")]
     {
         use crate::debug::dump_pairs_range;
@@ -426,21 +424,7 @@ pub fn verify_shplemini(
             }
         }
         dump_pairs_range(&coms, &scalars, 0, 15);
-    }
-    dump_pairs(&coms, &scalars, usize::MAX);
-
-    // Persist batchMul inputs to a hex file for 1:1 comparison with Solidity test5
-    #[cfg(feature = "std")]
-    {
-        use std::fmt::Write as _;
-        let mut out = String::new();
-        for (i, (c, s)) in coms.iter().zip(scalars.iter()).enumerate() {
-            let x = hex::encode(c.x.into_bigint().to_bytes_be());
-            let y = hex::encode(c.y.into_bigint().to_bytes_be());
-            let sh = hex::encode(s.to_bytes());
-            let _ = writeln!(out, "{:02} {} {} {}", i, sh, x, y);
-        }
-        let _ = std::fs::write("rust_batchmul_test5.hex", out);
+        dump_pairs(&coms, &scalars, usize::MAX);
     }
 
     // 14) MSM + pairing

@@ -26,10 +26,7 @@ impl UltraHonkVerifier {
         Self { vk: load_vk_from_json(json_data) }
     }
 
-    #[cfg(feature = "std")]
-    pub fn new_from_vk_bytes(path: &std::path::Path) -> Option<Self> {
-        crate::utils::load_vk_from_bytes_file(path).map(|vk| Self { vk })
-    }
+    // Removed std-based file loader; prefer JSON-based constructor
 
     /// Expose a reference to the parsed VK for debugging/inspection.
     pub fn get_vk(&self) -> &crate::types::VerificationKey {

@@ -14,6 +14,4 @@ pub mod types;
 pub mod utils;
 pub mod verifier;
 pub use utils::load_proof_and_public_inputs;
-#[cfg(feature = "std")]
-pub use utils::load_vk_from_bytes_file;
 pub use verifier::UltraHonkVerifier;

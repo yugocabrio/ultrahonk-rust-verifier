@@ -1,0 +1,252 @@
+   Compiling ultrahonk_rust_verifier v0.1.0 (/Users/yugo/zero_knowledge_proof/ultrahonk_verifier_rs)
+warning: unused import: `crate::debug::dbg_fr`
+ --> src/shplemini.rs:4:5
+  |
+4 | use crate::debug::dbg_fr;
+  |     ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::debug::dbg_vec`
+ --> src/shplemini.rs:5:5
+  |
+5 | use crate::debug::dbg_vec;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::debug::dump_pairs`
+ --> src/shplemini.rs:6:5
+  |
+6 | use crate::debug::dump_pairs;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::format`
+  --> src/shplemini.rs:11:5
+   |
+11 | use alloc::format;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `BigInteger`
+  --> src/shplemini.rs:14:14
+   |
+14 | use ark_ff::{BigInteger, One, PrimeField, Zero};
+   |              ^^^^^^^^^^
+
+warning: unused import: `dump_subrelations`
+ --> src/sumcheck.rs:7:50
+  |
+7 |     relations::{accumulate_relation_evaluations, dump_subrelations},
+  |                                                  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `boxed`
+  --> src/sumcheck.rs:12:13
+   |
+12 | use alloc::{boxed, format, string::String};
+   |             ^^^^^
+
+warning: unused imports: `dbg_fr` and `dbg_vec`
+ --> src/transcript.rs:4:20
+  |
+4 | use crate::debug::{dbg_fr, dbg_vec};
+  |                    ^^^^^^  ^^^^^^^
+
+warning: unused import: `ark_bn254::Fq`
+  --> src/transcript.rs:11:5
+   |
+11 | use ark_bn254::Fq;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `format`
+  --> src/verifier.rs:13:13
+   |
+13 | use alloc::{format, string::String, vec::Vec};
+   |             ^^^^^^
+
+warning: unused variable: `x_hex`
+  --> src/debug.rs:65:14
+   |
+65 |         let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+   |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_x_hex`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `y_hex`
+  --> src/debug.rs:65:21
+   |
+65 |         let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+   |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_y_hex`
+
+warning: unused variable: `s_hex`
+  --> src/debug.rs:66:13
+   |
+66 |         let s_hex = fr_to_hex(&scalars[i]);
+   |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_s_hex`
+
+warning: unused variable: `x_hex`
+  --> src/debug.rs:87:14
+   |
+87 |         let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+   |              ^^^^^ help: if this is intentional, prefix it with an underscore: `_x_hex`
+
+warning: unused variable: `y_hex`
+  --> src/debug.rs:87:21
+   |
+87 |         let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+   |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_y_hex`
+
+warning: unused variable: `s_hex`
+  --> src/debug.rs:88:13
+   |
+88 |         let s_hex = fr_to_hex(&scalars[i]);
+   |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_s_hex`
+
+warning: unused variable: `i`
+   --> src/debug.rs:100:10
+    |
+100 |     for (i, v) in xs.iter().enumerate() {
+    |          ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `v`
+   --> src/debug.rs:100:13
+    |
+100 |     for (i, v) in xs.iter().enumerate() {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_v`
+
+warning: unused variable: `tag`
+  --> src/debug.rs:99:16
+   |
+99 | pub fn dbg_vec(tag: &str, xs: &[Fr]) {
+   |                ^^^ help: if this is intentional, prefix it with an underscore: `_tag`
+
+warning: unused variable: `tag`
+   --> src/debug.rs:112:15
+    |
+112 | pub fn dbg_fr(tag: &str, x: &Fr) {
+    |               ^^^ help: if this is intentional, prefix it with an underscore: `_tag`
+
+warning: unused variable: `x`
+   --> src/debug.rs:112:26
+    |
+112 | pub fn dbg_fr(tag: &str, x: &Fr) {
+    |                          ^ help: if this is intentional, prefix it with an underscore: `_x`
+
+warning: unused variable: `i`
+   --> src/relations.rs:381:10
+    |
+381 |     for (i, v) in out.iter().enumerate() {
+    |          ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `v`
+   --> src/relations.rs:381:13
+    |
+381 |     for (i, v) in out.iter().enumerate() {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_v`
+
+warning: unused variable: `i`
+  --> src/shplemini.rs:47:10
+   |
+47 |     for (i, (c, s)) in coms.iter().zip(scalars.iter()).enumerate() {
+   |          ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: unused variable: `n_sum`
+   --> src/shplemini.rs:172:9
+    |
+172 |     let n_sum = proof.sumcheck_evaluations.len();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_n_sum`
+
+warning: value assigned to `j` is never read
+   --> src/shplemini.rs:310:9
+    |
+310 |         j += 1;
+    |         ^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: unused variable: `tmp`
+   --> src/transcript.rs:159:19
+    |
+159 |     let (u_chals, tmp) = {
+    |                   ^^^ help: if this is intentional, prefix it with an underscore: `_tmp`
+
+warning: value assigned to `field_index` is never read
+   --> src/utils.rs:263:13
+    |
+263 |             field_index += 4;
+    |             ^^^^^^^^^^^
+...
+298 |     let lagrange_last = read_g1!();
+    |                         ---------- in this macro invocation
+    |
+    = help: maybe it is overwritten before being read?
+    = note: this warning originates in the macro `read_g1` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: variable does not need to be mutable
+   --> src/utils.rs:236:13
+    |
+236 |         let mut try_pairs: [([&BigUint; 2], [&BigUint; 2]); 2] = [([lx, hx], [ly, hy]), ([ly, hy], [lx, hx])];
+    |             ----^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: function `fq_from_be_bytes` is never used
+  --> src/utils.rs:31:4
+   |
+31 | fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
+   |    ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: function `biguint_to_fq` is never used
+   --> src/utils.rs:206:8
+    |
+206 |     fn biguint_to_fq(x: BigUint) -> Fq { biguint_to_fq_mod(&x) }
+    |        ^^^^^^^^^^^^^
+
+warning: `ultrahonk_rust_verifier` (lib) generated 31 warnings (run `cargo fix --lib -p ultrahonk_rust_verifier` to apply 11 suggestions)
+warning: unused imports: `fs` and `path::Path`
+ --> tests/compare_vk_sources.rs:1:11
+  |
+1 | use std::{fs, path::Path};
+  |           ^^  ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `ultrahonk_rust_verifier::types::VerificationKey`
+ --> tests/compare_vk_sources.rs:2:5
+  |
+2 | use ultrahonk_rust_verifier::types::VerificationKey;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `field::Fr` and `utils`
+ --> tests/verifier_test.rs:3:31
+  |
+3 | use ultrahonk_rust_verifier::{field::Fr, utils};
+  |                               ^^^^^^^^^  ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `ultrahonk_rust_verifier` (lib test) generated 31 warnings (31 duplicates)
+warning: `ultrahonk_rust_verifier` (test "compare_vk_sources") generated 2 warnings (run `cargo fix --test "compare_vk_sources"` to apply 2 suggestions)
+warning: `ultrahonk_rust_verifier` (test "verifier_test") generated 1 warning (run `cargo fix --test "verifier_test"` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+     Running unittests src/lib.rs (target/debug/deps/ultrahonk_rust_verifier-7984eb0702bcfa0e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compare_vk_sources.rs (target/debug/deps/compare_vk_sources-9bcc4ff505350662)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/verifier_test.rs (target/debug/deps/verifier_test-98151520441d649c)
+
+running 1 test
+test simple_circuit_proof_verifies ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
