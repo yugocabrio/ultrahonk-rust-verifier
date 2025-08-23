@@ -220,27 +220,43 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
 
     // v0.87 固定: header_len=3, limbs_per_point=4（lo_x, hi_x, lo_y, hi_y）。
     let mut field_index = 3usize;
+    // Attempt to auto-synchronize start of G1 limbs in vk_fields.json by sliding until a valid point is found.
+    {
+        let max_probe = 16usize;
+        let len = vk_fields.len();
+        'outer: for offset in 0..max_probe {
+            if field_index + offset + 3 >= len { break; }
+            let ix = field_index + offset;
+            let parse = |i: usize| BigUint::from_str_radix(vk_fields[i].trim_start_matches("0x"), 16).unwrap();
+            let lx = parse(ix);
+            let hx = parse(ix + 1);
+            let ly = parse(ix + 2);
+            let hy = parse(ix + 3);
+            let pt = read_g1_from_limbs(&lx, &hx, &ly, &hy);
+            let aff = G1Affine::new_unchecked(pt.x, pt.y);
+            if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+                field_index = ix;
+                break 'outer;
+            }
+        }
+    }
 
-    // Safe reader: if we run out of limbs, return a dummy point (0,0).
-    // Robust 4-limb → G1 復元（136/128bit シフト、lo/hi 順序、(x,y) 入替を試行）
-    fn try_make_g1(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
-        let assemble = |lo: &BigUint, hi: &BigUint, shift: u32, lohi: bool| -> BigUint {
-            if lohi { (lo << shift) | hi } else { (hi << shift) | lo }
-        };
-        let pairs = [((lx, hx), (ly, hy)), ((ly, hy), (lx, hx))];
+    // Safe reader: 4 limbs → G1 using fixed v0.87 encoding (lo136, hi<=118) per coordinate.
+    // Falls back to a couple of alternative assemblies if on-curve check fails.
+    fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
+        // Primary: lo | (hi << 136)
+        let assemble = |lo: &BigUint, hi: &BigUint, shift: u32| -> BigUint { lo | (hi << shift) };
+        let mut try_pairs: [([&BigUint; 2], [&BigUint; 2]); 2] = [([lx, hx], [ly, hy]), ([ly, hy], [lx, hx])];
         let shifts = [136u32, 128u32];
-        let orders = [true, false];
         for &shift in &shifts {
-            for &lohi in &orders {
-                for &((ax0, ax1), (ay0, ay1)) in &pairs {
-                    let bx = assemble(ax0, ax1, shift, lohi);
-                    let by = assemble(ay0, ay1, shift, lohi);
-                    let x = biguint_to_fq_mod(&bx);
-                    let y = biguint_to_fq_mod(&by);
-                    let aff = G1Affine::new_unchecked(x, y);
-                    if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
-                        return G1Point { x: aff.x, y: aff.y };
-                    }
+            for &(ref ax, ref ay) in &try_pairs {
+                let bx = assemble(ax[0], ax[1], shift);
+                let by = assemble(ay[0], ay[1], shift);
+                let x = biguint_to_fq_mod(&bx);
+                let y = biguint_to_fq_mod(&by);
+                let aff = G1Affine::new_unchecked(x, y);
+                if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+                    return G1Point { x: aff.x, y: aff.y };
                 }
             }
         }
@@ -258,7 +274,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
             let ly = BigUint::from_str_radix(low_y.trim_start_matches("0x"), 16).unwrap();
             let hy = BigUint::from_str_radix(high_y.trim_start_matches("0x"), 16).unwrap();
             field_index += 4;
-            try_make_g1(&lx, &hx, &ly, &hy)
+            read_g1_from_limbs(&lx, &hx, &ly, &hy)
         }};
     }
 
