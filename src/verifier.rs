@@ -1,4 +1,3 @@
-// src/verifier.rs
 //! UltraHonk verifier
 
 use crate::{
@@ -25,8 +24,6 @@ impl UltraHonkVerifier {
     pub fn new_from_json(json_data: &str) -> Self {
         Self { vk: load_vk_from_json(json_data) }
     }
-
-    // Removed std-based file loader; prefer JSON-based constructor
 
     /// Expose a reference to the parsed VK for debugging/inspection.
     pub fn get_vk(&self) -> &crate::types::VerificationKey {

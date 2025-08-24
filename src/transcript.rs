@@ -1,4 +1,3 @@
-// srctranscript.rs
 //! Fiat–Shamir transcript for UltraHonk
 
 use crate::debug::{dbg_fr, dbg_vec};

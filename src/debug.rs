@@ -1,4 +1,4 @@
-// src/debug.rs
+ 
 
 use crate::field::Fr;
 use crate::types::G1Point;

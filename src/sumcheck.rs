@@ -1,4 +1,3 @@
-// src/sumcheck.rs
 //! Sum-check verifier
 use crate::trace;
 use crate::{

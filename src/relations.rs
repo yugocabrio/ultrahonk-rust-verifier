@@ -1,5 +1,3 @@
-// relations.rs
-// Relation evaluation accumulation for UltraHonk.
 //!
 //! This module accumulates all of the UltraHonk relations (arithmetic, permutation,
 //! lookup, range, elliptic, auxiliary, Poseidon external/internal) into a single

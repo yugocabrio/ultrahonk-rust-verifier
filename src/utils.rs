@@ -1,4 +1,3 @@
-// src/utils.rs
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
@@ -171,7 +170,7 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     }
 }
 
-// Removed deprecated helpers from bb82 era
+ 
 
 /// Load a VerificationKey from a JSON string containing an array of hex‐encoded field‐elements.
 #[cfg(feature = "serde_json")]
@@ -337,7 +336,6 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
 /// This parser assumes the `vk` file contains a flat sequence of BN254 G1 affine elements (x||y),
 /// each coordinate encoded as 32-byte big-endian field element. If the length does not match an
 /// integral number of points, or on-curve checks fail, this function returns None.
-// Removed std-based VK loader
 
 /// Load a proof and public inputs from a byte array.
 pub fn load_proof_and_public_inputs(bytes: &[u8]) -> (Vec<Fr>, Vec<u8>) {

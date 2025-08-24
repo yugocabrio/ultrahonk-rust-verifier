@@ -1,4 +1,3 @@
-// src/shplemini.rs
 //! Shplemini batch-opening verifier for BN254
 
 use crate::debug::dbg_fr;
