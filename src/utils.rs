@@ -10,10 +10,7 @@ use num_traits::Num;
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
 
-#[cfg(feature = "std")]
-use std::fs;
-#[cfg(feature = "std")]
-use std::path::Path;
+ 
 
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {
@@ -27,11 +24,7 @@ fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
 }
 
 /// Big-Endian 32 byte → Fq (accept mod p)
-fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
-    let mut bytes_le = *bytes_be; // 32-byte copy
-    bytes_le.reverse(); // BE → LE
-    Fq::from_le_bytes_mod_order(&bytes_le)
-}
+ 
 
 /// Fq → 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
@@ -201,8 +194,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         (cs, h0)
     };
 
-    // Helper to convert BigUint into an Fq via LE bytes (auto-reduced mod p)
-    fn biguint_to_fq(x: BigUint) -> Fq { biguint_to_fq_mod(&x) }
+    
 
     // v0.87 固定: header_len=3, limbs_per_point=4（lo_x, hi_x, lo_y, hi_y）。
     let mut field_index = 3usize;

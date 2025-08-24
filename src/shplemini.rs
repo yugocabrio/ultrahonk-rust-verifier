@@ -1,8 +1,7 @@
 //! Shplemini batch-opening verifier for BN254
 
-use crate::debug::dbg_fr;
-use crate::debug::dbg_vec;
-use crate::debug::dump_pairs;
+#[cfg(feature = "trace")]
+use crate::debug::{dbg_fr, dbg_vec, dump_pairs};
 use crate::field::Fr;
 use crate::trace;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N};
@@ -10,7 +9,9 @@ use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE
 use alloc::format;
 use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
-use ark_ff::{BigInteger, One, PrimeField, Zero};
+#[cfg(feature = "trace")]
+use ark_ff::BigInteger;
+use ark_ff::{One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec, vec::Vec};
@@ -47,8 +48,7 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
         let aff = G1Affine::new_unchecked(c.x, c.y);
         if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
             trace!(
-                "Invalid G1 at i={} x=0x{} y=0x{}",
-                i,
+                "Invalid G1 at x=0x{} y=0x{}",
                 hex::encode(c.x.into_bigint().to_bytes_be()),
                 hex::encode(c.y.into_bigint().to_bytes_be())
             );
@@ -168,7 +168,6 @@ pub fn verify_shplemini(
 ) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
-    let n_sum = proof.sumcheck_evaluations.len();
     let mut r_pows = Vec::with_capacity(log_n);
     r_pows.push(tx.gemini_r);
     for i in 1..log_n {
@@ -307,6 +306,7 @@ pub fn verify_shplemini(
         j += 1;
         coms[j] = proof.z_perm.clone();
         j += 1;
+        let _ = j; // silence "assigned but never read" in non-trace builds
     }
 
     // 7) folding rounds

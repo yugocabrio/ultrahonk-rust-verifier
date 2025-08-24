@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 use ultrahonk_rust_verifier::UltraHonkVerifier;
-use ultrahonk_rust_verifier::{field::Fr, utils};
+ 
 
 fn run(dir: &str) -> Result<(), String> {
     let path = Path::new(dir);

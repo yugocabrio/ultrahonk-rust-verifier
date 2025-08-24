@@ -47,68 +47,96 @@ pub fn g1_to_hex(pt: &G1Point) -> (String, String) {
 
 /// Outputs commitment/scalar pairs
 pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
-    assert_eq!(
-        coms.len(),
-        scalars.len(),
-        "commitment / scalar length mismatch"
-    );
-
-    let len = coms.len();
-    trace!("========= FULL LIST =========");
-    for i in 0..len {
-        if head_tail != usize::MAX && i >= head_tail && i < len - head_tail {
-            if i == head_tail {
-                trace!("    ...");
-            }
-            continue;
-        }
-        let (x_hex, y_hex) = g1_to_hex(&coms[i]);
-        let s_hex = fr_to_hex(&scalars[i]);
-        trace!(
-            "[#{:02}]  s = {:>66}  C.x = {:>66}  C.y = {:>66}",
-            i,
-            s_hex,
-            x_hex,
-            y_hex
+    #[cfg(feature = "trace")]
+    {
+        assert_eq!(
+            coms.len(),
+            scalars.len(),
+            "commitment / scalar length mismatch"
         );
+
+        let len = coms.len();
+        trace!("========= FULL LIST =========");
+        for i in 0..len {
+            if head_tail != usize::MAX && i >= head_tail && i < len - head_tail {
+                if i == head_tail {
+                    trace!("    ...");
+                }
+                continue;
+            }
+            let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+            let s_hex = fr_to_hex(&scalars[i]);
+            trace!(
+                "[#{:02}]  s = {:>66}  C.x = {:>66}  C.y = {:>66}",
+                i,
+                s_hex,
+                x_hex,
+                y_hex
+            );
+        }
+        trace!("================================");
     }
-    trace!("================================");
+    #[cfg(not(feature = "trace"))]
+    {
+        let _ = (coms, scalars, head_tail);
+    }
 }
 
 /// Outputs a specific slice of commitment/scalar pairs, useful for
 /// cross-checking against Solidity's first 40 entities (1..=40).
 #[allow(dead_code)]
 pub fn dump_pairs_range(coms: &[G1Point], scalars: &[Fr], start: usize, end_inclusive: usize) {
-    assert_eq!(coms.len(), scalars.len(), "commitment / scalar length mismatch");
-    let end = end_inclusive.min(coms.len().saturating_sub(1));
-    let start = start.min(end);
-    trace!("========= RANGE LIST [{}..={}] =========", start, end);
-    for i in start..=end {
-        let (x_hex, y_hex) = g1_to_hex(&coms[i]);
-        let s_hex = fr_to_hex(&scalars[i]);
-        trace!(
-            "[#{:02}]  s = {}  C.x = {}  C.y = {}",
-            i, s_hex, x_hex, y_hex
-        );
+    #[cfg(feature = "trace")]
+    {
+        assert_eq!(coms.len(), scalars.len(), "commitment / scalar length mismatch");
+        let end = end_inclusive.min(coms.len().saturating_sub(1));
+        let start = start.min(end);
+        trace!("========= RANGE LIST [{}..={}] =========", start, end);
+        for i in start..=end {
+            let (x_hex, y_hex) = g1_to_hex(&coms[i]);
+            let s_hex = fr_to_hex(&scalars[i]);
+            trace!(
+                "[#{:02}]  s = {}  C.x = {}  C.y = {}",
+                i, s_hex, x_hex, y_hex
+            );
+        }
+        trace!("========================================");
     }
-    trace!("========================================");
+    #[cfg(not(feature = "trace"))]
+    {
+        let _ = (coms, scalars, start, end_inclusive);
+    }
 }
 
 /// Debug Fr vector with hex output
 #[inline(always)]
 pub fn dbg_vec(tag: &str, xs: &[Fr]) {
-    for (i, v) in xs.iter().enumerate() {
-        trace!(
-            "{tag}[{i:02}] = 0x{}",
-            hex::encode(v.to_bytes()),
-            tag = tag,
-            i = i
-        );
+    #[cfg(feature = "trace")]
+    {
+        for (i, v) in xs.iter().enumerate() {
+            trace!(
+                "{tag}[{i:02}] = 0x{}",
+                hex::encode(v.to_bytes()),
+                tag = tag,
+                i = i
+            );
+        }
+    }
+    #[cfg(not(feature = "trace"))]
+    {
+        let _ = (tag, xs);
     }
 }
 
 /// Debug Fr with hex output
 #[inline(always)]
 pub fn dbg_fr(tag: &str, x: &Fr) {
-    trace!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
+    #[cfg(feature = "trace")]
+    {
+        trace!("{:<18}: 0x{}", tag, hex::encode(x.to_bytes()));
+    }
+    #[cfg(not(feature = "trace"))]
+    {
+        let _ = (tag, x);
+    }
 }

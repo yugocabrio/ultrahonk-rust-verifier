@@ -1,13 +1,11 @@
 //! Fiat–Shamir transcript for UltraHonk
 
-use crate::debug::{dbg_fr, dbg_vec};
 use crate::trace;
 use crate::{
     field::Fr,
     hash::keccak256,
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
 };
-use ark_bn254::Fq;
 use ark_bn254::G1Affine;
 
 #[cfg(not(feature = "std"))]
