@@ -163,7 +163,7 @@ pub fn generate_transcript(
             }
             t = hash_to_fr(&d);
             vs.push(split(t).0);
-            cur = t; // 各反復でcurを更新
+            cur = t; // update cur at each iteration
         }
         (vs, cur)
     };

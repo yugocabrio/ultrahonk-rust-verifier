@@ -23,10 +23,10 @@ fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
     Fr::from_bytes(bytes)
 }
 
-/// Big-Endian 32 byte → Fq (accept mod p)
+/// Big-Endian 32 byte to Fq (accept mod p)
  
 
-/// Fq → 32-byte big-endian
+/// Fq to 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
     let mut out = [0u8; 32];
     let bi: BigInteger256 = (*f).into(); // 4 × 64-bit limbs (LE)
@@ -36,7 +36,7 @@ pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
     out
 }
 
-/// Fq → (low136, high(<=118)) each 32-byte BE
+/// Fq to (low136, high(<=118)) each 32-byte BE
 pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     let be = fq_to_be_bytes(f);
     let big = BigUint::from_bytes_be(&be);
@@ -54,9 +54,10 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     (to_arr(low), to_arr(high))
 }
 
-// (v0.87) G1 座標は (lo136, hi<=118) の 2 リムで (x,y) を順に格納する前提
-
 /// Load a Proof from a byte array (e.g. read from proof.bin).
+///
+/// Note (bb v0.87.0): G1 coordinates are encoded as two limbs per coordinate
+/// using the (lo136, hi<=118) split and stored in the order (x_lo, x_hi, y_lo, y_hi).
 pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     let mut cursor = 0usize;
 
@@ -116,7 +117,7 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         sumcheck_univariates.push(row);
     }
 
-    // 6) sumcheck_evaluations: 40/41 をファイル長から自動判定
+    // 6) sumcheck_evaluations: auto-detect 40 or 41 entries from total file length
     let mut sumcheck_evaluations = Vec::new();
     let size_40 = 16 * 32 /*pairing*/
         + 8 * 128 /*wires & lookups before univariates*/
@@ -170,7 +171,7 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
 pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     // Parse JSON into Vec<String>
     let vk_fields: Vec<String> = serde_json::from_str(json_data).unwrap();
-    // Expect v0.87+ header(3) + 28*4 limbs
+    // Expect v0.87.0 header(3) + 28*4 limbs
     assert!(vk_fields.len() >= 3, "VK JSON must contain header elements");
 
     // Helper to parse hex field element to u64 (fits for small header values)
@@ -179,13 +180,13 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         x.to_u64_digits().get(0).copied().unwrap_or(0)
     }
 
-    // Parse VK header (barretenberg v0.87+):
+    // Parse VK header (barretenberg v0.87.0):
     //   [0] log_circuit_size, [1] num_public_inputs, [2] pub_inputs_offset
     let h0 = parse_u64_hex(&vk_fields[0]);
     let public_inputs_size = if vk_fields.len() > 1 { parse_u64_hex(&vk_fields[1]) } else { 0 };
     let pub_inputs_offset = if vk_fields.len() > 2 { parse_u64_hex(&vk_fields[2]) } else { 0 };
-    // 一部のビルドは [0] に circuit_size、別のものは log2(circuit_size) を格納する。
-    // 値が 2 の冪なら circuit_size とみなして log を計算、そうでなければ log 値とみなす。
+    // Some builds store circuit_size in [0], others store log2(circuit_size).
+    // If the value is a power of two, treat it as circuit_size and compute log; otherwise treat it as log value.
     let (circuit_size_u64, log_circuit_size) = if h0 != 0 && (h0 & (h0 - 1)) == 0 {
         let mut lg = 0u64; let mut n = h0; while n > 1 { n >>= 1; lg += 1; }
         (h0, lg)
@@ -196,7 +197,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
 
     
 
-    // v0.87 固定: header_len=3, limbs_per_point=4（lo_x, hi_x, lo_y, hi_y）。
+    // Fixed for v0.87.0: header_len=3, limbs_per_point=4 (lo_x, hi_x, lo_y, hi_y).
     let mut field_index = 3usize;
     // Attempt to auto-synchronize start of G1 limbs in vk_fields.json by sliding until a valid point is found.
     {
@@ -219,7 +220,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         }
     }
 
-    // Safe reader: 4 limbs → G1 using fixed v0.87 encoding (lo136, hi<=118) per coordinate.
+    // Safe reader: 4 limbs → G1 using fixed v0.87.0 encoding (lo136, hi<=118) per coordinate.
     // Falls back to a couple of alternative assemblies if on-curve check fails.
     fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
         // Primary: lo | (hi << 136)
@@ -256,7 +257,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         }};
     }
 
-    // Follow bb v0.87 vk_fields.json order (wire/commitment order in fields file):
+    // Follow bb v0.87.0 vk_fields.json order (wire/commitment order in fields file):
     // qm, qc, ql, qr, qo, q4, q_lookup, q_arith, q_delta_range, q_elliptic, q_memory(qAux),
     // q_poseidon2_external, q_poseidon2_internal, s1..s4, id1..id4, t1..t4, lagrange_first, lagrange_last
     let qm = read_g1!();
@@ -276,7 +277,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     let s2 = read_g1!();
     let s3 = read_g1!();
     let s4 = read_g1!();
-    // bb v0.87 order: IDs come before table commitments
+    // bb v0.87.0 order: IDs come before table commitments
     let id1 = read_g1!();
     let id2 = read_g1!();
     let id3 = read_g1!();

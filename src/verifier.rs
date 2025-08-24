@@ -45,7 +45,7 @@ impl UltraHonkVerifier {
         // We avoid failing hard here and instead trust caller-provided inputs.
 
         // 3) Fiat–Shamir transcript
-        // In bb v0.87, publicInputsSize includes pairing point object (16 elements)
+        // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
         let pis_total = public_inputs_bytes.len() as u64 + 16;
         let pub_offset = if self.vk.pub_inputs_offset != 0 { self.vk.pub_inputs_offset } else { 1 };
         let mut tx = generate_transcript(
