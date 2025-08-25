@@ -10,8 +10,6 @@ use num_traits::Num;
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
 
- 
-
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {
     let le = x.to_bytes_le();
@@ -24,7 +22,6 @@ fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
 }
 
 /// Big-Endian 32 byte to Fq (accept mod p)
- 
 
 /// Fq to 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
@@ -126,8 +123,14 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         + 27 * 128 /*fold comms*/
         + 28 * 32 /*A evals*/
         + 2 * 128; /*Q + quotient*/
-    let evals_to_read = if proof_bytes.len() >= size_40 + 32 { 41 } else { 40 };
-    for _ in 0..evals_to_read { sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor)); }
+    let evals_to_read = if proof_bytes.len() >= size_40 + 32 {
+        41
+    } else {
+        40
+    };
+    for _ in 0..evals_to_read {
+        sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
+    }
 
     // 7) gemini_fold_comms: 27 G1Points
     let mut gemini_fold_comms = Vec::new();
@@ -164,8 +167,6 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     }
 }
 
- 
-
 /// Load a VerificationKey from a JSON string containing an array of hex‐encoded field‐elements.
 #[cfg(feature = "serde_json")]
 pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
@@ -183,19 +184,30 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     // Parse VK header (barretenberg v0.87.0):
     //   [0] log_circuit_size, [1] num_public_inputs, [2] pub_inputs_offset
     let h0 = parse_u64_hex(&vk_fields[0]);
-    let public_inputs_size = if vk_fields.len() > 1 { parse_u64_hex(&vk_fields[1]) } else { 0 };
-    let pub_inputs_offset = if vk_fields.len() > 2 { parse_u64_hex(&vk_fields[2]) } else { 0 };
+    let public_inputs_size = if vk_fields.len() > 1 {
+        parse_u64_hex(&vk_fields[1])
+    } else {
+        0
+    };
+    let pub_inputs_offset = if vk_fields.len() > 2 {
+        parse_u64_hex(&vk_fields[2])
+    } else {
+        0
+    };
     // Some builds store circuit_size in [0], others store log2(circuit_size).
     // If the value is a power of two, treat it as circuit_size and compute log; otherwise treat it as log value.
     let (circuit_size_u64, log_circuit_size) = if h0 != 0 && (h0 & (h0 - 1)) == 0 {
-        let mut lg = 0u64; let mut n = h0; while n > 1 { n >>= 1; lg += 1; }
+        let mut lg = 0u64;
+        let mut n = h0;
+        while n > 1 {
+            n >>= 1;
+            lg += 1;
+        }
         (h0, lg)
     } else {
         let cs = 1u64.checked_shl(h0 as u32).expect("circuit_size too large");
         (cs, h0)
     };
-
-    
 
     // Fixed for v0.87.0: header_len=3, limbs_per_point=4 (lo_x, hi_x, lo_y, hi_y).
     let mut field_index = 3usize;
@@ -204,9 +216,13 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         let max_probe = 16usize;
         let len = vk_fields.len();
         'outer: for offset in 0..max_probe {
-            if field_index + offset + 3 >= len { break; }
+            if field_index + offset + 3 >= len {
+                break;
+            }
             let ix = field_index + offset;
-            let parse = |i: usize| BigUint::from_str_radix(vk_fields[i].trim_start_matches("0x"), 16).unwrap();
+            let parse = |i: usize| {
+                BigUint::from_str_radix(vk_fields[i].trim_start_matches("0x"), 16).unwrap()
+            };
             let lx = parse(ix);
             let hx = parse(ix + 1);
             let ly = parse(ix + 2);
@@ -225,7 +241,8 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
         // Primary: lo | (hi << 136)
         let assemble = |lo: &BigUint, hi: &BigUint, shift: u32| -> BigUint { lo | (hi << shift) };
-        let mut try_pairs: [([&BigUint; 2], [&BigUint; 2]); 2] = [([lx, hx], [ly, hy]), ([ly, hy], [lx, hx])];
+        let mut try_pairs: [([&BigUint; 2], [&BigUint; 2]); 2] =
+            [([lx, hx], [ly, hy]), ([ly, hy], [lx, hx])];
         let shifts = [136u32, 128u32];
         for &shift in &shifts {
             for &(ref ax, ref ay) in &try_pairs {
@@ -239,7 +256,10 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
                 }
             }
         }
-        G1Point { x: Fq::from(0u64), y: Fq::from(0u64) }
+        G1Point {
+            x: Fq::from(0u64),
+            y: Fq::from(0u64),
+        }
     }
 
     macro_rules! read_g1 {
@@ -305,7 +325,10 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         q_delta_range,
         q_elliptic,
         q_memory,
-        q_nnf: G1Point { x: Fq::from(0u64), y: Fq::from(0u64) },
+        q_nnf: G1Point {
+            x: Fq::from(0u64),
+            y: Fq::from(0u64),
+        },
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,

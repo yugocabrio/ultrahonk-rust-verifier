@@ -1,5 +1,3 @@
- 
-
 use crate::field::Fr;
 use crate::types::G1Point;
 use ark_ff::{BigInteger256, PrimeField};
@@ -88,7 +86,11 @@ pub fn dump_pairs(coms: &[G1Point], scalars: &[Fr], head_tail: usize) {
 pub fn dump_pairs_range(coms: &[G1Point], scalars: &[Fr], start: usize, end_inclusive: usize) {
     #[cfg(feature = "trace")]
     {
-        assert_eq!(coms.len(), scalars.len(), "commitment / scalar length mismatch");
+        assert_eq!(
+            coms.len(),
+            scalars.len(),
+            "commitment / scalar length mismatch"
+        );
         let end = end_inclusive.min(coms.len().saturating_sub(1));
         let start = start.min(end);
         trace!("========= RANGE LIST [{}..={}] =========", start, end);
@@ -97,7 +99,10 @@ pub fn dump_pairs_range(coms: &[G1Point], scalars: &[Fr], start: usize, end_incl
             let s_hex = fr_to_hex(&scalars[i]);
             trace!(
                 "[#{:02}]  s = {}  C.x = {}  C.y = {}",
-                i, s_hex, x_hex, y_hex
+                i,
+                s_hex,
+                x_hex,
+                y_hex
             );
         }
         trace!("========================================");

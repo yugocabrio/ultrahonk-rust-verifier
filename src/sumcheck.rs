@@ -132,7 +132,10 @@ pub fn verify_sumcheck(
     crate::trace!("===== SUMCHECK DEBUG SUMMARY =====");
     crate::trace!("beta = 0x{}", hex::encode(tx.rel_params.beta.to_bytes()));
     crate::trace!("gamma = 0x{}", hex::encode(tx.rel_params.gamma.to_bytes()));
-    crate::trace!("public_inputs_delta = 0x{}", hex::encode(tx.rel_params.public_inputs_delta.to_bytes()));
+    crate::trace!(
+        "public_inputs_delta = 0x{}",
+        hex::encode(tx.rel_params.public_inputs_delta.to_bytes())
+    );
     crate::trace!("pow_partial = 0x{}", hex::encode(pow_par.to_bytes()));
     crate::trace!("grand_relation_sum = 0x{}", hex::encode(grand.to_bytes()));
     crate::trace!("target = 0x{}", hex::encode(target.to_bytes()));
@@ -149,7 +152,10 @@ pub fn verify_sumcheck(
         crate::trace!("===== SUMCHECK FINAL CHECK FAILED =====");
         crate::trace!("grand_relation = 0x{}", hex::encode(grand.to_bytes()));
         crate::trace!("target = 0x{}", hex::encode(target.to_bytes()));
-        crate::trace!("difference = 0x{}", hex::encode((grand - target).to_bytes()));
+        crate::trace!(
+            "difference = 0x{}",
+            hex::encode((grand - target).to_bytes())
+        );
         crate::trace!("======================================");
         Err("Final relation ≠ target".into())
     }

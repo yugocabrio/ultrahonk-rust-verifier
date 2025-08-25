@@ -1,5 +1,3 @@
- 
-
 use sha3::{Digest, Keccak256};
 
 /// Compute Keccak-256 hash of the given data, returning a 32-byte array.

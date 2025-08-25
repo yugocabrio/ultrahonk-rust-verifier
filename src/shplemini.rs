@@ -35,7 +35,6 @@ fn negate(pt: &G1Point) -> G1Point {
     G1Point { x: pt.x, y: -pt.y }
 }
 
-
 /// ∑ sᵢ·Cᵢ
 fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
     if coms.len() != scalars.len() {
