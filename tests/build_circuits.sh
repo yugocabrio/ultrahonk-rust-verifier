@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NOIR_VERSION="1.0.0-beta.3"
-BB_VERSION="v0.82.2"
+NOIR_VERSION="1.0.0-beta.9"
+# Pin to Aztec bb v0.87.0 as指定
+BB_VERSION="v0.87.0"
 
 install_nargo() {
   if ! command -v nargo >/dev/null 2>&1; then

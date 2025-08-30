@@ -1,13 +1,10 @@
-// srctranscript.rs
 //! Fiat–Shamir transcript for UltraHonk
 
-use crate::debug::{dbg_fr, dbg_vec};
 use crate::trace;
 use crate::{
     field::Fr,
     hash::keccak256,
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
-    utils::fq_to_halves_be,
 };
 use ark_bn254::G1Affine;
 
@@ -15,6 +12,8 @@ use ark_bn254::G1Affine;
 use alloc::vec::Vec;
 
 fn push_point(buf: &mut Vec<u8>, pt: &G1Affine) {
+    // Serialize an Fq coordinate into two bn254::Fr limbs (lo136, hi<=118)
+    use crate::utils::fq_to_halves_be;
     let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
     let (y_lo, y_hi) = fq_to_halves_be(&pt.y);
     buf.extend_from_slice(&x_lo);
@@ -47,15 +46,19 @@ fn gen_eta(
     proof: &Proof,
     pub_inputs: &[Vec<u8>],
     cs: u64,
-    pis: u64,
+    pis_total: u64,
     offset: u64,
 ) -> (RelationParameters, Fr) {
     let mut data = Vec::new();
     data.extend_from_slice(&u64_to_be32(cs));
-    data.extend_from_slice(&u64_to_be32(pis));
+    data.extend_from_slice(&u64_to_be32(pis_total));
     data.extend_from_slice(&u64_to_be32(offset));
     for pi in pub_inputs {
         data.extend_from_slice(pi);
+    }
+    // Append pairing point object (16 Fr) after public inputs
+    for fr in &proof.pairing_point_object {
+        data.extend_from_slice(&fr.to_bytes());
     }
     for w in &[&proof.w1, &proof.w2, &proof.w3] {
         push_point(&mut data, &w.to_affine());
@@ -129,11 +132,11 @@ pub fn generate_transcript(
     proof: &Proof,
     pub_inputs: &[Vec<u8>],
     cs: u64,
-    pis: u64,
+    pis_total: u64,
     offset: u64,
 ) -> Transcript {
     // 1) η
-    let (mut rp, mut cur) = gen_eta(proof, pub_inputs, cs, pis, offset);
+    let (mut rp, mut cur) = gen_eta(proof, pub_inputs, cs, pis_total, offset);
 
     // 2) β, γ
     let (beta, gamma, tmp) = gen_beta_gamma(cur, proof);
@@ -145,11 +148,11 @@ pub fn generate_transcript(
     let (alphas, tmp) = gen_alphas(cur, proof);
     cur = tmp;
 
-    // 4) gate challenges
+    // 4) gate challenges (padded to constant proof size)
     let (gate_chals, tmp) = gen_challenges(cur, CONST_PROOF_SIZE_LOG_N);
     cur = tmp;
 
-    // 5) sumcheck u challenges
+    // 5) sumcheck challenges - sumcheckUnivariates
     let (u_chals, tmp) = {
         let mut t = cur;
         let mut vs = Vec::with_capacity(CONST_PROOF_SIZE_LOG_N);
@@ -160,10 +163,10 @@ pub fn generate_transcript(
             }
             t = hash_to_fr(&d);
             vs.push(split(t).0);
+            cur = t; // update cur at each iteration
         }
-        (vs, t)
+        (vs, cur)
     };
-    cur = tmp;
 
     // 6) ρ
     let mut data = cur.to_bytes().to_vec();
@@ -194,20 +197,20 @@ pub fn generate_transcript(
     push_point(&mut data, &proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
-    trace!("===== TRANSCRIPT (Rust) =====");
-    dbg_fr("eta", &rp.eta);
-    dbg_fr("eta_two", &rp.eta_two);
-    dbg_fr("eta_three", &rp.eta_three);
-    dbg_fr("beta", &rp.beta);
-    dbg_fr("gamma", &rp.gamma);
-    dbg_vec("alpha", &alphas);
-    dbg_vec("gate_ch", &gate_chals);
-    dbg_vec("u_ch", &u_chals);
-    dbg_fr("rho", &rho);
-    dbg_fr("gemini_r", &gemini_r);
-    dbg_fr("shplonk_nu", &shplonk_nu);
-    dbg_fr("shplonk_z", &shplonk_z);
-    trace!("=============================");
+    trace!("===== TRANSCRIPT PARAMETERS =====");
+    trace!("eta = 0x{}", hex::encode(rp.eta.to_bytes()));
+    trace!("eta_two = 0x{}", hex::encode(rp.eta_two.to_bytes()));
+    trace!("eta_three = 0x{}", hex::encode(rp.eta_three.to_bytes()));
+    trace!("beta = 0x{}", hex::encode(rp.beta.to_bytes()));
+    trace!("gamma = 0x{}", hex::encode(rp.gamma.to_bytes()));
+    trace!("rho = 0x{}", hex::encode(rho.to_bytes()));
+    trace!("gemini_r = 0x{}", hex::encode(gemini_r.to_bytes()));
+    trace!("shplonk_nu = 0x{}", hex::encode(shplonk_nu.to_bytes()));
+    trace!("shplonk_z = 0x{}", hex::encode(shplonk_z.to_bytes()));
+    trace!("circuit_size = {}", cs);
+    trace!("public_inputs_total = {}", pis_total);
+    trace!("public_inputs_offset = {}", offset);
+    trace!("=================================");
 
     Transcript {
         rel_params: rp,

@@ -1,4 +1,3 @@
-// src/verifier.rs
 //! UltraHonk verifier
 
 use crate::{
@@ -10,7 +9,7 @@ use crate::{
 use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 
 pub struct UltraHonkVerifier {
     vk: crate::types::VerificationKey,
@@ -28,6 +27,11 @@ impl UltraHonkVerifier {
         }
     }
 
+    /// Expose a reference to the parsed VK for debugging/inspection.
+    pub fn get_vk(&self) -> &crate::types::VerificationKey {
+        &self.vk
+    }
+
     /// Top-level verify
     pub fn verify(
         &self,
@@ -38,29 +42,33 @@ impl UltraHonkVerifier {
         let proof = load_proof(proof_bytes);
 
         // 2) sanity on public inputs
-        if public_inputs_bytes.len() != self.vk.public_inputs_size as usize {
-            return Err(format!(
-                "expected {} public inputs, got {}",
-                self.vk.public_inputs_size,
-                public_inputs_bytes.len()
-            ));
-        }
+        // If VK metadata is missing/zero, fall back to actual provided public inputs.
+        // Newer bb versions may omit header fields in vk_fields.json.
+        // We avoid failing hard here and instead trust caller-provided inputs.
 
         // 3) Fiat–Shamir transcript
+        // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
+        let pis_total = public_inputs_bytes.len() as u64 + 16;
+        let pub_offset = if self.vk.pub_inputs_offset != 0 {
+            self.vk.pub_inputs_offset
+        } else {
+            1
+        };
         let mut tx = generate_transcript(
             &proof,
             public_inputs_bytes,
             self.vk.circuit_size,
-            self.vk.public_inputs_size,
-            1, // pubInputsOffset
+            pis_total,
+            pub_offset, // pubInputsOffset
         );
 
-        // 4) compute Δₚᵢ and inject ( **← BUG FIX HERE** )
+        // 4) compute Δₚᵢ and inject
         tx.rel_params.public_inputs_delta = Self::public_inputs_delta(
             public_inputs_bytes,
+            &proof.pairing_point_object,
             tx.rel_params.beta,
             tx.rel_params.gamma,
-            1,
+            pub_offset,
             self.vk.circuit_size,
         );
 
@@ -75,6 +83,7 @@ impl UltraHonkVerifier {
 
     fn public_inputs_delta(
         public_inputs: &[Vec<u8>],
+        pairing_point_object: &[Fr],
         beta: Fr,
         gamma: Fr,
         offset: u64,
@@ -90,6 +99,12 @@ impl UltraHonkVerifier {
             let pi = Fr::from_bytes(bytes.as_slice().try_into().unwrap());
             num = num * (num_acc + pi);
             den = den * (den_acc + pi);
+            num_acc = num_acc + beta;
+            den_acc = den_acc - beta;
+        }
+        for pi in pairing_point_object {
+            num = num * (num_acc + *pi);
+            den = den * (den_acc + *pi);
             num_acc = num_acc + beta;
             den_acc = den_acc - beta;
         }

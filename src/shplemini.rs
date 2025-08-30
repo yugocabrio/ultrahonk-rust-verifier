@@ -1,21 +1,24 @@
-// src/shplemini.rs
 //! Shplemini batch-opening verifier for BN254
 
-use crate::debug::dbg_fr;
-use crate::debug::dbg_vec;
-use crate::debug::dump_pairs;
+#[cfg(feature = "trace")]
+use crate::debug::{dbg_fr, dbg_vec, dump_pairs};
 use crate::field::Fr;
 use crate::trace;
-use crate::types::{G1Point, Proof, Transcript, VerificationKey};
+use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N};
+#[cfg(not(feature = "std"))]
+use alloc::format;
 use ark_bn254::{Bn254, Fq, Fq2, G1Affine, G1Projective, G2Affine};
 use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
-use ark_ff::{BigInteger, Field, One, PrimeField, Zero};
+#[cfg(feature = "trace")]
+use ark_ff::BigInteger;
+use ark_ff::{One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec, vec::Vec};
 
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
 pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted
+const NUMBER_OF_ENTITIES: usize = NUMBER_UNSHIFTED + NUMBER_SHIFTED; // 40
 
 #[inline(always)]
 fn affine_checked(pt: &G1Point) -> Result<G1Affine, String> {
@@ -32,11 +35,6 @@ fn negate(pt: &G1Point) -> G1Point {
     G1Point { x: pt.x, y: -pt.y }
 }
 
-#[inline(always)]
-fn is_dummy(pt: &G1Point) -> bool {
-    pt.x.is_zero() && pt.y.is_zero()
-}
-
 /// ∑ sᵢ·Cᵢ
 fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
     if coms.len() != scalars.len() {
@@ -46,12 +44,13 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
     trace!("Initial acc: {:?}", acc);
 
     for (i, (c, s)) in coms.iter().zip(scalars.iter()).enumerate() {
-        if s.is_zero() || is_dummy(c) {
-            trace!("Iteration {}: Skipping (zero scalar or dummy)", i);
-            continue;
-        }
         let aff = G1Affine::new_unchecked(c.x, c.y);
         if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
+            trace!(
+                "Invalid G1 at x=0x{} y=0x{}",
+                hex::encode(c.x.into_bigint().to_bytes_be()),
+                hex::encode(c.y.into_bigint().to_bytes_be())
+            );
             return Err("invalid G1 point".into());
         }
 
@@ -66,6 +65,7 @@ fn batch_mul(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
         );
         trace!("  Scalar     : 0x{}", hex::encode(s.to_bytes()));
 
+        // Always process, even for zero scalar, to mirror Solidity's batchMul
         acc += G1Projective::from(aff).mul_bigint(s.0.into_bigint());
         let acc_aff = acc.into_affine();
         trace!("  Accumulated result:");
@@ -167,7 +167,6 @@ pub fn verify_shplemini(
 ) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
-    let n_sum = proof.sumcheck_evaluations.len();
     let mut r_pows = Vec::with_capacity(log_n);
     r_pows.push(tx.gemini_r);
     for i in 1..log_n {
@@ -182,7 +181,14 @@ pub fn verify_shplemini(
     }
 
     // 2) allocate arrays
-    let total = 1 + n_sum + log_n + 1 + 1;
+    // Match Solidity sizing: NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 2
+    // Layout:
+    //   [0]                 = shplonk_Q
+    //   [1..=40]            = VK + proof entities (NUMBER_OF_ENTITIES)
+    //   [41..=67]           = gemini_fold_comms (CONST_PROOF_SIZE_LOG_N - 1 = 27)
+    //   [68]                = generator (1,2) with const_acc scalar
+    //   [69]                = kzg_quotient with scalar z
+    let total = 1 + NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 1;
     trace!("total = {}", total);
     let mut scalars = vec![Fr::zero(); total];
     let mut coms = vec![
@@ -213,7 +219,12 @@ pub fn verify_shplemini(
     // 5) weight sumcheck evals
     let mut rho_pow = Fr::one();
     let mut eval_acc = Fr::zero();
-    for (idx, eval) in proof.sumcheck_evaluations.iter().enumerate() {
+    for (idx, eval) in proof
+        .sumcheck_evaluations
+        .iter()
+        .take(NUMBER_OF_ENTITIES)
+        .enumerate()
+    {
         let scalar = if idx < NUMBER_UNSHIFTED {
             -unshifted
         } else {
@@ -243,11 +254,13 @@ pub fn verify_shplemini(
         push!(qr);
         push!(qo);
         push!(q4);
+        // Match Solidity VK commitment order strictly
+        // 7..13: qLookup, qArith, qDeltaRange, qElliptic, qAux (q_memory), qPoseidon2External, qPoseidon2Internal
         push!(q_lookup);
         push!(q_arith);
-        push!(q_range);
-        push!(q_aux);
+        push!(q_delta_range);
         push!(q_elliptic);
+        push!(q_memory); // qAux in Solidity
         push!(q_poseidon2_external);
         push!(q_poseidon2_internal);
         push!(s1);
@@ -292,6 +305,7 @@ pub fn verify_shplemini(
         j += 1;
         coms[j] = proof.z_perm.clone();
         j += 1;
+        let _ = j; // silence "assigned but never read" in non-trace builds
     }
 
     // 7) folding rounds
@@ -320,7 +334,8 @@ pub fn verify_shplemini(
     }
 
     // 9) further folding + commit
-    let base = 1 + n_sum;
+    // Base index where fold commitments start
+    let base = 1 + NUMBER_OF_ENTITIES;
     trace!("base = {}", base);
     for j in 1..log_n {
         #[cfg(feature = "trace")]
@@ -358,8 +373,14 @@ pub fn verify_shplemini(
         coms[base + j - 1] = proof.gemini_fold_comms[j - 1].clone();
     }
 
+    // Fill remaining (dummy) fold commitments so MSM layout matches Solidity (total 27 entries)
+    for i in (log_n - 1)..(CONST_PROOF_SIZE_LOG_N - 1) {
+        coms[base + i] = proof.gemini_fold_comms[i].clone();
+    }
+
     // 10) add generator
-    let one_idx = base + log_n;
+    // Generator goes right after all fold commitments (27 entries)
+    let one_idx = base + (CONST_PROOF_SIZE_LOG_N - 1);
     trace!("one_idx = {}", one_idx);
     let gen = G1Projective::generator().into_affine();
     coms[one_idx] = G1Point { x: gen.x, y: gen.y };
@@ -384,8 +405,25 @@ pub fn verify_shplemini(
         trace!("============================");
     }
 
-    // 13) dump all pairs
-    dump_pairs(&coms, &scalars, usize::MAX);
+    // 13) dump all pairs (range + full) for cross-checking with Solidity (trace-only)
+    #[cfg(feature = "trace")]
+    {
+        use crate::debug::dump_pairs_range;
+        // sanity-check points are on-curve to locate any invalid index early
+        for (i, c) in coms.iter().enumerate() {
+            let aff = G1Affine::new_unchecked(c.x, c.y);
+            if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
+                trace!(
+                    "Precheck: invalid G1 at coms[{}] x=0x{} y=0x{}",
+                    i,
+                    hex::encode(c.x.into_bigint().to_bytes_be()),
+                    hex::encode(c.y.into_bigint().to_bytes_be())
+                );
+            }
+        }
+        dump_pairs_range(&coms, &scalars, 0, 15);
+        dump_pairs(&coms, &scalars, usize::MAX);
+    }
 
     // 14) MSM + pairing
     let p0 = batch_mul(&coms, &scalars)?;
