@@ -5,40 +5,44 @@ use alloc::{string::String as StdString, vec::Vec as StdVec};
 use core::str;
 
 use soroban_sdk::{contract, contracterror, contractimpl, Bytes, BytesN, Env};
-use soroban_sdk::crypto::Hash;
+use sha3::{Digest, Keccak256};
 
-use ark_bn254::Fq;
-use ark_ff::PrimeField; // trait required so that from_be_bytes_mod_order is available. :contentReference[oaicite:0]{index=0}
+use ark_bn254::{Fq, G1Affine};
+use ark_ff::PrimeField;
 
 use num_bigint::BigUint;
 
 use ultrahonk_rust_verifier::{
+    types::{G1Point, VerificationKey},
     UltraHonkVerifier,
-    utils::load_proof_and_public_inputs,
-    types::{VerificationKey, G1Point},
 };
 
-/// Helper: big-endian 32-byte → Fq
+/// 32-byte big-endian → Fq
+#[inline(always)]
 fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
-    // Requires PrimeField in scope so that provided method exists. :contentReference[oaicite:1]{index=1}
     Fq::from_be_bytes_mod_order(bytes_be)
 }
 
-/// Combine low/high hex field elements into a single BigUint: (high << 136) | low
-fn combine_fields(low_str: &str, high_str: &str) -> BigUint {
-    let low = BigUint::parse_bytes(low_str.trim_start_matches("0x").as_bytes(), 16)
-        .expect("invalid hex in low part");
-    let high = BigUint::parse_bytes(high_str.trim_start_matches("0x").as_bytes(), 16)
-        .expect("invalid hex in high part");
-    (high << 136) | low
+/// BigUint → Fq (auto-reduced mod p)
+#[inline(always)]
+fn biguint_to_fq(x: &BigUint) -> Fq {
+    let be = x.to_bytes_be();
+    let mut arr = [0u8; 32];
+    if be.len() >= 32 {
+        // take the least-significant 32 bytes
+        arr.copy_from_slice(&be[be.len() - 32..]);
+    } else {
+        arr[32 - be.len()..].copy_from_slice(&be);
+    }
+    fq_from_be_bytes(&arr)
 }
 
-/// Parse a JSON array of strings like `["0xabc", "0xdef", ...]` without using serde_json.
+/// Parse `["0x..","0x..", ...]` (no serde)
 fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
     let mut out: StdVec<StdString> = StdVec::new();
     let mut chars = s.chars().peekable();
 
-    // Skip whitespace
+    // skip ws
     while let Some(&c) = chars.peek() {
         if c.is_whitespace() {
             chars.next();
@@ -46,14 +50,12 @@ fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
             break;
         }
     }
-
-    // Expect opening '['
     if chars.next() != Some('[') {
         return Err(());
     }
 
     loop {
-        // Skip whitespace and commas
+        // skip ws/commas
         while let Some(&c) = chars.peek() {
             if c.is_whitespace() || c == ',' {
                 chars.next();
@@ -61,26 +63,19 @@ fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
                 break;
             }
         }
-
-        // End?
         if let Some(&']') = chars.peek() {
             chars.next();
             break;
         }
-
-        // Expect opening quote
         if chars.next() != Some('"') {
             return Err(());
         }
-
-        // Collect string
         let mut buf = StdString::new();
         while let Some(c) = chars.next() {
             if c == '"' {
                 break;
             }
             if c == '\\' {
-                // simple escape handling
                 if let Some(next) = chars.next() {
                     buf.push(next);
                 }
@@ -90,68 +85,144 @@ fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
         }
         out.push(buf);
     }
-
     Ok(out)
 }
 
-/// Load a verification key from a JSON string of hex field elements WITHOUT serde_json.
+/// Robust point assembly matching the library semantics:
+/// - try shift=136, then shift=128
+/// - for each shift, try (x=lx|hx<<s, y=ly|hy<<s) and XY-swapped
+fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> Option<G1Point> {
+    let assemble = |lo: &BigUint, hi: &BigUint, shift: u32| -> BigUint { lo | (hi << shift) };
+    let shifts = [136u32, 128u32];
+
+    for &shift in &shifts {
+        // normal order
+        let bx = assemble(lx, hx, shift);
+        let by = assemble(ly, hy, shift);
+        let px = biguint_to_fq(&bx);
+        let py = biguint_to_fq(&by);
+        let aff = G1Affine::new_unchecked(px, py);
+        if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+            return Some(G1Point { x: aff.x, y: aff.y });
+        }
+
+        // XY swap
+        let bx = assemble(ly, hy, shift);
+        let by = assemble(lx, hx, shift);
+        let px = biguint_to_fq(&bx);
+        let py = biguint_to_fq(&by);
+        let aff = G1Affine::new_unchecked(px, py);
+        if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+            return Some(G1Point { x: aff.x, y: aff.y });
+        }
+    }
+    None
+}
+
+/// Try read a single G1 from 4 limbs at index i
+fn try_read_g1(vk_fields: &[StdString], i: usize) -> Option<(G1Point, usize)> {
+    if i + 3 >= vk_fields.len() {
+        return None;
+    }
+    let parse = |s: &str| BigUint::parse_bytes(s.trim_start_matches("0x").as_bytes(), 16);
+    let lx = parse(&vk_fields[i])?;
+    let hx = parse(&vk_fields[i + 1])?;
+    let ly = parse(&vk_fields[i + 2])?;
+    let hy = parse(&vk_fields[i + 3])?;
+
+    let pt = read_g1_from_limbs(&lx, &hx, &ly, &hy)?;
+    Some((pt, i + 4))
+}
+
+/// Lookahead to find the first index where 27 consecutive points decode on-curve.
+/// This avoids false sync on a single accidental on-curve tuple.
+fn find_first_g1_start(
+    vk_fields: &[StdString],
+    start_guess: usize,
+    max_probe: usize,
+) -> Option<usize> {
+    const TOTAL_POINTS: usize = 27;
+    const TOTAL_LIMBS: usize = TOTAL_POINTS * 4;
+
+    let end = core::cmp::min(vk_fields.len(), start_guess + max_probe);
+    'probe: for i in start_guess..end {
+        if i + TOTAL_LIMBS > vk_fields.len() {
+            break;
+        }
+        let mut idx = i;
+        for _ in 0..TOTAL_POINTS {
+            if let Some((_pt, next)) = try_read_g1(vk_fields, idx) {
+                idx = next;
+            } else {
+                continue 'probe;
+            }
+        }
+        return Some(i);
+    }
+    None
+}
+
+/// Manual loader for `vk_fields.json` (bb v0.87.0 layout) without serde.
+/// Replicates the ordering used in the library's parser and enforces robust sync.
 fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     let vk_fields = parse_json_array_of_strings(json_data)?;
-    if vk_fields.len() <= 127 {
+    if vk_fields.len() < 3 + 4 {
         return Err(());
     }
 
-    // Parse circuit params
-    let circuit_size_big: BigUint = BigUint::parse_bytes(
-        vk_fields[0].trim_start_matches("0x").as_bytes(),
-        16,
-    )
-    .ok_or(())?;
-    let circuit_size_u64_vec = circuit_size_big.to_u64_digits();
-    let circuit_size_u64 = *circuit_size_u64_vec
-        .get(0)
-        .ok_or(())?;
+    // Header: [0]=logN or circuit_size, [1]=num_public_inputs, [2]=pub_inputs_offset
+    let parse_u64 = |s: &str| -> u64 {
+        BigUint::parse_bytes(s.trim_start_matches("0x").as_bytes(), 16)
+            .and_then(|b| b.to_u64_digits().get(0).copied())
+            .unwrap_or(0)
+    };
 
-    let public_inputs_size_big: BigUint = BigUint::parse_bytes(
-        vk_fields[1].trim_start_matches("0x").as_bytes(),
-        16,
-    )
-    .ok_or(())?;
-    let public_inputs_size = *public_inputs_size_big.to_u64_digits().get(0).ok_or(())?;
+    let h0 = parse_u64(&vk_fields[0]);
+    let public_inputs_size = if vk_fields.len() > 1 {
+        parse_u64(&vk_fields[1])
+    } else {
+        0
+    };
+    let pub_inputs_offset = if vk_fields.len() > 2 {
+        parse_u64(&vk_fields[2])
+    } else {
+        0
+    };
 
-    // Compute log_circuit_size
-    let mut n = circuit_size_u64;
-    let mut log = 0;
-    while n > 1 {
-        n >>= 1;
-        log += 1;
-    }
+    // Interpret h0: power-of-two => circuit_size; else => logN
+    let (circuit_size, log_circuit_size) = if h0 != 0 && (h0 & (h0 - 1)) == 0 {
+        // h0 is circuit_size
+        let mut lg = 0u64;
+        let mut n = h0;
+        while n > 1 {
+            n >>= 1;
+            lg += 1;
+        }
+        (h0, lg)
+    } else {
+        // h0 is logN
+        let cs = 1u64.checked_shl(h0 as u32).ok_or(())?;
+        (cs, h0)
+    };
 
-    // Helper to convert BigUint → Fq
-    fn biguint_to_fq(x: BigUint) -> Fq {
-        let be = x.to_bytes_be();
-        let mut arr = [0u8; 32];
-        arr[32 - be.len()..].copy_from_slice(&be);
-        fq_from_be_bytes(&arr)
-    }
-
-    // Starting index for G1 points: 20
-    let mut field_index = 20usize;
+    // Start of G1 limbs: find index where 27 consecutive points decode properly.
+    let mut idx = find_first_g1_start(&vk_fields, 3, 64).ok_or(())?;
 
     macro_rules! read_g1 {
         () => {{
-            let low_x = &vk_fields[field_index];
-            let high_x = &vk_fields[field_index + 1];
-            let low_y = &vk_fields[field_index + 2];
-            let high_y = &vk_fields[field_index + 3];
-            field_index += 4;
-            G1Point {
-                x: biguint_to_fq(combine_fields(low_x, high_x)),
-                y: biguint_to_fq(combine_fields(low_y, high_y)),
-            }
+            let (pt, next) = try_read_g1(&vk_fields, idx).ok_or(())?;
+            idx = next;
+            pt
         }};
     }
 
+    // Follow bb v0.87.0 vk_fields order:
+    // qm, qc, ql, qr, qo, q4, q_lookup, q_arith, q_delta_range, q_elliptic, q_memory (qAux),
+    // q_poseidon2_external, q_poseidon2_internal,
+    // s1..s4,
+    // id1..id4,
+    // t1..t4,
+    // lagrange_first, lagrange_last
     let qm = read_g1!();
     let qc = read_g1!();
     let ql = read_g1!();
@@ -160,9 +231,9 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     let q4 = read_g1!();
     let q_lookup = read_g1!();
     let q_arith = read_g1!();
-    let q_range = read_g1!();
-    let q_aux = read_g1!();
+    let q_delta_range = read_g1!();
     let q_elliptic = read_g1!();
+    let q_memory = read_g1!(); // qAux
     let q_poseidon2_external = read_g1!();
     let q_poseidon2_internal = read_g1!();
     let s1 = read_g1!();
@@ -181,9 +252,10 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     let lagrange_last = read_g1!();
 
     Ok(VerificationKey {
-        circuit_size: circuit_size_u64,
-        log_circuit_size: log,
+        circuit_size,
+        log_circuit_size,
         public_inputs_size,
+        pub_inputs_offset,
         qm,
         qc,
         ql,
@@ -192,9 +264,13 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
         q4,
         q_lookup,
         q_arith,
-        q_range,
-        q_aux,
+        q_delta_range,
         q_elliptic,
+        q_memory,
+        q_nnf: G1Point {
+            x: Fq::from(0u64),
+            y: Fq::from(0u64),
+        },
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,
@@ -214,11 +290,10 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     })
 }
 
-/// Contract name
+/// Contract
 #[contract]
 pub struct UltraHonkVerifierContract;
 
-/// Custom errors for contract operations.
 #[contracterror]
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -230,36 +305,58 @@ pub enum Error {
 
 #[contractimpl]
 impl UltraHonkVerifierContract {
-    /// Verifies an UltraHonk proof and stores the proof_id (keccak256 of the blob) on success.
-    pub fn verify_proof(
-        env: Env,
-        vk_json: Bytes,
-        proof_blob: Bytes,
-    ) -> Result<BytesN<32>, Error> {
-        // Compute proof_id = keccak256(proof_blob)
-        let proof_id_hash: Hash<32> = env.crypto().keccak256(&proof_blob);
-        let proof_id_bytes: BytesN<32> = proof_id_hash.to_bytes();
+    /// Split a packed [4-byte count][public_inputs][proof] buffer into
+    /// (public_inputs as 32-byte big-endian slices, proof bytes).
+    /// Accepts proof sections of either 440 or 456 field elements (BN254), to be
+    /// compatible with differing bb versions.
+    fn split_inputs_and_proof_bytes(packed: &[u8]) -> (StdVec<StdVec<u8>>, StdVec<u8>) {
+        if packed.len() < 4 {
+            return (StdVec::new(), packed.to_vec());
+        }
+        let rest = &packed[4..];
+        for &pf in &[456usize, 440usize] {
+            let need = pf * 32;
+            if rest.len() >= need {
+                let pis_len = rest.len() - need;
+                if pis_len % 32 == 0 {
+                    let mut pub_inputs_bytes: StdVec<StdVec<u8>> =
+                        StdVec::with_capacity(pis_len / 32);
+                    for chunk in rest[..pis_len].chunks(32) {
+                        pub_inputs_bytes.push(chunk.to_vec());
+                    }
+                    let proof_bytes = rest[pis_len..].to_vec();
+                    return (pub_inputs_bytes, proof_bytes);
+                }
+            }
+        }
+        (StdVec::new(), rest.to_vec())
+    }
+    /// Verify an UltraHonk proof; on success store proof_id (= keccak256(proof_blob))
+    pub fn verify_proof(env: Env, vk_json: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+        // proof_id = keccak256(proof_blob) computed locally to avoid host VM limits
+        let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
+        let mut hasher = Keccak256::new();
+        hasher.update(&proof_vec);
+        let digest = hasher.finalize();
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&digest);
+        let proof_id_bytes: BytesN<32> = BytesN::from_array(&env, &arr);
 
-        // Parse vk_json to &str
-        let vk_vec: StdVec<u8> = vk_json.to_alloc_vec(); // requires soroban-sdk alloc feature. :contentReference[oaicite:2]{index=2}
-        let vk_str = str::from_utf8(&vk_vec).map_err(|_| Error::VkParseError).unwrap_or_default();
+        // vk_json → &str  (avoid temporary drop by binding first)
+        let vk_vec: StdVec<u8> = vk_json.to_alloc_vec();
+        let vk_str = str::from_utf8(&vk_vec).map_err(|_| Error::VkParseError)?;
 
-        // Build verification key manually (no serde_json)
+        // Build VK (manual JSON parser; no serde_json needed)
         let vk = load_vk_from_json_no_serde(vk_str).map_err(|_| Error::VkParseError)?;
 
-        // Create verifier with the parsed VK
+        // Verifier (moves vk)
         let verifier = UltraHonkVerifier::new_with_vk(vk);
 
-        // Parse proof_blob into public inputs + proof bytes
-        let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
-        let (pub_inputs, proof_bytes) =
-            load_proof_and_public_inputs(&proof_vec); // if this panics upstream, consider wrapping for safety
+        // Proof & public inputs (tolerate 440 or 456 field proofs)
+        let (pub_inputs_bytes, proof_bytes) =
+            Self::split_inputs_and_proof_bytes(&proof_vec);
 
-        // Convert public inputs into expected form: Vec<Vec<u8>>
-        let pub_inputs_bytes: StdVec<StdVec<u8>> =
-            pub_inputs.iter().map(|fr| fr.to_bytes().to_vec()).collect();
-
-        // Run verification
+        // Verify
         verifier
             .verify(&proof_bytes, &pub_inputs_bytes)
             .map_err(|_| Error::VerificationFailed)?;
@@ -270,9 +367,8 @@ impl UltraHonkVerifierContract {
         Ok(proof_id_bytes)
     }
 
-    /// Checks if a given proof_id (keccak256 of proof blob) was previously verified.
+    /// Query if a proof_id was previously verified
     pub fn is_verified(env: Env, proof_id: BytesN<32>) -> bool {
         env.storage().instance().get(&proof_id).unwrap_or(false)
     }
 }
-
