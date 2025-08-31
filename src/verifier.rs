@@ -9,7 +9,26 @@ use crate::{
 use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, vec::Vec};
+// ===== 💡 FIX: format 매크로를 가져옵니다. =====
+use alloc::{format, string::String, vec::Vec};
+// ===============================================
+
+/// 검증 실패의 원인을 구체적으로 나타내는 오류 타입입니다.
+#[derive(Debug)]
+pub enum VerifyError {
+    SumcheckFailed(String),
+    ShplonkFailed(String),
+}
+
+/// 디버깅 및 로깅을 위해 VerifyError를 String으로 변환할 수 있도록 합니다.
+impl From<VerifyError> for String {
+    fn from(err: VerifyError) -> String {
+        match err {
+            VerifyError::SumcheckFailed(s) => format!("Sum-check failed: {}", s),
+            VerifyError::ShplonkFailed(s) => format!("Shplonk failed: {}", s),
+        }
+    }
+}
 
 pub struct UltraHonkVerifier {
     vk: crate::types::VerificationKey,
@@ -32,12 +51,12 @@ impl UltraHonkVerifier {
         &self.vk
     }
 
-    /// Top-level verify
+    /// Top-level verify. 반환 타입을 String에서 구체적인 VerifyError로 변경했습니다.
     pub fn verify(
         &self,
         proof_bytes: &[u8],
         public_inputs_bytes: &[Vec<u8>],
-    ) -> Result<(), String> {
+    ) -> Result<(), VerifyError> {
         // 1) parse proof
         let proof = load_proof(proof_bytes);
 
@@ -72,11 +91,11 @@ impl UltraHonkVerifier {
             self.vk.circuit_size,
         );
 
-        // 5) Sum-check
-        verify_sumcheck(&proof, &tx, &self.vk)?;
+        // 5) Sum-check: 실패 시 SumcheckFailed 오류를 반환합니다.
+        verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
 
-        // 6) Shplonk (batch opening)
-        verify_shplemini(&proof, &self.vk, &tx)?;
+        // 6) Shplonk (batch opening): 실패 시 ShplonkFailed 오류를 반환합니다.
+        verify_shplemini(&proof, &self.vk, &tx).map_err(VerifyError::ShplonkFailed)?;
 
         Ok(())
     }
