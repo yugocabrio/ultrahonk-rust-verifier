@@ -113,7 +113,7 @@ stellar contract build
 
 ---
 
-# 5) Deploy the contract to localnet
+### 5) Deploy the contract to localnet
 
 ```bash
 # Replace <crate_name>.wasm with your actual artifact name
@@ -127,7 +127,7 @@ That single command uploads the WASM and creates an instance (optionally you can
 
 ---
 
-# 6) (Optional) Invoke a method to verify
+### 6) (Optional) Invoke a method to verify
 
 ```bash
 # Example shape; adjust --id and args to your contract
