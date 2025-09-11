@@ -109,7 +109,7 @@ stellar contract build
 * `stellar contract build` is the preferred, CLI-wrapped build command.
 * Target choice—`wasm32v1-none` vs `wasm32-unknown-unknown`—depends on your Rust version. ([developers.stellar.org][4])
 
-> ⚠️ Note: Soroban contracts have a **hard code size limit of \~64 KB**. Even with “unlimited” local limits, this intrinsic code-size cap still applies. Use `stellar contract optimize` and typical size-reduction techniques if you exceed it. ([developers.stellar.org][5])
+⚠️ Note: Soroban contract Wasm is stored as a ledger entry and may be up to **131,072 bytes (128 KiB)**. In local Quickstart, `--limits unlimited` raises local resource caps (including contract size), so it shouldn’t block deployment; on testnet/pubnet the network’s 128 KiB entry limit still applies. Use `stellar contract optimize` only if you exceed that network limit.
 
 ---
 
