@@ -47,7 +47,7 @@ stellar container stop local
 ```bash
 # Add a "local" network profile that points at the Quickstart RPC
 stellar network add local \
-  --rpc-url http://localhost:8000 \
+  --rpc-url http://localhost:8000/soroban/rpc \
   --network-passphrase "Standalone Network ; February 2017"
 
 # Make "local" the default network so you can omit --network later
@@ -189,7 +189,9 @@ cargo install --locked stellar-cli
 stellar container start local --limits unlimited
 
 # 2) Configure network
-stellar network add local --rpc-url http://localhost:8000 --network-passphrase "Standalone Network ; February 2017"
+stellar network add local \
+  --rpc-url http://localhost:8000/soroban/rpc \
+  --network-passphrase "Standalone Network ; February 2017"
 stellar network use local
 stellar network health --output json
 
