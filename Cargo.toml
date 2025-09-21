@@ -16,12 +16,12 @@ ark-ff = { version = "0.5", default-features = false }
 num-bigint = { version = "0.4", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
-soroban-env-host = "23.0.0-rc.2"
 sha3 = { version = "0.10", default-features = false }
 
 [dev-dependencies]
 # Enable test helpers for local unit tests
 soroban-sdk = { version = "23.0.0-rc.3", features = ["testutils"] }
+soroban-env-host = "23.0.0-rc.2"
 
 [profile.release]
 opt-level = "z"
