@@ -10,8 +10,6 @@ use sha3::{Digest, Keccak256};
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::PrimeField;
 
-use num_bigint::BigUint;
-
 use ultrahonk_rust_verifier::{
     types::{G1Point, VerificationKey},
     UltraHonkVerifier,
@@ -23,18 +21,51 @@ fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
     Fq::from_be_bytes_mod_order(bytes_be)
 }
 
-/// BigUint → Fq (auto-reduced mod p)
-#[inline(always)]
-fn biguint_to_fq(x: &BigUint) -> Fq {
-    let be = x.to_bytes_be();
-    let mut arr = [0u8; 32];
-    if be.len() >= 32 {
-        // take the least-significant 32 bytes
-        arr.copy_from_slice(&be[be.len() - 32..]);
-    } else {
-        arr[32 - be.len()..].copy_from_slice(&be);
+/// Parse a hex string (optional 0x prefix) into a 32-byte big-endian array.
+/// Takes the least-significant 32 bytes if longer.
+#[inline(never)]
+fn hex_str_to_be32(s: &str) -> Option<[u8; 32]> {
+    #[inline(always)]
+    fn hex_val(b: u8) -> Option<u8> {
+        match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(10 + (b - b'a')),
+            b'A'..=b'F' => Some(10 + (b - b'A')),
+            _ => None,
+        }
     }
-    fq_from_be_bytes(&arr)
+    let hex = s.trim_start_matches("0x").as_bytes();
+    let mut out = [0u8; 32];
+    let mut oi = 32usize;
+    let mut i = hex.len();
+    // pack from least-significant end
+    while i > 0 && oi > 0 {
+        // low nibble
+        let low = hex_val(hex[i - 1])?;
+        i -= 1;
+        // high nibble (may be absent)
+        let high = if i > 0 { let v = hex_val(hex[i - 1])?; i -= 1; v } else { 0 };
+        oi -= 1;
+        out[oi] = (high << 4) | low;
+    }
+    Some(out)
+}
+
+/// Combine lo | (hi << shift_bytes) where shift is 16 or 17 bytes; return the least-significant 32 bytes.
+#[inline(never)]
+fn or_with_left_shift_bytes(lo: &[u8; 32], hi: &[u8; 32], shift_bytes: usize) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    if shift_bytes >= 32 {
+        // hi contribution falls outside the last 32 bytes
+        out.copy_from_slice(lo);
+        return out;
+    }
+    // hi shifted by whole bytes: the last 32 bytes of (hi || zeros[shift]) is hi[shift..32] followed by zeros
+    for i in 0..32 {
+        let hi_byte = if i + shift_bytes < 32 { hi[i + shift_bytes] } else { 0 };
+        out[i] = lo[i] | hi_byte;
+    }
+    out
 }
 
 /// Parse `["0x..","0x..", ...]` (no serde)
@@ -91,26 +122,26 @@ fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
 /// Robust point assembly matching the library semantics:
 /// - try shift=136, then shift=128
 /// - for each shift, try (x=lx|hx<<s, y=ly|hy<<s) and XY-swapped
-fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> Option<G1Point> {
-    let assemble = |lo: &BigUint, hi: &BigUint, shift: u32| -> BigUint { lo | (hi << shift) };
-    let shifts = [136u32, 128u32];
+fn read_g1_from_limbs(lx: &[u8; 32], hx: &[u8; 32], ly: &[u8; 32], hy: &[u8; 32]) -> Option<G1Point> {
+    let shifts = [136usize, 128usize];
 
     for &shift in &shifts {
+        let sbytes = shift / 8;
         // normal order
-        let bx = assemble(lx, hx, shift);
-        let by = assemble(ly, hy, shift);
-        let px = biguint_to_fq(&bx);
-        let py = biguint_to_fq(&by);
+        let bx = or_with_left_shift_bytes(lx, hx, sbytes);
+        let by = or_with_left_shift_bytes(ly, hy, sbytes);
+        let px = fq_from_be_bytes(&bx);
+        let py = fq_from_be_bytes(&by);
         let aff = G1Affine::new_unchecked(px, py);
         if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
             return Some(G1Point { x: aff.x, y: aff.y });
         }
 
         // XY swap
-        let bx = assemble(ly, hy, shift);
-        let by = assemble(lx, hx, shift);
-        let px = biguint_to_fq(&bx);
-        let py = biguint_to_fq(&by);
+        let bx = or_with_left_shift_bytes(ly, hy, sbytes);
+        let by = or_with_left_shift_bytes(lx, hx, sbytes);
+        let px = fq_from_be_bytes(&bx);
+        let py = fq_from_be_bytes(&by);
         let aff = G1Affine::new_unchecked(px, py);
         if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
             return Some(G1Point { x: aff.x, y: aff.y });
@@ -124,11 +155,10 @@ fn try_read_g1(vk_fields: &[StdString], i: usize) -> Option<(G1Point, usize)> {
     if i + 3 >= vk_fields.len() {
         return None;
     }
-    let parse = |s: &str| BigUint::parse_bytes(s.trim_start_matches("0x").as_bytes(), 16);
-    let lx = parse(&vk_fields[i])?;
-    let hx = parse(&vk_fields[i + 1])?;
-    let ly = parse(&vk_fields[i + 2])?;
-    let hy = parse(&vk_fields[i + 3])?;
+    let lx = hex_str_to_be32(&vk_fields[i])?;
+    let hx = hex_str_to_be32(&vk_fields[i + 1])?;
+    let ly = hex_str_to_be32(&vk_fields[i + 2])?;
+    let hy = hex_str_to_be32(&vk_fields[i + 3])?;
 
     let pt = read_g1_from_limbs(&lx, &hx, &ly, &hy)?;
     Some((pt, i + 4))
@@ -171,20 +201,32 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     }
 
     // Header: [0]=logN or circuit_size, [1]=num_public_inputs, [2]=pub_inputs_offset
-    let parse_u64 = |s: &str| -> u64 {
-        BigUint::parse_bytes(s.trim_start_matches("0x").as_bytes(), 16)
-            .and_then(|b| b.to_u64_digits().get(0).copied())
-            .unwrap_or(0)
-    };
+    #[inline(always)]
+    fn parse_u64_hex_lsb(s: &str) -> u64 {
+        let h = s.trim_start_matches("0x");
+        let n = core::cmp::min(16, h.len());
+        let slice = &h[h.len() - n..];
+        let mut out: u64 = 0;
+        for ch in slice.chars() {
+            let v = match ch {
+                '0'..='9' => ch as u64 - '0' as u64,
+                'a'..='f' => 10 + (ch as u64 - 'a' as u64),
+                'A'..='F' => 10 + (ch as u64 - 'A' as u64),
+                _ => 0,
+            };
+            out = (out << 4) | v;
+        }
+        out
+    }
 
-    let h0 = parse_u64(&vk_fields[0]);
+    let h0 = parse_u64_hex_lsb(&vk_fields[0]);
     let public_inputs_size = if vk_fields.len() > 1 {
-        parse_u64(&vk_fields[1])
+        parse_u64_hex_lsb(&vk_fields[1])
     } else {
         0
     };
     let pub_inputs_offset = if vk_fields.len() > 2 {
-        parse_u64(&vk_fields[2])
+        parse_u64_hex_lsb(&vk_fields[2])
     } else {
         0
     };

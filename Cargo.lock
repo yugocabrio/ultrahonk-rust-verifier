@@ -1733,9 +1733,6 @@ version = "0.1.0"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.5.0",
- "hex",
- "num-bigint",
- "num-traits",
  "sha3",
  "soroban-env-host",
  "soroban-sdk",
