@@ -1,0 +1,16 @@
+[package]
+name = "tornado_classic_harness"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ultrahonk_soroban_contract = { path = "../.." }
+soroban-sdk = { version = "23.0.0-rc.3", features = ["testutils"] }
+soroban-env-host = "23.0.0-rc.2"
+num-bigint = "0.4"
+
+[dev-dependencies]
+
+[lib]
+name = "tornado_classic_harness"
+path = "lib.rs"
