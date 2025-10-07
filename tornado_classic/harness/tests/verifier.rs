@@ -9,7 +9,7 @@ fn verify_proof_direct_with_vk_json() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json/vk_fields.json");
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -45,7 +45,7 @@ fn verify_proof_with_stored_vk_path() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json/vk_fields.json");
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -75,4 +75,3 @@ fn verify_proof_with_stored_vk_path() {
     });
     assert!(verified);
 }
-

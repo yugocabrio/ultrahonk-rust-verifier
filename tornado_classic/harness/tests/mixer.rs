@@ -68,7 +68,7 @@ fn mixer_withdraw_v3_and_double_spend_rejected() {
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Artifacts
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json/vk_fields.json");
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -141,7 +141,7 @@ fn withdraw_v3_rejects_nullifier_mismatch() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json/vk_fields.json");
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -219,7 +219,7 @@ fn withdraw_v3_rejects_root_mismatch() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json/vk_fields.json");
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 

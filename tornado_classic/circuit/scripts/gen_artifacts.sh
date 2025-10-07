@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reusable helper to compile/execute Noir circuit and generate UltraHonk artifacts with bb.
-# - Uses Poseidon2 in-circuit; uses keccak oracle for bb (UltraHonk/solidity compatibility).
-# - Produces under ./target:
-#   - <name>.json (ACIR), <name>.gz (witness)
-#   - vk_fields.json/vk_fields.json
-#   - proof, public_inputs, proof_fields.json, public_inputs_fields.json
-#
-# Env overrides:
-#   NARGO (default: ~/.nargo/bin/nargo)
-#   BB    (default: ~/.bb/bb)
-#   NAME  (default: project name from Nargo.toml, else 'tornado_classic')
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+export PATH="${SCRIPT_DIR}:${PATH}"
+cd "${PROJECT_ROOT}"
 
 NARGO_BIN="${NARGO:-${HOME}/.nargo/bin/nargo}"
 BB_BIN="${BB:-${HOME}/.bb/bb}"
@@ -55,12 +48,25 @@ if [[ ! -f "${WIT}" ]]; then
 fi
 
 echo "[3/4] bb write_vk --scheme ultra_honk --oracle_hash keccak"
+if [[ -f target/vk_fields.json ]]; then
+  rm -f target/vk_fields.json
+fi
+if [[ -d target/vk_fields.json ]]; then
+  rm -rf target/vk_fields.json
+fi
 "${BB_BIN}" write_vk \
   --scheme ultra_honk \
   --oracle_hash keccak \
   --bytecode_path "${ACIR}" \
   --output_format fields \
   --output_path target/vk_fields.json
+
+# bb currently writes a directory containing vk_fields.json; flatten to a single file.
+if [[ -d target/vk_fields.json && -f target/vk_fields.json/vk_fields.json ]]; then
+  mv target/vk_fields.json/vk_fields.json target/vk_fields.json.tmp
+  rmdir target/vk_fields.json
+  mv target/vk_fields.json.tmp target/vk_fields.json
+fi
 
 echo "[4/4] bb prove --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields"
 "${BB_BIN}" prove \
@@ -76,7 +82,7 @@ ls -la target | sed 's/^/  /'
 
 echo "\nUsage next:"
 echo "  - Harness verifier test reads:"
-echo "      circuit/target/vk_fields.json/vk_fields.json"
+echo "      circuit/target/vk_fields.json"
 echo "      circuit/target/proof"
 echo "      circuit/target/public_inputs"
 echo "  - Then run: cargo test --manifest-path tornado_classic/harness/Cargo.toml -- tests::verify_tornado_classic_proof_succeeds --nocapture"
