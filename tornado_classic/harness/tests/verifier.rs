@@ -14,7 +14,7 @@ fn verify_proof_direct_with_vk_json() {
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
     // Pack inputs: [u32_be total_fields][public_inputs][proof]
-    const PROOF_NUM_FIELDS: u32 = 456;
+    const PROOF_NUM_FIELDS: u32 = 440;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
@@ -49,7 +49,7 @@ fn verify_proof_with_stored_vk_path() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    const PROOF_NUM_FIELDS: u32 = 456;
+    const PROOF_NUM_FIELDS: u32 = 440;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;

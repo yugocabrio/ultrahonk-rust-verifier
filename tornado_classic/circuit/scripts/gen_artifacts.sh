@@ -8,6 +8,8 @@ cd "${PROJECT_ROOT}"
 
 NARGO_BIN="${NARGO:-${HOME}/.nargo/bin/nargo}"
 BB_BIN="${BB:-${HOME}/.bb/bb}"
+REQUIRED_NARGO_VERSION="1.0.0-beta.9"
+REQUIRED_BB_VERSION="v0.87.0"
 
 PROJECT_NAME="${NAME:-}"
 if [[ -z "${PROJECT_NAME}" ]]; then
@@ -25,6 +27,18 @@ if ! command -v "${NARGO_BIN}" >/dev/null 2>&1; then
 fi
 if [[ ! -x "${BB_BIN}" ]]; then
   echo "[!] bb not found/executable at ${BB_BIN}. Set BB=/path/to/bb" >&2
+  exit 1
+fi
+
+NARGO_VERSION_RAW="$(${NARGO_BIN} --version 2>/dev/null | head -n1)"
+if [[ "${NARGO_VERSION_RAW}" != *"${REQUIRED_NARGO_VERSION}"* ]]; then
+  echo "[!] Expected nargo ${REQUIRED_NARGO_VERSION}, but got '${NARGO_VERSION_RAW}'" >&2
+  exit 1
+fi
+
+BB_VERSION_RAW="$(${BB_BIN} --version 2>/dev/null | head -n1)"
+if [[ "${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" ]]; then
+  echo "[!] Expected bb ${REQUIRED_BB_VERSION}, but got '${BB_VERSION_RAW}'" >&2
   exit 1
 fi
 

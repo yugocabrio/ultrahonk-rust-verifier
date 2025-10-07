@@ -171,7 +171,7 @@ fn internal_2(state: [Fq; 2]) -> [Fq; 2] {
     [x + sum, sum + y + y]
 }
 
-// Round constants (same as Solidity version)
+// Round constants
 const FIRST_FULL_RC_HEX: [[&str; 2]; 4] = [
     [
         "0x09c46e9ec68e9bd4fe1faaba294cba38a71aa177534cdd1b6c7dc0dbd0abd7a7",
