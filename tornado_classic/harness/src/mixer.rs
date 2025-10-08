@@ -17,6 +17,9 @@ pub enum MixerError {
     AdminNotConfigured = 5,
     AdminAlreadyConfigured = 6,
     NullifierMismatch = 7,
+    TreeFull = 8,
+    RootNotSet = 9,
+    RootOverrideDisabled = 10,
 }
 
 fn key_count() -> Symbol { symbol_short!("cnt") }
@@ -29,6 +32,7 @@ fn key_ci_prefix() -> Symbol { symbol_short!("ci") }
 fn key_admin() -> Symbol { symbol_short!("adm") }
 
 const TREE_DEPTH: u32 = 20; // match circuit depth for now
+const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
 
 fn bytesn_to_arr(b: &BytesN<32>) -> [u8; 32] {
     let mut a = [0u8; 32];
@@ -102,6 +106,9 @@ impl MixerContract {
             .instance()
             .get(&key_next_index())
             .unwrap_or(0u32);
+        if next_index >= MAX_LEAVES {
+            return Err(MixerError::TreeFull);
+        }
         // leaf index used for insertion
         let ins_idx = next_index;
         let mut cur = commitment.clone();
@@ -168,11 +175,13 @@ impl MixerContract {
         let mut rcpt_arr = [0u8; 32];
         rcpt_arr.copy_from_slice(&pub_inputs[2]);
         let root_from_proof = BytesN::from_array(&env, &root_arr);
-        let stored_root: Option<BytesN<32>> = env.storage().instance().get(&key_root());
-        if let Some(sr) = stored_root {
-            if sr != root_from_proof {
-                return Err(MixerError::RootMismatch);
-            }
+        let stored_root: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&key_root())
+            .ok_or(MixerError::RootNotSet)?;
+        if stored_root != root_from_proof {
+            return Err(MixerError::RootMismatch);
         }
         // Verify via stored VK on verifier
         let mut args: SorobanVec<Val> = SorobanVec::new(&env);
@@ -202,6 +211,10 @@ impl MixerContract {
         }
         admin.require_auth();
         env.storage().instance().set(&key, &admin);
+        let empty_root = zero_at(&env, TREE_DEPTH);
+        env.storage().instance().set(&key_root(), &empty_root);
+        env.storage().instance().set(&key_next_index(), &0u32);
+        env.storage().instance().set(&key_count(), &0u32);
         Ok(())
     }
 
@@ -212,6 +225,9 @@ impl MixerContract {
             .get(&key_admin())
             .ok_or(MixerError::AdminNotConfigured)?;
         admin.require_auth();
+        if !cfg!(debug_assertions) {
+            return Err(MixerError::RootOverrideDisabled);
+        }
         env.storage().instance().set(&key_root(), &root);
         Ok(())
     }
