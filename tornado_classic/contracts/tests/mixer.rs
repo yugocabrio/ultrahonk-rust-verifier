@@ -43,6 +43,7 @@ fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
     root
 }
 
+/// Deposits a sequence of leaves and checks the contract frontier updates match a reference implementation.
 #[test]
 fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
     let env = Env::default();
@@ -62,6 +63,7 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
     }
 }
 
+/// Happy-path withdraw followed by a double-spend attempt confirms the nullifier is enforced.
 #[test]
 fn mixer_withdraw_and_double_spend_rejected() {
     let env = Env::default();
@@ -123,6 +125,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
 
+/// Ensures `set_root` cannot be called before the admin is configured.
 #[test]
 fn set_root_requires_admin_configuration() {
     let env = Env::default();
@@ -136,6 +139,7 @@ fn set_root_requires_admin_configuration() {
     assert_eq!(err as u32, MixerError::AdminNotConfigured as u32);
 }
 
+/// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
 #[test]
 fn withdraw_rejects_nullifier_mismatch() {
     let env = Env::default();
@@ -196,6 +200,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     assert!(!used, "nullifier should remain unused after mismatch");
 }
 
+/// Checks that `configure` may only be invoked once.
 #[test]
 fn configure_twice_is_rejected() {
     let env = Env::default();
@@ -214,6 +219,7 @@ fn configure_twice_is_rejected() {
     assert_eq!(err as u32, MixerError::AdminAlreadyConfigured as u32);
 }
 
+/// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
 fn withdraw_rejects_root_mismatch() {
     let env = Env::default();
