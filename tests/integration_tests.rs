@@ -1,6 +1,6 @@
+use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{Bytes, Env};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
-use soroban_env_host::DiagnosticLevel; 
 
 #[test]
 fn verify_simple_circuit_proof_succeeds() {

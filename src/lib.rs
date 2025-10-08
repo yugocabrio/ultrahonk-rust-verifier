@@ -4,8 +4,10 @@ extern crate alloc;
 use alloc::{string::String as StdString, vec::Vec as StdVec};
 use core::str;
 
-use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol};
 use sha3::{Digest, Keccak256};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
+};
 
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::PrimeField;
@@ -44,7 +46,13 @@ fn hex_str_to_be32(s: &str) -> Option<[u8; 32]> {
         let low = hex_val(hex[i - 1])?;
         i -= 1;
         // high nibble (may be absent)
-        let high = if i > 0 { let v = hex_val(hex[i - 1])?; i -= 1; v } else { 0 };
+        let high = if i > 0 {
+            let v = hex_val(hex[i - 1])?;
+            i -= 1;
+            v
+        } else {
+            0
+        };
         oi -= 1;
         out[oi] = (high << 4) | low;
     }
@@ -62,7 +70,11 @@ fn or_with_left_shift_bytes(lo: &[u8; 32], hi: &[u8; 32], shift_bytes: usize) ->
     }
     // hi shifted by whole bytes: the last 32 bytes of (hi || zeros[shift]) is hi[shift..32] followed by zeros
     for i in 0..32 {
-        let hi_byte = if i + shift_bytes < 32 { hi[i + shift_bytes] } else { 0 };
+        let hi_byte = if i + shift_bytes < 32 {
+            hi[i + shift_bytes]
+        } else {
+            0
+        };
         out[i] = lo[i] | hi_byte;
     }
     out
@@ -122,7 +134,12 @@ fn parse_json_array_of_strings(s: &str) -> Result<StdVec<StdString>, ()> {
 /// Robust point assembly matching the library semantics:
 /// - try shift=136, then shift=128
 /// - for each shift, try (x=lx|hx<<s, y=ly|hy<<s) and XY-swapped
-fn read_g1_from_limbs(lx: &[u8; 32], hx: &[u8; 32], ly: &[u8; 32], hy: &[u8; 32]) -> Option<G1Point> {
+fn read_g1_from_limbs(
+    lx: &[u8; 32],
+    hx: &[u8; 32],
+    ly: &[u8; 32],
+    hy: &[u8; 32],
+) -> Option<G1Point> {
     let shifts = [136usize, 128usize];
 
     for &shift in &shifts {
@@ -409,8 +426,7 @@ impl UltraHonkVerifierContract {
         let verifier = UltraHonkVerifier::new_with_vk(vk);
 
         // Proof & public inputs (tolerate 440 or 456 field proofs)
-        let (pub_inputs_bytes, proof_bytes) =
-            Self::split_inputs_and_proof_bytes(&proof_vec);
+        let (pub_inputs_bytes, proof_bytes) = Self::split_inputs_and_proof_bytes(&proof_vec);
 
         // Verify
         verifier
@@ -434,10 +450,7 @@ impl UltraHonkVerifierContract {
     }
 
     /// Verify using the on-chain stored VK
-    pub fn verify_proof_with_stored_vk(
-        env: Env,
-        proof_blob: Bytes,
-    ) -> Result<BytesN<32>, Error> {
+    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
         let vk_json: Bytes = env
             .storage()
             .instance()

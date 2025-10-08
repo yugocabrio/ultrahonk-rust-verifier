@@ -1,5 +1,5 @@
 [package]
-name = "tornado_classic_harness"
+name = "tornado_classic_contracts"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,5 +12,5 @@ num-bigint = "0.4"
 [dev-dependencies]
 
 [lib]
-name = "tornado_classic_harness"
+name = "tornado_classic_contracts"
 path = "lib.rs"

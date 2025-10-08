@@ -19,7 +19,7 @@ fn biguint_from_dec(s: &str) -> BigUint {
 fn field_hash2(a: &BigUint, b: &BigUint) -> BigUint {
     let aa = be32_from_biguint(a);
     let bb = be32_from_biguint(b);
-    let out = tornado_classic_harness::hash2::permute_2_bytes_be(&aa, &bb);
+    let out = tornado_classic_contracts::hash2::permute_2_bytes_be(&aa, &bb);
     BigUint::from_bytes_be(&out)
 }
 
@@ -116,4 +116,3 @@ fn main() {
     fs::write(prover_path, out).expect("write Prover.toml");
     println!("Updated Prover.toml with public inputs and path_index");
 }
-

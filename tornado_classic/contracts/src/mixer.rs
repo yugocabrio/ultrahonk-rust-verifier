@@ -143,7 +143,7 @@ impl MixerContract {
 
     /// Withdraw using stored VK and new public inputs ordering:
     /// public_inputs = [root, nullifier_hash, recipient]
-    pub fn withdraw_v3(
+    pub fn withdraw(
         env: Env,
         verifier: Address,
         proof_blob: Bytes,

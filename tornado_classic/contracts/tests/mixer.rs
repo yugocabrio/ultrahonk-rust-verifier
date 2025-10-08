@@ -1,8 +1,8 @@
 use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{testutils::Address as TestAddress, Address, Bytes, BytesN, Env};
 
-use tornado_classic_harness::hash2::permute_2_bytes_be;
-use tornado_classic_harness::mixer::{MixerContract, MixerError};
+use tornado_classic_contracts::hash2::permute_2_bytes_be;
+use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 
 fn be32_from_u64(x: u64) -> [u8; 32] {
@@ -63,7 +63,7 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
 }
 
 #[test]
-fn mixer_withdraw_v3_and_double_spend_rejected() {
+fn mixer_withdraw_and_double_spend_rejected() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
@@ -105,19 +105,19 @@ fn mixer_withdraw_v3_and_double_spend_rejected() {
     packed.extend_from_slice(proof_bin);
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
-    // Store VK and withdraw_v3
+    // Store VK and withdraw
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())).expect("set_vk ok");
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
 
-    let _pid = env.as_contract(&mixer_id, || MixerContract::withdraw_v3(
+    let _pid = env.as_contract(&mixer_id, || MixerContract::withdraw(
         env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone()
-    )).expect("withdraw_v3 ok");
+    )).expect("withdraw ok");
 
     // Double-spend attempt with same nullifier must fail
-    let err = env.as_contract(&mixer_id, || MixerContract::withdraw_v3(
+    let err = env.as_contract(&mixer_id, || MixerContract::withdraw(
         env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone()
     )).err().expect("expected error");
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
@@ -137,7 +137,7 @@ fn set_root_requires_admin_configuration() {
 }
 
 #[test]
-fn withdraw_v3_rejects_nullifier_mismatch() {
+fn withdraw_rejects_nullifier_mismatch() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
@@ -181,7 +181,7 @@ fn withdraw_v3_rejects_nullifier_mismatch() {
     let wrong_nf = BytesN::from_array(&env, &[0xAA; 32]);
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw_v3(env.clone(), verifier_id.clone(), proof_bytes.clone(), wrong_nf.clone())
+            MixerContract::withdraw(env.clone(), verifier_id.clone(), proof_bytes.clone(), wrong_nf.clone())
         })
         .err()
         .expect("expected nullifier mismatch");
@@ -215,7 +215,7 @@ fn configure_twice_is_rejected() {
 }
 
 #[test]
-fn withdraw_v3_rejects_root_mismatch() {
+fn withdraw_rejects_root_mismatch() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
@@ -261,7 +261,7 @@ fn withdraw_v3_rejects_root_mismatch() {
 
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw_v3(env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone())
+            MixerContract::withdraw(env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone())
         })
         .err()
         .expect("expected root mismatch");

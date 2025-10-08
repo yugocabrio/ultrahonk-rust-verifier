@@ -99,7 +99,7 @@ echo "  - Harness verifier test reads:"
 echo "      circuit/target/vk_fields.json"
 echo "      circuit/target/proof"
 echo "      circuit/target/public_inputs"
-echo "  - Then run: cargo test --manifest-path tornado_classic/harness/Cargo.toml -- tests::verify_tornado_classic_proof_succeeds --nocapture"
+echo "  - Then run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- tests::verify_tornado_classic_proof_succeeds --nocapture"
 
 echo "\nProof/public inputs for external verifiers:"
 echo "  - Proof (hex):"
