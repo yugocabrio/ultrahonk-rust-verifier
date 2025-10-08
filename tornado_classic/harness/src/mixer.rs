@@ -141,10 +141,8 @@ impl MixerContract {
         Ok(idx)
     }
 
-    // old withdraw/withdraw2 removed; use withdraw_v3 with stored VK and new public inputs order
-
     /// Withdraw using stored VK and new public inputs ordering:
-    /// public_inputs = [nullifier_hash, root, recipient]
+    /// public_inputs = [root, nullifier_hash, recipient]
     pub fn withdraw_v3(
         env: Env,
         verifier: Address,
@@ -159,9 +157,11 @@ impl MixerContract {
         if pub_inputs[0].len() != 32 || pub_inputs[1].len() != 32 || pub_inputs[2].len() != 32 {
             return Err(MixerError::VerificationFailed);
         }
-        // Extract according to new ordering
+        // [root, nullifier_hash, recipient]
+        let mut root_arr = [0u8; 32];
+        root_arr.copy_from_slice(&pub_inputs[0]);
         let mut nf_arr = [0u8; 32];
-        nf_arr.copy_from_slice(&pub_inputs[0]);
+        nf_arr.copy_from_slice(&pub_inputs[1]);
         let nf_from_proof = BytesN::from_array(&env, &nf_arr);
         if nf_from_proof != nullifier_hash {
             return Err(MixerError::NullifierMismatch);
@@ -170,8 +170,6 @@ impl MixerContract {
         if env.storage().instance().has(&nf_key) {
             return Err(MixerError::NullifierUsed);
         }
-        let mut root_arr = [0u8; 32];
-        root_arr.copy_from_slice(&pub_inputs[1]);
         let mut rcpt_arr = [0u8; 32];
         rcpt_arr.copy_from_slice(&pub_inputs[2]);
         let root_from_proof = BytesN::from_array(&env, &root_arr);

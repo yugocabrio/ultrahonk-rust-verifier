@@ -85,10 +85,10 @@ fn mixer_withdraw_v3_and_double_spend_rejected() {
     let commitment = BytesN::from_array(&env, &[0x11; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment)).unwrap();
 
-    // Set on-chain root to circuit public root (second field)
+    // Set on-chain root to circuit public root
     assert!(pub_inputs_bin.len() >= 64);
     let mut root_arr = [0u8; 32];
-    root_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    root_arr.copy_from_slice(&pub_inputs_bin[..32]);
     env.as_contract(&mixer_id, || {
         MixerContract::set_root(env.clone(), BytesN::from_array(&env, &root_arr))
     })
@@ -109,7 +109,7 @@ fn mixer_withdraw_v3_and_double_spend_rejected() {
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())).expect("set_vk ok");
     let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[..32]);
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
 
     let _pid = env.as_contract(&mixer_id, || MixerContract::withdraw_v3(
@@ -158,7 +158,7 @@ fn withdraw_v3_rejects_nullifier_mismatch() {
 
     assert!(pub_inputs_bin.len() >= 64);
     let mut root_arr = [0u8; 32];
-    root_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    root_arr.copy_from_slice(&pub_inputs_bin[..32]);
     env.as_contract(&mixer_id, || {
         MixerContract::set_root(env.clone(), BytesN::from_array(&env, &root_arr))
     })
@@ -188,7 +188,7 @@ fn withdraw_v3_rejects_nullifier_mismatch() {
     assert_eq!(err as u32, MixerError::NullifierMismatch as u32);
 
     let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[..32]);
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf_from_proof = BytesN::from_array(&env, &nf_arr);
     let used = env.as_contract(&mixer_id, || {
         MixerContract::is_nullifier_used(env.clone(), nf_from_proof.clone())
@@ -256,7 +256,7 @@ fn withdraw_v3_rejects_root_mismatch() {
         .expect("set_vk ok");
 
     let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[..32]);
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
 
     let err = env
