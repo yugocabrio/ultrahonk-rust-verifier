@@ -1,6 +1,6 @@
 // Tornado Classic-style circuit
 // - Private inputs: nullifier, secret, Merkle path (siblings, path_bits)
-// - Public outputs: root, nullifier_hash, commitment
+// - Public inputs: root, nullifier_hash, recipient
 // - Hash function uses Poseidon2 (via dep::poseidon2) for 2-to-1 compression
 // - Aligns with on-chain frontier Merkle: H = Poseidon2_2to1 (first limb),
 //   zero[0] = 0; zero[i+1] = H(zero[i], zero[i])
