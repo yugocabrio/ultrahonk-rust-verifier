@@ -63,8 +63,8 @@ impl Fr {
         format!("0x{}", hex::encode(self.to_bytes()))
     }
 
-    pub fn inverse(&self) -> Self {
-        Fr(self.0.inverse().unwrap())
+    pub fn inverse(&self) -> Option<Self> {
+        self.0.inverse().map(Fr)
     }
 
     pub fn zero() -> Self {
@@ -85,8 +85,8 @@ impl Fr {
         self.0.is_zero()
     }
 
-    pub fn div(&self, rhs: &Fr) -> Self {
-        Fr(self.0 * rhs.0.inverse().unwrap())
+    pub fn div(&self, rhs: &Fr) -> Option<Self> {
+        rhs.inverse().map(|inv| *self * inv)
     }
 }
 
