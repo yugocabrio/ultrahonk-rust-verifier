@@ -16,6 +16,7 @@ use alloc::{format, string::String, vec::Vec};
 /// 검증 실패의 원인을 구체적으로 나타내는 오류 타입입니다.
 #[derive(Debug)]
 pub enum VerifyError {
+    InvalidInput(String),
     SumcheckFailed(String),
     ShplonkFailed(String),
 }
@@ -24,6 +25,7 @@ pub enum VerifyError {
 impl From<VerifyError> for String {
     fn from(err: VerifyError) -> String {
         match err {
+            VerifyError::InvalidInput(s) => format!("Invalid input: {}", s),
             VerifyError::SumcheckFailed(s) => format!("Sum-check failed: {}", s),
             VerifyError::ShplonkFailed(s) => format!("Shplonk failed: {}", s),
         }
@@ -89,7 +91,8 @@ impl UltraHonkVerifier {
             tx.rel_params.gamma,
             pub_offset,
             self.vk.circuit_size,
-        );
+        )
+        .map_err(VerifyError::InvalidInput)?;
 
         // 5) Sum-check: 실패 시 SumcheckFailed 오류를 반환합니다.
         verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
@@ -107,7 +110,7 @@ impl UltraHonkVerifier {
         gamma: Fr,
         offset: u64,
         n: u64,
-    ) -> Fr {
+    ) -> Result<Fr, String> {
         let mut num = Fr::one();
         let mut den = Fr::one();
 
@@ -127,6 +130,9 @@ impl UltraHonkVerifier {
             num_acc = num_acc + beta;
             den_acc = den_acc - beta;
         }
-        num * den.inverse()
+        let den_inv = den
+            .inverse()
+            .ok_or_else(|| String::from("public inputs delta denominator is zero"))?;
+        Ok(num * den_inv)
     }
 }

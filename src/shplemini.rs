@@ -7,8 +7,6 @@ use crate::ec::{g1_msm, pairing_check};
 use crate::field::Fr;
 use crate::trace;
 use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N};
-#[cfg(not(feature = "std"))]
-use alloc::format;
 use ark_bn254::{Fq, G1Affine, G1Projective};
 use ark_ec::{CurveGroup, PrimeGroup};
 #[cfg(feature = "trace")]
@@ -16,7 +14,7 @@ use ark_ff::BigInteger;
 use ark_ff::{One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{format, string::String, vec, vec::Vec};
 
 pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
 pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted
@@ -63,10 +61,18 @@ pub fn verify_shplemini(
     ];
 
     // 3) compute shplonk weights
-    let pos0 = (tx.shplonk_z - r_pows[0]).inverse();
-    let neg0 = (tx.shplonk_z + r_pows[0]).inverse();
+    let pos0 = (tx.shplonk_z - r_pows[0])
+        .inverse()
+        .ok_or_else(|| String::from("shplonk denominator (z - r^0) is zero"))?;
+    let neg0 = (tx.shplonk_z + r_pows[0])
+        .inverse()
+        .ok_or_else(|| String::from("shplonk denominator (z + r^0) is zero"))?;
     let unshifted = pos0 + tx.shplonk_nu * neg0;
-    let shifted = tx.gemini_r.inverse() * (pos0 - tx.shplonk_nu * neg0);
+    let gemini_r_inv = tx
+        .gemini_r
+        .inverse()
+        .ok_or_else(|| String::from("gemini_r challenge is zero"))?;
+    let shifted = gemini_r_inv * (pos0 - tx.shplonk_nu * neg0);
     #[cfg(feature = "trace")]
     {
         dbg_fr("pos0", &pos0);
@@ -180,7 +186,10 @@ pub fn verify_shplemini(
         let num = r2 * cur * Fr::from_u64(2)
             - proof.gemini_a_evaluations[j - 1] * (r2 * (Fr::one() - u) - u);
         let den = r2 * (Fr::one() - u) + u;
-        cur = num * den.inverse();
+        let den_inv = den
+            .inverse()
+            .ok_or_else(|| format!("fold round {} denominator is zero", j))?;
+        cur = num * den_inv;
         fold_pos[j - 1] = cur;
     }
     #[cfg(feature = "trace")]
@@ -207,8 +216,12 @@ pub fn verify_shplemini(
             dbg_fr("v_pow (before)", &v_pow);
         }
 
-        let pos_inv = (tx.shplonk_z - r_pows[j]).inverse();
-        let neg_inv = (tx.shplonk_z + r_pows[j]).inverse();
+        let pos_inv = (tx.shplonk_z - r_pows[j])
+            .inverse()
+            .ok_or_else(|| format!("shplonk denominator (z - r^{}) is zero", j))?;
+        let neg_inv = (tx.shplonk_z + r_pows[j])
+            .inverse()
+            .ok_or_else(|| format!("shplonk denominator (z + r^{}) is zero", j))?;
         let sp = v_pow * pos_inv;
         let sn = v_pow * tx.shplonk_nu * neg_inv;
 

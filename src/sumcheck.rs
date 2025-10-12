@@ -58,7 +58,7 @@ fn check_round_sum(u: &[Fr], target: Fr) -> bool {
 
 /// Calculate next target value for the sum-check
 #[inline(always)]
-fn next_target(u: &[Fr], chi: Fr) -> Fr {
+fn next_target(u: &[Fr], chi: Fr) -> Result<Fr, String> {
     // B(χ) = ∏ (χ - i)
     let mut b = Fr::one();
     for i in 0..8 {
@@ -73,11 +73,14 @@ fn next_target(u: &[Fr], chi: Fr) -> Fr {
         #[cfg(not(feature = "std"))]
         let bary_val = get_bary()[i];
 
-        let inv = (bary_val * (chi - Fr::from_u64(i as u64))).inverse();
+        let denom = bary_val * (chi - Fr::from_u64(i as u64));
+        let inv = denom
+            .inverse()
+            .ok_or_else(|| format!("sum-check denominator is zero at i={}", i))?;
         acc = acc + (u[i] * inv);
     }
 
-    b * acc
+    Ok(b * acc)
 }
 
 #[inline(always)]
@@ -112,7 +115,7 @@ pub fn verify_sumcheck(
         let chi = tx.sumcheck_u_challenges[r];
         dbg_fr("chi", &chi);
 
-        target = next_target(uni, chi);
+        target = next_target(uni, chi)?;
         pow_par = update_pow(pow_par, tx.gate_challenges[r], chi);
 
         dbg_fr("target_after", &target);
