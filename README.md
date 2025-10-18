@@ -173,7 +173,7 @@ stellar contract invoke \
   stellar contract optimize --wasm target/wasm32v1-none/release/<crate_name>.wasm
   ```
 
-  and trim dependencies / features. (The 64 KB cap still applies.) ([JamesBachini.com][6], [developers.stellar.org][5])
+  and trim dependencies / features. (The 128 KiB cap still applies.) ([JamesBachini.com][6], [developers.stellar.org][5])
 
 ---
 
