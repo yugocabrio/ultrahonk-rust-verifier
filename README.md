@@ -60,13 +60,13 @@ Notes:
 - `std`: enables I/O and serde for convenient loading.
 - `trace`: prints detailed verifier internals (for debugging); off by default.
 - `alloc` (default): required for `no_std` collections.
-- `soroban-bn254-precompile`: routes MSM + pairing calls through a backend facade intended for a Soroban BN254 precompile.
+- `soroban-precompile`: routes MSM + pairing calls through a backend facade intended for a Soroban host precompile.
   For now, it falls back to Arkworks so behavior is unchanged, but gives a stable call site to switch to host calls later.
 
-### Soroban BN254 precompile
-- Purpose: Provide a seam to swap the EC hot paths (G1 MSM and pairing) to a Soroban BN254 precompile.
-- Enable: `--features soroban-bn254-precompile`. If no backend is registered, it transparently falls back to the Arkworks implementation.
-- Scope: Public API remains unchanged (`ec::g1_msm`, `ec::pairing_check`). Register a backend once at startup.
+### Soroban precompile
+- Purpose: Provide seams to swap the EC hot paths (G1 MSM and pairing) and the transcript hash to Soroban host precompiles.
+- Enable: `--features soroban-precompile`. If no backend is registered, it transparently falls back to the Arkworks/Keccak implementations.
+- Scope: Public API remains unchanged (`ec::g1_msm`, `ec::pairing_check`, `hash::hash32`). Register backends once during contract initialization.
 
 Backend contract
 - Trait: `ec::Bn254Ops` (intended to be `Send + Sync`)
@@ -76,14 +76,19 @@ Backend contract
     - Must verify `e(p0, rhs_g2) * e(p1, lhs_g2) == 1` using the fixed G2 constants defined in `ec.rs`.
 
 ```
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 {
-    use ultrahonk_rust_verifier::{ec::{self, Bn254Ops}, types::G1Point, field::Fr};
+    use ultrahonk_rust_verifier::{
+        ec::{self, Bn254Ops},
+        hash::{self, HashOps},
+        types::G1Point,
+        field::Fr,
+    };
     use ark_bn254::G1Affine;
 
     // Example backend that calls the Soroban host precompile (pseudo-code)
-    struct SorobanOps { /* env: soroban_sdk::Env, ... */ }
-    impl Bn254Ops for SorobanOps {
+    struct SorobanEcOps { /* env: soroban_sdk::Env, ... */ }
+    impl Bn254Ops for SorobanEcOps {
         fn g1_msm(&self, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
             // host_msm(env, coms, scalars).map_err(|e| e.to_string())
             unimplemented!("call Soroban MSM precompile")
@@ -93,8 +98,16 @@ Backend contract
             unimplemented!("call Soroban pairing precompile")
         }
     }
+    struct SorobanHashOps { /* env, ... */ }
+    impl HashOps for SorobanHashOps {
+        fn hash(&self, data: &[u8]) -> [u8; 32] {
+            // host_poseidon(env, data)
+            unimplemented!("call Soroban hash precompile")
+        }
+    }
 
-    ec::set_soroban_bn254_backend(Box::new(SorobanOps { /* env, ... */ }));
+    ec::set_soroban_bn254_backend(Box::new(SorobanEcOps { /* env, ... */ }));
+    hash::set_soroban_hash_backend(Box::new(SorobanHashOps { /* env, ... */ }));
 }
 ```
 

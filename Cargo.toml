@@ -29,7 +29,7 @@ once_cell = { version = "1.19", default-features = false, features = ["alloc", "
 [features]
 default = ["alloc", "serde", "serde_json"]
 # Soroban BN254 precompile integration switch
-soroban-bn254-precompile = []
+soroban-precompile = []
 std = [
     "sha3/std",
     "ark-ff/std",
