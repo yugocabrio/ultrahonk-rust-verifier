@@ -12,7 +12,7 @@ use ark_ec::{pairing::Pairing, CurveGroup, PrimeGroup};
 use ark_ff::BigInteger;
 use ark_ff::{One, PrimeField, Zero};
 
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 use once_cell::race::OnceBox;
 
 /// Trait for BN254 operations used by the verifier hot paths.
@@ -158,15 +158,15 @@ impl Bn254Ops for ArkworksOps {
 
 static ARKWORKS: ArkworksOps = ArkworksOps;
 
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 struct BackendHolder(pub Box<dyn Bn254Ops + Send + Sync>);
 
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 static BACKEND: OnceBox<BackendHolder> = OnceBox::new();
 
 #[inline(always)]
 fn backend() -> &'static dyn Bn254Ops {
-    #[cfg(feature = "soroban-bn254-precompile")]
+    #[cfg(feature = "soroban-precompile")]
     {
         if let Some(b) = BACKEND.get() {
             return &*b.0;
@@ -199,13 +199,13 @@ pub mod helpers {
     }
 }
 
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 /// Register a custom BN254 backend (Soroban BN254 precompile bridge).
 pub fn set_backend(ops: Box<dyn Bn254Ops + Send + Sync>) {
     let _ = BACKEND.set(Box::new(BackendHolder(ops)));
 }
 
-#[cfg(feature = "soroban-bn254-precompile")]
+#[cfg(feature = "soroban-precompile")]
 #[inline(always)]
 pub fn set_soroban_bn254_backend(ops: Box<dyn Bn254Ops + Send + Sync>) {
     set_backend(ops)

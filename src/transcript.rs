@@ -3,7 +3,7 @@
 use crate::trace;
 use crate::{
     field::Fr,
-    hash::keccak256,
+    hash::hash32,
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
 };
 use ark_bn254::G1Affine;
@@ -33,7 +33,7 @@ fn split(fr: Fr) -> (Fr, Fr) {
 
 #[inline(always)]
 fn hash_to_fr(bytes: &[u8]) -> Fr {
-    Fr::from_bytes(&keccak256(bytes))
+    Fr::from_bytes(&hash32(bytes))
 }
 
 fn u64_to_be32(x: u64) -> [u8; 32] {
