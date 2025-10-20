@@ -52,7 +52,7 @@ pub fn hash32(data: &[u8]) -> [u8; 32] {
 #[cfg(feature = "soroban-precompile")]
 /// Register a custom hash backend (Soroban precompile bridge).
 pub fn set_backend(ops: Box<dyn HashOps>) {
-    let _ = BACKEND.set(ops);
+    let _ = BACKEND.set(Box::new(ops));
 }
 
 #[cfg(feature = "soroban-precompile")]
