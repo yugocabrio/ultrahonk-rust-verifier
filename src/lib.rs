@@ -1,10 +1,8 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{string::String as StdString, vec::Vec as StdVec};
+use alloc::{boxed::Box, string::String as StdString, vec::Vec as StdVec};
 use core::str;
-
-use sha3::{Digest, Keccak256};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
 };
@@ -13,6 +11,7 @@ use ark_bn254::{Fq, G1Affine};
 use ark_ff::PrimeField;
 
 use ultrahonk_rust_verifier::{
+    hash::{self, HashOps},
     types::{G1Point, VerificationKey},
     UltraHonkVerifier,
 };
@@ -353,6 +352,30 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
 #[contract]
 pub struct UltraHonkVerifierContract;
 
+struct SorobanKeccak {
+    env: Env,
+}
+
+// Soroban contracts execute on a single-threaded host; marking the adapter as
+// Send/Sync is safe because the underlying Env handle is not shared across threads.
+unsafe impl Send for SorobanKeccak {}
+unsafe impl Sync for SorobanKeccak {}
+
+impl SorobanKeccak {
+    fn new(env: &Env) -> Self {
+        Self { env: env.clone() }
+    }
+}
+
+impl HashOps for SorobanKeccak {
+    fn hash(&self, data: &[u8]) -> [u8; 32] {
+        let env = self.env.clone();
+        let input = Bytes::from_slice(&env, data);
+        let digest: BytesN<32> = env.crypto().keccak256(&input).into();
+        digest.into()
+    }
+}
+
 #[contracterror]
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -371,15 +394,6 @@ impl UltraHonkVerifierContract {
 
     fn key_vk_hash() -> Symbol {
         symbol_short!("vk_hash")
-    }
-
-    fn keccak32(data: &[u8]) -> [u8; 32] {
-        let mut hasher = Keccak256::new();
-        hasher.update(data);
-        let digest = hasher.finalize();
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&digest);
-        out
     }
 
     /// Split a packed [4-byte count][public_inputs][proof] buffer into
@@ -410,10 +424,10 @@ impl UltraHonkVerifierContract {
     }
     /// Verify an UltraHonk proof; on success store proof_id (= keccak256(proof_blob))
     pub fn verify_proof(env: Env, vk_json: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
-        // proof_id = keccak256(proof_blob) computed locally to avoid host VM limits
+        hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
+
+        let proof_hash: BytesN<32> = env.crypto().keccak256(&proof_blob).into();
         let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
-        let proof_hash = Self::keccak32(&proof_vec);
-        let proof_id_bytes: BytesN<32> = BytesN::from_array(&env, &proof_hash);
 
         // vk_json → &str  (avoid temporary drop by binding first)
         let vk_vec: StdVec<u8> = vk_json.to_alloc_vec();
@@ -434,17 +448,15 @@ impl UltraHonkVerifierContract {
             .map_err(|_| Error::VerificationFailed)?;
 
         // Persist success
-        env.storage().instance().set(&proof_id_bytes, &true);
+        env.storage().instance().set(&proof_hash, &true);
 
-        Ok(proof_id_bytes)
+        Ok(proof_hash)
     }
 
     /// Set verification key JSON and cache its hash. Returns vk_hash
     pub fn set_vk(env: Env, vk_json: Bytes) -> Result<BytesN<32>, Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_json);
-        let vk_vec = vk_json.to_alloc_vec();
-        let hash_arr = Self::keccak32(&vk_vec);
-        let hash_bn = BytesN::from_array(&env, &hash_arr);
+        let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_json).into();
         env.storage().instance().set(&Self::key_vk_hash(), &hash_bn);
         Ok(hash_bn)
     }

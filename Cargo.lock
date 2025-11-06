@@ -1733,7 +1733,6 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "ultrahonk_rust_verifier"
 version = "0.1.0"
-source = "git+https://github.com/yugocabrio/ultrahonk-rust-verifier.git?branch=main#521b6bdb70586c44b392155c888bb2d7379e0099"
 dependencies = [
  "ark-bn254",
  "ark-ec 0.5.0",
@@ -1744,6 +1743,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "once_cell",
+ "serde_json",
  "sha3",
 ]
 
@@ -1753,7 +1753,6 @@ version = "0.1.0"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.5.0",
- "sha3",
  "soroban-env-host",
  "soroban-sdk",
  "ultrahonk_rust_verifier",
