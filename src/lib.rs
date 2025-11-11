@@ -4,7 +4,6 @@ extern crate alloc;
 use alloc::{string::String as StdString, vec::Vec as StdVec};
 use core::str;
 
-use sha3::{Digest, Keccak256};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
 };
@@ -373,13 +372,9 @@ impl UltraHonkVerifierContract {
         symbol_short!("vk_hash")
     }
 
-    fn keccak32(data: &[u8]) -> [u8; 32] {
-        let mut hasher = Keccak256::new();
-        hasher.update(data);
-        let digest = hasher.finalize();
-        let mut out = [0u8; 32];
-        out.copy_from_slice(&digest);
-        out
+    fn hash32(env: &Env, data: &[u8]) -> BytesN<32> {
+        let bytes = Bytes::from_slice(env, data);
+        env.crypto().sha256(&bytes).into()
     }
 
     /// Split a packed [4-byte count][public_inputs][proof] buffer into
@@ -408,12 +403,11 @@ impl UltraHonkVerifierContract {
         }
         (StdVec::new(), rest.to_vec())
     }
-    /// Verify an UltraHonk proof; on success store proof_id (= keccak256(proof_blob))
+    /// Verify an UltraHonk proof; on success store proof_id (= soroban sha256(proof_blob))
     pub fn verify_proof(env: Env, vk_json: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
-        // proof_id = keccak256(proof_blob) computed locally to avoid host VM limits
+        // proof_id = soroban sha256(proof_blob) computed locally to avoid host VM limits
         let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
-        let proof_hash = Self::keccak32(&proof_vec);
-        let proof_id_bytes: BytesN<32> = BytesN::from_array(&env, &proof_hash);
+        let proof_id_bytes = Self::hash32(&env, &proof_vec);
 
         // vk_json → &str  (avoid temporary drop by binding first)
         let vk_vec: StdVec<u8> = vk_json.to_alloc_vec();
@@ -443,8 +437,7 @@ impl UltraHonkVerifierContract {
     pub fn set_vk(env: Env, vk_json: Bytes) -> Result<BytesN<32>, Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_json);
         let vk_vec = vk_json.to_alloc_vec();
-        let hash_arr = Self::keccak32(&vk_vec);
-        let hash_bn = BytesN::from_array(&env, &hash_arr);
+        let hash_bn = Self::hash32(&env, &vk_vec);
         env.storage().instance().set(&Self::key_vk_hash(), &hash_bn);
         Ok(hash_bn)
     }
