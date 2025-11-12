@@ -600,7 +600,7 @@ impl UltraHonkVerifierContract {
         }
         (StdVec::new(), rest.to_vec())
     }
-    /// Verify an UltraHonk proof; on success store proof_id (= soroban sha256(proof_blob))
+    /// Verify an UltraHonk proof; on success store proof_id (= keccak256(proof_blob))
     pub fn verify_proof(env: Env, vk_json: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
