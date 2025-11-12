@@ -1,4 +1,3 @@
-use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{Bytes, Env};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 
@@ -9,7 +8,6 @@ fn verify_simple_circuit_proof_succeeds() {
     let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
 
     let env = Env::default();
-    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Prepare inputs
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
@@ -48,7 +46,6 @@ fn verify_fib_chain_proof_succeeds() {
     let pub_inputs_bin: &[u8] = include_bytes!("fib_chain/target/public_inputs");
 
     let env = Env::default();
-    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     // Prepare inputs
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
     const PROOF_NUM_FIELDS: u32 = 440;
