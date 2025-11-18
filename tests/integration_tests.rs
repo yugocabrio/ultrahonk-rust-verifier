@@ -46,6 +46,7 @@ fn verify_fib_chain_proof_succeeds() {
     let pub_inputs_bin: &[u8] = include_bytes!("fib_chain/target/public_inputs");
 
     let env = Env::default();
+
     // Prepare inputs
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
     const PROOF_NUM_FIELDS: u32 = 440;

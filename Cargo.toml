@@ -7,16 +7,18 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = { version = "23.0.0-rc.3", default-features = false, features = ["alloc"] }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3cf10a984dba03f68b4f2ed653b715063e983bba", default-features = false, features = ["alloc"] }
 ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", branch = "main", default-features = false, features = ["alloc", "soroban-precompile"] }
 
 # 아래는 lib.rs에서 직접 사용하는 타입들을 위해 명시적으로 추가.
 ark-bn254 = { version = "0.5", default-features = false }
 ark-ff = { version = "0.5", default-features = false }
+ark-ec = { version = "0.5", default-features = false }
+ark-serialize = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 # Enable test helpers for local unit tests
-soroban-sdk = { version = "23.0.0-rc.3", features = ["testutils"] }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3cf10a984dba03f68b4f2ed653b715063e983bba", features = ["testutils"] }
 soroban-env-host = "23.0.0-rc.2"
 
 [profile.release]
