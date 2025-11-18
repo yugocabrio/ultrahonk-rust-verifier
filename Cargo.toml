@@ -10,7 +10,6 @@ crate-type = ["cdylib", "rlib"]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3cf10a984dba03f68b4f2ed653b715063e983bba", default-features = false, features = ["alloc"] }
 ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", branch = "main", default-features = false, features = ["alloc", "soroban-precompile"] }
 
-# 아래는 lib.rs에서 직접 사용하는 타입들을 위해 명시적으로 추가.
 ark-bn254 = { version = "0.5", default-features = false }
 ark-ff = { version = "0.5", default-features = false }
 ark-ec = { version = "0.5", default-features = false }
