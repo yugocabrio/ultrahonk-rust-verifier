@@ -9,7 +9,6 @@ use crate::{
 use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
-// ===== 💡 FIX: bring in the format macro. =====
 use alloc::{format, string::String, vec::Vec};
 // ===============================================
 
