@@ -2,7 +2,6 @@
 set -euo pipefail
 
 NOIR_VERSION="1.0.0-beta.9"
-# Pin to Aztec bb v0.87.0 as指定
 BB_VERSION="v0.87.0"
 
 install_nargo() {
