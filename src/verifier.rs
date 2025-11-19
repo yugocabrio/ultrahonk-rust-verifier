@@ -9,11 +9,11 @@ use crate::{
 use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
-// ===== 💡 FIX: format 매크로를 가져옵니다. =====
+// ===== 💡 FIX: bring in the format macro. =====
 use alloc::{format, string::String, vec::Vec};
 // ===============================================
 
-/// 검증 실패의 원인을 구체적으로 나타내는 오류 타입입니다.
+/// Error type describing the specific reason verification failed.
 #[derive(Debug)]
 pub enum VerifyError {
     InvalidInput(String),
@@ -21,7 +21,7 @@ pub enum VerifyError {
     ShplonkFailed(String),
 }
 
-/// 디버깅 및 로깅을 위해 VerifyError를 String으로 변환할 수 있도록 합니다.
+/// Allow converting VerifyError into a String for debugging and logging.
 impl From<VerifyError> for String {
     fn from(err: VerifyError) -> String {
         match err {
@@ -53,7 +53,7 @@ impl UltraHonkVerifier {
         &self.vk
     }
 
-    /// Top-level verify. 반환 타입을 String에서 구체적인 VerifyError로 변경했습니다.
+    /// Top-level verify; return type changed from String to the concrete VerifyError.
     pub fn verify(
         &self,
         proof_bytes: &[u8],
@@ -94,10 +94,10 @@ impl UltraHonkVerifier {
         )
         .map_err(VerifyError::InvalidInput)?;
 
-        // 5) Sum-check: 실패 시 SumcheckFailed 오류를 반환합니다.
+        // 5) Sum-check: returns SumcheckFailed when this step fails.
         verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
 
-        // 6) Shplonk (batch opening): 실패 시 ShplonkFailed 오류를 반환합니다.
+        // 6) Shplonk (batch opening): returns ShplonkFailed when this stage fails.
         verify_shplemini(&proof, &self.vk, &tx).map_err(VerifyError::ShplonkFailed)?;
 
         Ok(())
