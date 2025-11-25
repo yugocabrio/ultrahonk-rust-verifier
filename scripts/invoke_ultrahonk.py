@@ -12,10 +12,10 @@ This script can:
   * drive the `stellar contract invoke` CLI for verify_proof + is_verified
 
 Example (local Quickstart):
-    python scripts/invoke_ultrahonk.py invoke \
+    python3 scripts/invoke_ultrahonk.py invoke \
         --dataset tests/fib_chain/target \
-        --contract-id CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP \
-        --network local --source-account alice --send no
+        --contract-id CCJFN27YH2D5HGI5SOZYNYPJZ6W776QCSJSGVIMUZSCEDR52XXLMRSHG \
+        --network local --source-account alice --send yes
 """
 
 from __future__ import annotations
@@ -24,9 +24,10 @@ import argparse
 import base64
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 
 DEFAULT_CONTRACT_ID = "CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP"
@@ -211,7 +212,22 @@ def load_artifacts(
 
 
 # === CLI helpers =============================================================
-def run_command(cmd: Sequence[str], dry_run: bool) -> int:
+@dataclass
+class CommandResult:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def get_cli_variants(function_name: str) -> List[str]:
+    variants = [function_name]
+    hyphenated = function_name.replace("_", "-")
+    if hyphenated not in variants:
+        variants.append(hyphenated)
+    return variants
+
+
+def run_command(cmd: Sequence[str], dry_run: bool) -> CommandResult:
     display_parts: list[str] = []
     for part in cmd:
         if len(part) > 128:
@@ -220,9 +236,68 @@ def run_command(cmd: Sequence[str], dry_run: bool) -> int:
             display_parts.append(part)
     print("→", " ".join(display_parts))
     if dry_run:
-        return 0
-    proc = subprocess.run(cmd)
-    return proc.returncode
+        return CommandResult(returncode=0, stdout="", stderr="")
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+
+    def _forward(stream, target, buffer):
+        if stream is None:
+            return
+        for line in stream:
+            buffer.append(line)
+            target.write(line)
+            target.flush()
+
+    threads = [
+        threading.Thread(target=_forward, args=(proc.stdout, sys.stdout, stdout_parts)),
+        threading.Thread(target=_forward, args=(proc.stderr, sys.stderr, stderr_parts)),
+    ]
+
+    for t in threads:
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    returncode = proc.wait()
+    stdout_text = "".join(stdout_parts)
+    stderr_text = "".join(stderr_parts)
+
+    return CommandResult(returncode=returncode, stdout=stdout_text, stderr=stderr_text)
+
+
+def invoke_with_variants(
+    base_cmd: Sequence[str],
+    function_name: str,
+    args: Sequence[str],
+    dry_run: bool,
+) -> CommandResult:
+    variants = get_cli_variants(function_name)
+    last_result: Optional[CommandResult] = None
+
+    for idx, cli_name in enumerate(variants):
+        cmd = [*base_cmd, "--", cli_name, *args]
+        result = run_command(cmd, dry_run=dry_run)
+        if dry_run or result.returncode == 0:
+            return result
+        combined = (result.stderr + "\n" + result.stdout).lower()
+        if (
+            "unrecognized subcommand" in combined
+            or "unexpected argument" in combined
+        ) and idx + 1 < len(variants):
+            last_result = result
+            continue
+        return result
+
+    return last_result or CommandResult(returncode=1, stdout="", stderr="")
 
 
 def print_summary(artifacts: PackedArtifacts, proof_blob: bytes, proof_id: bytes) -> None:
@@ -281,7 +356,7 @@ def command_invoke(args: argparse.Namespace) -> int:
     vk_hex = artifacts.vk_bytes.hex()
     proof_hex = proof_blob.hex()
 
-    verify_cmd: list[str] = [
+    base_cmd: list[str] = [
         "stellar",
         "contract",
         "invoke",
@@ -293,52 +368,35 @@ def command_invoke(args: argparse.Namespace) -> int:
         args.network,
     ]
     if args.send != "default":
-        verify_cmd.extend(["--send", args.send])
+        base_cmd.extend(["--send", args.send])
     if args.cost:
-        verify_cmd.append("--cost")
-    verify_cmd.extend(
-        [
-            "--",
-            "verify_proof",
-            "--vk-json",
-            vk_hex,
-            "--proof-blob",
-            proof_hex,
-        ]
-    )
+        base_cmd.append("--cost")
 
-    rc = run_command(verify_cmd, args.dry_run)
-    if rc != 0:
-        return rc
+    verify_args = [
+        "--vk-json",
+        vk_hex,
+        "--proof-blob",
+        proof_hex,
+    ]
+    result = invoke_with_variants(
+        base_cmd,
+        "verify_proof",
+        verify_args,
+        args.dry_run,
+    )
+    if result.returncode != 0:
+        return result.returncode
 
     if not args.skip_is_verified:
         proof_id_hex = proof_id.hex()
-        check_cmd: list[str] = [
-            "stellar",
-            "contract",
-            "invoke",
-            "--id",
-            args.contract_id,
-            "--source-account",
-            args.source,
-            "--network",
-            args.network,
-        ]
-        if args.send != "default":
-            check_cmd.extend(["--send", args.send])
-        if args.cost:
-            check_cmd.append("--cost")
-        check_cmd.extend(
-            [
-                "--",
-                "is_verified",
-                "--proof-id",
-                proof_id_hex,
-            ]
+        check_result = invoke_with_variants(
+            base_cmd,
+            "is_verified",
+            ["--proof-id", proof_id_hex],
+            args.dry_run,
         )
-        rc = run_command(check_cmd, args.dry_run)
-        if rc != 0:
-            return rc
+        if check_result.returncode != 0:
+            return check_result.returncode
 
     return 0
 
