@@ -126,7 +126,7 @@ async function main() {
   parser.add_argument('--network', { default: 'local', help: 'Network (local, testnet, futurenet)' });
   parser.add_argument('--source-secret', { default: ALICE_SECRET, help: 'Source account secret key' });
   parser.add_argument('--dataset', { 
-    default: path.resolve(__dirname, '../tests/fib_chain/target'), 
+    default: path.resolve(__dirname, '../../tests/fib_chain/target'), 
     help: 'Path to dataset directory' 
   });
   parser.add_argument('--rpc-url', { default: DEFAULT_RPC_URL, help: 'RPC URL' });
@@ -178,8 +178,6 @@ async function main() {
 
   console.log('\nMeasuring costs...');
   console.log('----------------------------------------------------------------');
-  console.log(`${'Function'.padEnd(30)} | ${'CPU Instructions'.padStart(16)} | ${'Memory Bytes'.padStart(12)} | ${'Min Fee'.padStart(10)}`);
-  console.log('----------------------------------------------------------------');
 
   for (const fn of functions) {
     try {
@@ -191,17 +189,22 @@ async function main() {
         fn.args
       );
       
-      console.log(
-        `${fn.name.padEnd(30)} | ` +
-        `${(cpu?.toString() || '-').padStart(16)} | ` +
-        `${(mem?.toString() || '-').padStart(12)} | ` +
-        `${(minFee || '-').padStart(10)}`
-      );
+      console.log(`Function: ${fn.name}`);
+      if (cpu !== null && mem !== null && minFee !== null) {
+        console.log(`CPU Instructions: ${parseInt(cpu.toString()).toLocaleString()}`);
+        console.log(`Memory Bytes: ${parseInt(mem.toString()).toLocaleString()}`);
+        const fee = parseInt(minFee);
+        const feeXlm = fee / 10000000;
+        console.log(`Fee: ${fee.toLocaleString()} stroops (${feeXlm} XLM)`);
+      } else {
+        console.log('Simulation failed or returned no resources.');
+      }
+      console.log('----------------------------------------------------------------');
     } catch (err: any) {
       console.error(`Error measuring ${fn.name}:`, err.message || err);
+      console.log('----------------------------------------------------------------');
     }
   }
-  console.log('----------------------------------------------------------------');
 }
 
 main().catch((err: any) => {
