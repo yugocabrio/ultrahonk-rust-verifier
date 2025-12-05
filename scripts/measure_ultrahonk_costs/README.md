@@ -34,6 +34,14 @@ npx ts-node measure_ultrahonk_costs.ts --contract-id <CONTRACT_ID> --source-secr
 
 ```bash
 npx ts-node measure_ultrahonk_costs.ts \
-  --contract-id CBLGBJGV67SIQDFPK35SSJQYMYF22HIZ3MAXHOJR44JKEYDTRBYXSCGA \
+  --contract-id CDIO5W3SH3BE6DW5HWWUBBOSY52WJKNYX6LWLNRE66SOTVJ524FWAOPO \
   --source-secret SBLVSX4PFMIVV5BO3N3DYHA2QKEW4P3JO6WK5WIB36BCAJPJOV57Y3HN
+```
+
+### Error handling
+
+If the script encounters errors during `verify_proof_with_stored_vk` function calls, one should call `invoke_ultrahonk.ts` script with the `set_vk` parameter to set the verification key on-chain before measuring costs again. It is possible via the following command:
+
+```bash
+npx ts-node invoke_ultrahonk.ts set_vk --contract-id <CONTRACT_ID> --network local --source-account alice
 ```
