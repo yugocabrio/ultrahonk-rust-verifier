@@ -126,7 +126,7 @@ async function main() {
   parser.add_argument('--network', { default: 'local', help: 'Network (local, testnet, futurenet)' });
   parser.add_argument('--source-secret', { default: ALICE_SECRET, help: 'Source account secret key' });
   parser.add_argument('--dataset', { 
-    default: path.resolve(__dirname, '../../tests/fib_chain/target'), 
+    default: path.resolve(__dirname, '../../tests/simple_circuit/target'), 
     help: 'Path to dataset directory' 
   });
   parser.add_argument('--rpc-url', { default: DEFAULT_RPC_URL, help: 'RPC URL' });
