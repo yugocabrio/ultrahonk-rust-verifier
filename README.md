@@ -222,32 +222,11 @@ stellar contract invoke --id <CONTRACT_ID> --source alice -- --func hello --to "
 
 ---
 
-## Invoke helper script
+## Invoke / cost measurement script
 
-Once the contract is deployed, you can invoke `verify_proof` (and optionally `is_verified`) with the automation helper:
+- See `scripts/invoke_ultrahonk/README.md` for instructions on using the
+`invoke_ultrahonk.ts` script to prepare and invoke the Ultrahonk contract.
 
-```bash
-# Packs tests/fib_chain/target artifacts and submits verify_proof
-python3 scripts/invoke_ultrahonk.py invoke \
-  --dataset tests/fib_chain/target \
-  --contract-id CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP \
-  --network local \
-  --source alice
-
-# Dry-run to only show the underlying stellar CLI commands
-python3 scripts/invoke_ultrahonk.py invoke --dry-run --dataset tests/fib_chain/target
-
-# Prepare/inspect the packed proof blob and proof_id
-python3 scripts/invoke_ultrahonk.py prepare --dataset tests/fib_chain/target --output fib_chain_proof_blob.bin
-```
-
-Key behaviours:
-
-- The helper packs `(u32_be total_fields) || public_inputs || proof` exactly like the on-chain contract expects.
-- The script computes the `proof_id` (Keccak-256 of the packed proof blob) locally so it can immediately call `is_verified`.
-- By default it uses the fib_chain artifacts under `tests/fib_chain/target`, but custom paths can be supplied with `--vk-json`, `--public-inputs`, and `--proof`.
-- Paths are resolved relative to the repo root, so you can run the helper from any working directory.
-- Contract arguments are hex-encoded before being forwarded to `stellar contract invoke`, matching the CLI’s expectation for `Bytes`/`BytesN` inputs.
-- Use `--send no` to run the invocation in simulation-only mode (no transaction submission).
-- Add `--dry-run` to skip calling the network and just show the CLI commands that would be executed.
-- Use `--proof-blob-file <path>` to save the packed proof blob instead of a temporary file.
+- See `scripts/measure_ultrahonk_costs/README.md` for instructions on using the
+`measure_ultrahonk_costs.ts` script to measure the costs of various Ultrahonk
+contract operations.
