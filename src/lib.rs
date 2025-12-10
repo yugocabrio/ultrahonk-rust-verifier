@@ -102,23 +102,20 @@ fn lhs_g2_affine() -> ArkG2Affine {
 
 fn ark_g1_affine_to_bytes(pt: &ArkG1Affine) -> [u8; 64] {
     let mut out = [0u8; 64];
-    pt.serialize_uncompressed(&mut out[..])
-        .expect("G1 serialize");
+    pt.serialize_uncompressed(&mut out[..]).unwrap();
     out
 }
 
 fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
     let mut out = [0u8; 128];
-    pt.serialize_uncompressed(&mut out[..])
-        .expect("G2 serialize");
+    pt.serialize_uncompressed(&mut out[..]).unwrap();
     out
 }
 
 fn host_g1_to_ark(pt: &HostG1Affine) -> Result<ArkG1Affine, StdString> {
     let mut bytes = [0u8; 64];
     pt.to_bytes().copy_into_slice(&mut bytes);
-    ArkG1Affine::deserialize_uncompressed(&bytes[..])
-        .map_err(|_| "host returned invalid G1 point".into())
+    ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| StdString::from("g1"))
 }
 
 fn ark_g1_to_host(env: &Env, pt: &ArkG1Affine) -> HostG1Affine {
@@ -674,7 +671,7 @@ impl SorobanBn254 {
 impl Bn254Ops for SorobanBn254 {
     fn g1_msm(&self, coms: &[G1Point], scalars: &[ArkFr]) -> Result<ArkG1Affine, StdString> {
         if coms.len() != scalars.len() {
-            return Err("commitments / scalars length mismatch".into());
+            return Err("msm len".into());
         }
         let env = self.env();
         let bn = env.crypto().bn254();
