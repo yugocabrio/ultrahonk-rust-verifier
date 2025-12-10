@@ -1,4 +1,6 @@
-#[cfg(not(feature = "soroban-precompile"))]
+// In std builds we always keep a pure-Rust Keccak backend for tests and tools.
+// For no_std + soroban-precompile (Soroban WASM) we rely solely on the host backend.
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
 use sha3::{Digest, Keccak256};
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
@@ -14,10 +16,10 @@ pub trait HashOps: Send + Sync {
     fn hash(&self, data: &[u8]) -> [u8; 32];
 }
 
-#[cfg(not(feature = "soroban-precompile"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
 pub struct KeccakBackend;
 
-#[cfg(not(feature = "soroban-precompile"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
 impl HashOps for KeccakBackend {
     #[inline(always)]
     fn hash(&self, data: &[u8]) -> [u8; 32] {
@@ -30,23 +32,23 @@ impl HashOps for KeccakBackend {
     }
 }
 
-#[cfg(not(feature = "soroban-precompile"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
 static KECCAK_BACKEND: KeccakBackend = KeccakBackend;
 
-#[cfg(feature = "soroban-precompile")]
+#[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 static BACKEND: OnceBox<Box<dyn HashOps>> = OnceBox::new();
 
 #[inline(always)]
 fn backend() -> &'static dyn HashOps {
-    #[cfg(feature = "soroban-precompile")]
+    #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
     {
         if let Some(b) = BACKEND.get() {
             return &**b;
         }
-        panic!("soroban-precompile hash backend not set");
+        unsafe { core::hint::unreachable_unchecked() }
     }
 
-    #[cfg(not(feature = "soroban-precompile"))]
+    #[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
     {
         &KECCAK_BACKEND
     }
@@ -58,13 +60,13 @@ pub fn hash32(data: &[u8]) -> [u8; 32] {
     backend().hash(data)
 }
 
-#[cfg(feature = "soroban-precompile")]
+#[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 /// Register a custom hash backend (Soroban precompile bridge).
 pub fn set_backend(ops: Box<dyn HashOps>) {
     let _ = BACKEND.set(Box::new(ops));
 }
 
-#[cfg(feature = "soroban-precompile")]
+#[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 #[inline(always)]
 pub fn set_soroban_hash_backend(ops: Box<dyn HashOps>) {
     set_backend(ops)
