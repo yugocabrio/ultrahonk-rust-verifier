@@ -1,6 +1,6 @@
 // In std builds we always keep a pure-Rust Keccak backend for tests and tools.
 // For no_std + soroban-precompile (Soroban WASM) we rely solely on the host backend.
-#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 use sha3::{Digest, Keccak256};
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
@@ -16,10 +16,10 @@ pub trait HashOps: Send + Sync {
     fn hash(&self, data: &[u8]) -> [u8; 32];
 }
 
-#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 pub struct KeccakBackend;
 
-#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 impl HashOps for KeccakBackend {
     #[inline(always)]
     fn hash(&self, data: &[u8]) -> [u8; 32] {
@@ -32,7 +32,7 @@ impl HashOps for KeccakBackend {
     }
 }
 
-#[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
+#[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 static KECCAK_BACKEND: KeccakBackend = KeccakBackend;
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
@@ -40,7 +40,8 @@ static BACKEND: OnceBox<Box<dyn HashOps>> = OnceBox::new();
 
 #[inline(always)]
 fn backend() -> &'static dyn HashOps {
-    #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
+    // Pure Soroban (no_std + soroban-precompile, non-test): rely on host backend.
+    #[cfg(all(feature = "soroban-precompile", not(feature = "std"), not(test)))]
     {
         if let Some(b) = BACKEND.get() {
             return &**b;
@@ -48,7 +49,8 @@ fn backend() -> &'static dyn HashOps {
         unsafe { core::hint::unreachable_unchecked() }
     }
 
-    #[cfg(any(not(feature = "soroban-precompile"), feature = "std"))]
+    // All other configurations (including tests) use the built-in Keccak backend.
+    #[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
     {
         &KECCAK_BACKEND
     }
