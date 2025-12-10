@@ -1,3 +1,4 @@
+#[cfg(not(feature = "soroban-precompile"))]
 use sha3::{Digest, Keccak256};
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
@@ -13,8 +14,10 @@ pub trait HashOps: Send + Sync {
     fn hash(&self, data: &[u8]) -> [u8; 32];
 }
 
+#[cfg(not(feature = "soroban-precompile"))]
 pub struct KeccakBackend;
 
+#[cfg(not(feature = "soroban-precompile"))]
 impl HashOps for KeccakBackend {
     #[inline(always)]
     fn hash(&self, data: &[u8]) -> [u8; 32] {
@@ -27,6 +30,7 @@ impl HashOps for KeccakBackend {
     }
 }
 
+#[cfg(not(feature = "soroban-precompile"))]
 static KECCAK_BACKEND: KeccakBackend = KeccakBackend;
 
 #[cfg(feature = "soroban-precompile")]
@@ -39,8 +43,13 @@ fn backend() -> &'static dyn HashOps {
         if let Some(b) = BACKEND.get() {
             return &**b;
         }
+        panic!("soroban-precompile hash backend not set");
     }
-    &KECCAK_BACKEND
+
+    #[cfg(not(feature = "soroban-precompile"))]
+    {
+        &KECCAK_BACKEND
+    }
 }
 
 /// Compute the active backend hash of the given data
