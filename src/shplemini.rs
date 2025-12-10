@@ -1,7 +1,4 @@
 //! Shplemini batch-opening verifier for BN254
-
-#[cfg(feature = "trace")]
-use crate::debug::{dbg_fr, dbg_vec, dump_pairs};
 use crate::ec::helpers::{affine_checked, negate};
 use crate::ec::{g1_msm, pairing_check};
 use crate::field::Fr;
@@ -33,14 +30,6 @@ pub fn verify_shplemini(
     for i in 1..log_n {
         r_pows.push(r_pows[i - 1] * r_pows[i - 1]);
     }
-    #[cfg(feature = "trace")]
-    {
-        trace!("===== Step-1 parameters =====");
-        dbg_fr("gemini_r", &tx.gemini_r);
-        dbg_vec("r_pow", &r_pows);
-        trace!("==============================");
-    }
-
     // 2) allocate arrays
     // Match Solidity sizing: NUMBER_OF_ENTITIES + CONST_PROOF_SIZE_LOG_N + 2
     // Layout:
@@ -73,14 +62,6 @@ pub fn verify_shplemini(
         .inverse()
         .ok_or_else(|| String::from("gemini_r challenge is zero"))?;
     let shifted = gemini_r_inv * (pos0 - tx.shplonk_nu * neg0);
-    #[cfg(feature = "trace")]
-    {
-        dbg_fr("pos0", &pos0);
-        dbg_fr("neg0", &neg0);
-        dbg_fr("unshifted", &unshifted);
-        dbg_fr("shifted", &shifted);
-    }
-
     // 4) shplonk_Q
     scalars[0] = Fr::one();
     coms[0] = proof.shplonk_q.clone();
@@ -103,11 +84,6 @@ pub fn verify_shplemini(
         eval_acc = eval_acc + (*eval * rho_pow);
         rho_pow = rho_pow * tx.rho;
     }
-    #[cfg(feature = "trace")]
-    {
-        dbg_fr("eval_acc_end", &eval_acc);
-    }
-
     // 6) load VK & proof
     {
         let mut j = 1;
@@ -192,30 +168,13 @@ pub fn verify_shplemini(
         cur = num * den_inv;
         fold_pos[j - 1] = cur;
     }
-    #[cfg(feature = "trace")]
-    {
-        dbg_fr("fold_pos_end", &fold_pos[0]);
-    }
-
     // 8) accumulate constant term
     let mut const_acc = fold_pos[0] * pos0 + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
     let mut v_pow = tx.shplonk_nu * tx.shplonk_nu;
-    #[cfg(feature = "trace")]
-    {
-        dbg_fr("const_acc_final", &const_acc);
-    }
-
     // 9) further folding + commit
     // Base index where fold commitments start
     let base = 1 + NUMBER_OF_ENTITIES;
-    trace!("base = {}", base);
     for j in 1..log_n {
-        #[cfg(feature = "trace")]
-        {
-            trace!("── fold round {} ──────────────", j);
-            dbg_fr("v_pow (before)", &v_pow);
-        }
-
         let pos_inv = (tx.shplonk_z - r_pows[j])
             .inverse()
             .ok_or_else(|| format!("shplonk denominator (z - r^{}) is zero", j))?;
@@ -225,26 +184,10 @@ pub fn verify_shplemini(
         let sp = v_pow * pos_inv;
         let sn = v_pow * tx.shplonk_nu * neg_inv;
 
-        #[cfg(feature = "trace")]
-        {
-            dbg_fr("pos_inv", &pos_inv);
-            dbg_fr("neg_inv", &neg_inv);
-            dbg_fr("scPos", &sp);
-            dbg_fr("scNeg", &sn);
-            dbg_fr("fold_pos[j]", &fold_pos[j]);
-            dbg_fr("A_eval", &proof.gemini_a_evaluations[j]);
-        }
-
         scalars[base + j - 1] = -(sp + sn);
         const_acc = const_acc + proof.gemini_a_evaluations[j] * sn + fold_pos[j] * sp;
 
         v_pow = v_pow * tx.shplonk_nu * tx.shplonk_nu;
-
-        #[cfg(feature = "trace")]
-        {
-            dbg_fr("const_acc", &const_acc);
-            dbg_fr("v_pow (after)", &v_pow);
-        }
 
         coms[base + j - 1] = proof.gemini_fold_comms[j - 1].clone();
     }
@@ -268,53 +211,9 @@ pub fn verify_shplemini(
     coms[q_idx] = proof.kzg_quotient.clone();
     scalars[q_idx] = tx.shplonk_z;
 
-    // 12) pre-MSM debug
-    #[cfg(feature = "trace")]
-    {
-        trace!("===== Shplonk pre-MSM =====");
-        trace!("scalars.len() = {}", scalars.len());
-        trace!("coms.len()    = {}", coms.len());
-        let base_shift = 1 + NUMBER_UNSHIFTED;
-        for k in 0..NUMBER_SHIFTED {
-            dbg_fr(&format!("scalar_shifted[{}]", k), &scalars[base_shift + k]);
-        }
-        trace!("============================");
-    }
-
-    // 13) dump all pairs (range + full) for cross-checking with Solidity (trace-only)
-    #[cfg(feature = "trace")]
-    {
-        use crate::debug::dump_pairs_range;
-        // sanity-check points are on-curve to locate any invalid index early
-        for (i, c) in coms.iter().enumerate() {
-            let aff = G1Affine::new_unchecked(c.x, c.y);
-            if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
-                trace!(
-                    "Precheck: invalid G1 at coms[{}] x=0x{} y=0x{}",
-                    i,
-                    hex::encode(c.x.into_bigint().to_bytes_be()),
-                    hex::encode(c.y.into_bigint().to_bytes_be())
-                );
-            }
-        }
-        dump_pairs_range(&coms, &scalars, 0, 15);
-        dump_pairs(&coms, &scalars, usize::MAX);
-    }
-
-    // 14) MSM + pairing
+    // 12) MSM + pairing
     let p0 = g1_msm(&coms, &scalars)?;
     let p1 = affine_checked(&negate(&proof.kzg_quotient))?;
-    #[cfg(feature = "trace")]
-    {
-        trace!("===== PAIRING-DEBUG =====");
-        dbg_fr("scalar[z]", &scalars[q_idx]);
-        trace!("P0.x = 0x{}", hex::encode(p0.x.into_bigint().to_bytes_be()));
-        trace!("P0.y = 0x{}", hex::encode(p0.y.into_bigint().to_bytes_be()));
-        trace!("P1.x = 0x{}", hex::encode(p1.x.into_bigint().to_bytes_be()));
-        trace!("P1.y = 0x{}", hex::encode(p1.y.into_bigint().to_bytes_be()));
-        trace!("=========================");
-    }
-
     if pairing_check(&p0, &p1) {
         Ok(())
     } else {
