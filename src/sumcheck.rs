@@ -1,5 +1,9 @@
 //! Sum-check verifier
-use crate::{field::Fr, relations::accumulate_relation_evaluations, types::{Transcript, VerificationKey}};
+use crate::{
+    field::Fr,
+    relations::accumulate_relation_evaluations,
+    types::{Transcript, VerificationKey},
+};
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed, format, string::String};
