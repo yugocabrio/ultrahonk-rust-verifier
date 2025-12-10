@@ -2,10 +2,9 @@
   "name": "ultrahonk-scripts",
   "version": "1.0.0",
   "description": "Scripts for UltraHonk Soroban Contract",
-  "main": "measure_ultrahonk_costs.ts",
   "scripts": {
-    "measure": "ts-node measure_ultrahonk_costs.ts",
-    "invoke": "ts-node invoke_ultrahonk.ts"
+    "invoke": "ts-node invoke_ultrahonk.ts",
+    "measure": "ts-node measure_ultrahonk_costs/measure_ultrahonk_costs.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^12.3.0",
