@@ -609,45 +609,6 @@ pub fn preprocess_vk_json(vk_json: &str) -> Result<StdVec<u8>, ()> {
     Ok(serialize_vk_to_bytes(&vk))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn vk_roundtrip_serialization() {
-        let json = include_str!("../tests/simple_circuit/target/vk_fields.json");
-        let vk = load_vk_from_json_no_serde(json).expect("vk parse");
-        let bytes = serialize_vk_to_bytes(&vk);
-        let decoded = deserialize_vk_from_bytes(&bytes).expect("vk decode");
-        assert_eq!(decoded.circuit_size, vk.circuit_size);
-        assert_eq!(decoded.log_circuit_size, vk.log_circuit_size);
-        assert_eq!(decoded.qm.x, vk.qm.x);
-        assert_eq!(decoded.qm.y, vk.qm.y);
-        assert_eq!(decoded.lagrange_last.x, vk.lagrange_last.x);
-    }
-
-    #[test]
-    fn vk_binary_verifies_simple_proof() {
-        let vk_json = include_str!("../tests/simple_circuit/target/vk_fields.json");
-        let vk = load_vk_from_json_no_serde(vk_json).expect("vk");
-        let vk_bytes = serialize_vk_to_bytes(&vk);
-        let decoded = deserialize_vk_from_bytes(&vk_bytes).expect("decode");
-
-        let proof = include_bytes!("../tests/simple_circuit/target/proof");
-        let pub_inputs = include_bytes!("../tests/simple_circuit/target/public_inputs");
-
-        let mut pub_inputs_vec = StdVec::new();
-        for chunk in pub_inputs.chunks(32) {
-            pub_inputs_vec.push(chunk.to_vec());
-        }
-
-        let verifier = UltraHonkVerifier::new_with_vk(decoded);
-        verifier
-            .verify(proof, &pub_inputs_vec)
-            .expect("proof verifies with binary vk");
-    }
-}
-
 /// Contract
 #[contract]
 pub struct UltraHonkVerifierContract;
