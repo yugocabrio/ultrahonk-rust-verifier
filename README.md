@@ -222,11 +222,7 @@ stellar contract invoke --id <CONTRACT_ID> --source alice -- --func hello --to "
 
 ---
 
-## Invoke / cost measurement script
+## Invoke script
 
 - See `scripts/invoke_ultrahonk/README.md` for instructions on using the
 `invoke_ultrahonk.ts` script to prepare and invoke the Ultrahonk contract.
-
-- See `scripts/measure_ultrahonk_costs/README.md` for instructions on using the
-`measure_ultrahonk_costs.ts` script to measure the costs of various Ultrahonk
-contract operations.
