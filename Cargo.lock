@@ -1842,7 +1842,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "ultrahonk_rust_verifier"
 version = "0.1.0"
-source = "git+https://github.com/yugocabrio/ultrahonk-rust-verifier.git?branch=main#875ed3ed02a5cfc83d8e87e95d0d360a741c2b8b"
+source = "git+https://github.com/yugocabrio/ultrahonk-rust-verifier.git?branch=main#1bbba84fc6dedeee9204938d2ee370f980b68c59"
 dependencies = [
  "ark-bn254 0.5.0",
  "ark-ec 0.5.0",

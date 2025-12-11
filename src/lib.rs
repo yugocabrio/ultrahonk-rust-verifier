@@ -2,8 +2,6 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, string::String as StdString, vec::Vec as StdVec};
-use core::str;
-
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short,
     crypto::bn254::{Fr as HostFr, G1Affine as HostG1Affine, G2Affine as HostG2Affine},
@@ -12,7 +10,7 @@ use soroban_sdk::{
 
 use ark_bn254::{Fq, Fq2, G1Affine as ArkG1Affine, G2Affine as ArkG2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_ff::PrimeField;
+use ark_ff::{PrimeField, Zero};
 
 use ultrahonk_rust_verifier::{
     ec::{self, Bn254Ops},
@@ -21,6 +19,10 @@ use ultrahonk_rust_verifier::{
     types::{G1Point, VerificationKey},
     UltraHonkVerifier,
 };
+
+const VK_HEADER_WORDS: usize = 4;
+const VK_NUM_G1_POINTS: usize = 28;
+const VK_SERIALIZED_LEN: usize = VK_HEADER_WORDS * 8 + VK_NUM_G1_POINTS * 64;
 
 /// 32-byte big-endian → Fq
 #[inline(always)]
@@ -100,23 +102,20 @@ fn lhs_g2_affine() -> ArkG2Affine {
 
 fn ark_g1_affine_to_bytes(pt: &ArkG1Affine) -> [u8; 64] {
     let mut out = [0u8; 64];
-    pt.serialize_uncompressed(&mut out[..])
-        .expect("G1 serialize");
+    pt.serialize_uncompressed(&mut out[..]).unwrap();
     out
 }
 
 fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
     let mut out = [0u8; 128];
-    pt.serialize_uncompressed(&mut out[..])
-        .expect("G2 serialize");
+    pt.serialize_uncompressed(&mut out[..]).unwrap();
     out
 }
 
 fn host_g1_to_ark(pt: &HostG1Affine) -> Result<ArkG1Affine, StdString> {
     let mut bytes = [0u8; 64];
     pt.to_bytes().copy_into_slice(&mut bytes);
-    ArkG1Affine::deserialize_uncompressed(&bytes[..])
-        .map_err(|_| "host returned invalid G1 point".into())
+    ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| StdString::from("g1"))
 }
 
 fn ark_g1_to_host(env: &Env, pt: &ArkG1Affine) -> HostG1Affine {
@@ -132,6 +131,28 @@ fn ark_g2_to_host(env: &Env, pt: &ArkG2Affine) -> HostG2Affine {
 fn g1_point_to_host(env: &Env, pt: &G1Point) -> HostG1Affine {
     let aff = pt.to_affine();
     ark_g1_to_host(env, &aff)
+}
+
+fn g1_point_to_bytes(pt: &G1Point) -> [u8; 64] {
+    if pt.x.is_zero() && pt.y.is_zero() {
+        return [0u8; 64];
+    }
+    let aff = pt.to_affine();
+    ark_g1_affine_to_bytes(&aff)
+}
+
+fn g1_point_from_bytes(bytes: &[u8; 64]) -> Result<G1Point, ()> {
+    if bytes.iter().all(|b| *b == 0) {
+        return Ok(G1Point {
+            x: Fq::from(0u64),
+            y: Fq::from(0u64),
+        });
+    }
+    let aff = ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| ())?;
+    Ok(G1Point {
+        x: aff.x,
+        y: aff.y,
+    })
 }
 
 fn ark_fr_to_host(env: &Env, scalar: &ArkFr) -> HostFr {
@@ -326,7 +347,7 @@ fn find_first_g1_start(
 
 /// Manual loader for `vk_fields.json` (bb v0.87.0 layout) without serde.
 /// Replicates the ordering used in the library's parser and enforces robust sync.
-fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
+pub fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     let vk_fields = parse_json_array_of_strings(json_data)?;
     if vk_fields.len() < 3 + 4 {
         return Err(());
@@ -464,6 +485,127 @@ fn load_vk_from_json_no_serde(json_data: &str) -> Result<VerificationKey, ()> {
     })
 }
 
+pub fn serialize_vk_to_bytes(vk: &VerificationKey) -> StdVec<u8> {
+    let mut out = StdVec::with_capacity(VK_SERIALIZED_LEN);
+    let header = [
+        vk.circuit_size,
+        vk.log_circuit_size,
+        vk.public_inputs_size,
+        vk.pub_inputs_offset,
+    ];
+    for &word in &header {
+        out.extend_from_slice(&word.to_be_bytes());
+    }
+
+    macro_rules! push_point {
+        ($pt:expr) => {{
+            let bytes = g1_point_to_bytes(&$pt);
+            out.extend_from_slice(&bytes);
+        }};
+    }
+
+    push_point!(vk.qm);
+    push_point!(vk.qc);
+    push_point!(vk.ql);
+    push_point!(vk.qr);
+    push_point!(vk.qo);
+    push_point!(vk.q4);
+    push_point!(vk.q_lookup);
+    push_point!(vk.q_arith);
+    push_point!(vk.q_delta_range);
+    push_point!(vk.q_elliptic);
+    push_point!(vk.q_memory);
+    push_point!(vk.q_nnf);
+    push_point!(vk.q_poseidon2_external);
+    push_point!(vk.q_poseidon2_internal);
+    push_point!(vk.s1);
+    push_point!(vk.s2);
+    push_point!(vk.s3);
+    push_point!(vk.s4);
+    push_point!(vk.id1);
+    push_point!(vk.id2);
+    push_point!(vk.id3);
+    push_point!(vk.id4);
+    push_point!(vk.t1);
+    push_point!(vk.t2);
+    push_point!(vk.t3);
+    push_point!(vk.t4);
+    push_point!(vk.lagrange_first);
+    push_point!(vk.lagrange_last);
+
+    out
+}
+
+fn deserialize_vk_from_bytes(bytes: &[u8]) -> Result<VerificationKey, ()> {
+    if bytes.len() != VK_SERIALIZED_LEN {
+        return Err(());
+    }
+    let mut idx = 0usize;
+    fn read_u64(bytes: &[u8], idx: &mut usize) -> u64 {
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&bytes[*idx..*idx + 8]);
+        *idx += 8;
+        u64::from_be_bytes(arr)
+    }
+    fn read_point(bytes: &[u8], idx: &mut usize) -> Result<G1Point, ()> {
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(&bytes[*idx..*idx + 64]);
+        *idx += 64;
+        g1_point_from_bytes(&arr)
+    }
+
+    let circuit_size = read_u64(bytes, &mut idx);
+    let log_circuit_size = read_u64(bytes, &mut idx);
+    let public_inputs_size = read_u64(bytes, &mut idx);
+    let pub_inputs_offset = read_u64(bytes, &mut idx);
+
+    macro_rules! next_point {
+        () => {
+            read_point(bytes, &mut idx)?
+        };
+    }
+
+    Ok(VerificationKey {
+        circuit_size,
+        log_circuit_size,
+        public_inputs_size,
+        pub_inputs_offset,
+        qm: next_point!(),
+        qc: next_point!(),
+        ql: next_point!(),
+        qr: next_point!(),
+        qo: next_point!(),
+        q4: next_point!(),
+        q_lookup: next_point!(),
+        q_arith: next_point!(),
+        q_delta_range: next_point!(),
+        q_elliptic: next_point!(),
+        q_memory: next_point!(),
+        q_nnf: next_point!(),
+        q_poseidon2_external: next_point!(),
+        q_poseidon2_internal: next_point!(),
+        s1: next_point!(),
+        s2: next_point!(),
+        s3: next_point!(),
+        s4: next_point!(),
+        id1: next_point!(),
+        id2: next_point!(),
+        id3: next_point!(),
+        id4: next_point!(),
+        t1: next_point!(),
+        t2: next_point!(),
+        t3: next_point!(),
+        t4: next_point!(),
+        lagrange_first: next_point!(),
+        lagrange_last: next_point!(),
+    })
+}
+
+pub fn preprocess_vk_json(vk_json: &str) -> Result<StdVec<u8>, ()> {
+    let vk = load_vk_from_json_no_serde(vk_json)?;
+    Ok(serialize_vk_to_bytes(&vk))
+}
+
 /// Contract
 #[contract]
 pub struct UltraHonkVerifierContract;
@@ -529,7 +671,7 @@ impl SorobanBn254 {
 impl Bn254Ops for SorobanBn254 {
     fn g1_msm(&self, coms: &[G1Point], scalars: &[ArkFr]) -> Result<ArkG1Affine, StdString> {
         if coms.len() != scalars.len() {
-            return Err("commitments / scalars length mismatch".into());
+            return Err("msm len".into());
         }
         let env = self.env();
         let bn = env.crypto().bn254();
@@ -601,19 +743,16 @@ impl UltraHonkVerifierContract {
         (StdVec::new(), rest.to_vec())
     }
     /// Verify an UltraHonk proof; on success store proof_id (= soroban sha256(proof_blob))
-    pub fn verify_proof(env: Env, vk_json: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
 
         let proof_hash: BytesN<32> = env.crypto().keccak256(&proof_blob).into();
         let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
 
-        // vk_json → &str  (avoid temporary drop by binding first)
-        let vk_vec: StdVec<u8> = vk_json.to_alloc_vec();
-        let vk_str = str::from_utf8(&vk_vec).map_err(|_| Error::VkParseError)?;
-
-        // Build VK (manual JSON parser; no serde_json needed)
-        let vk = load_vk_from_json_no_serde(vk_str).map_err(|_| Error::VkParseError)?;
+        // Deserialize preprocessed verification key bytes
+        let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
+        let vk = deserialize_vk_from_bytes(&vk_vec).map_err(|_| Error::VkParseError)?;
 
         // Verifier (moves vk)
         let verifier = UltraHonkVerifier::new_with_vk(vk);
@@ -632,22 +771,22 @@ impl UltraHonkVerifierContract {
         Ok(proof_hash)
     }
 
-    /// Set verification key JSON and cache its hash. Returns vk_hash
-    pub fn set_vk(env: Env, vk_json: Bytes) -> Result<BytesN<32>, Error> {
-        env.storage().instance().set(&Self::key_vk(), &vk_json);
-        let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_json).into();
+    /// Set preprocessed verification key bytes and cache its hash. Returns vk_hash
+    pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<BytesN<32>, Error> {
+        env.storage().instance().set(&Self::key_vk(), &vk_bytes);
+        let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();
         env.storage().instance().set(&Self::key_vk_hash(), &hash_bn);
         Ok(hash_bn)
     }
 
     /// Verify using the on-chain stored VK
     pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
-        let vk_json: Bytes = env
+        let vk_bytes: Bytes = env
             .storage()
             .instance()
             .get(&Self::key_vk())
             .ok_or(Error::VkNotSet)?;
-        Self::verify_proof(env, vk_json, proof_blob)
+        Self::verify_proof(env, vk_bytes, proof_blob)
     }
 
     /// Query if a proof_id was previously verified
