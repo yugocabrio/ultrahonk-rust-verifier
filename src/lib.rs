@@ -10,7 +10,6 @@ use soroban_sdk::{
 
 use ark_bn254::{Fq, Fq2, G1Affine as ArkG1Affine, G2Affine as ArkG2Affine};
 use ark_ff::{PrimeField, Zero};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use ultrahonk_rust_verifier::{
     ec::{self, Bn254Ops},
@@ -102,20 +101,24 @@ fn lhs_g2_affine() -> ArkG2Affine {
 
 fn ark_g1_affine_to_bytes(pt: &ArkG1Affine) -> [u8; 64] {
     let mut out = [0u8; 64];
-    pt.serialize_uncompressed(&mut out[..]).unwrap();
+    out[..32].copy_from_slice(&fq_to_be_bytes(&pt.x));
+    out[32..].copy_from_slice(&fq_to_be_bytes(&pt.y));
     out
 }
 
 fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
     let mut out = [0u8; 128];
-    pt.serialize_uncompressed(&mut out[..]).unwrap();
+    out[..32].copy_from_slice(&fq_to_be_bytes(&pt.x.c1));
+    out[32..64].copy_from_slice(&fq_to_be_bytes(&pt.x.c0));
+    out[64..96].copy_from_slice(&fq_to_be_bytes(&pt.y.c1));
+    out[96..].copy_from_slice(&fq_to_be_bytes(&pt.y.c0));
     out
 }
 
 fn host_g1_to_ark(pt: &HostG1Affine) -> Result<ArkG1Affine, StdString> {
     let mut bytes = [0u8; 64];
     pt.to_bytes().copy_into_slice(&mut bytes);
-    ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| StdString::from("g1"))
+    g1_bytes_to_affine(&bytes).map_err(|_| StdString::from("g1"))
 }
 
 fn ark_g1_to_host(env: &Env, pt: &ArkG1Affine) -> HostG1Affine {
@@ -141,6 +144,19 @@ fn g1_point_to_bytes(pt: &G1Point) -> [u8; 64] {
     ark_g1_affine_to_bytes(&aff)
 }
 
+fn g1_bytes_to_affine(bytes: &[u8; 64]) -> Result<ArkG1Affine, ()> {
+    let mut x_bytes = [0u8; 32];
+    let mut y_bytes = [0u8; 32];
+    x_bytes.copy_from_slice(&bytes[..32]);
+    y_bytes.copy_from_slice(&bytes[32..]);
+    let aff = ArkG1Affine::new_unchecked(fq_from_be_bytes(&x_bytes), fq_from_be_bytes(&y_bytes));
+    if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
+        Ok(aff)
+    } else {
+        Err(())
+    }
+}
+
 fn g1_point_from_bytes(bytes: &[u8; 64]) -> Result<G1Point, ()> {
     if bytes.iter().all(|b| *b == 0) {
         return Ok(G1Point {
@@ -148,7 +164,7 @@ fn g1_point_from_bytes(bytes: &[u8; 64]) -> Result<G1Point, ()> {
             y: Fq::from(0u64),
         });
     }
-    let aff = ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| ())?;
+    let aff = g1_bytes_to_affine(bytes)?;
     Ok(G1Point { x: aff.x, y: aff.y })
 }
 
