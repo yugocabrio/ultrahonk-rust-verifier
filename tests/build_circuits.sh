@@ -4,6 +4,8 @@ set -euo pipefail
 NOIR_VERSION="1.0.0-beta.9"
 BB_VERSION="v0.87.0"
 
+export PATH="$HOME/.nargo/bin:$HOME/.bb/bin:$PATH"
+
 install_nargo() {
   if ! command -v nargo >/dev/null 2>&1; then
     echo "• installing nargo $NOIR_VERSION"
@@ -12,7 +14,7 @@ install_nargo() {
     export PATH="$HOME/.nargo/bin:$PATH"
     [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
 
-    NOIR_VERSION="$NOIR_VERSION" noirup
+    noirup -v "$NOIR_VERSION"
   fi
 }
 
