@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: main
+  pull_request:
+    branches: main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build root circuits
+        run: tests/build_circuits.sh
+
+      - name: Build tornado circuits
+        run: tornado_classic/circuit/scripts/gen_artifacts.sh
+
+      - name: Run integration tests
+        run: RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
+
+      - name: Run tornado classic tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
