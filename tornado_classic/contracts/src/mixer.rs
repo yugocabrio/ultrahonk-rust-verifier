@@ -65,18 +65,17 @@ fn split_inputs_and_proof_bytes(packed: &[u8]) -> (Vec<Vec<u8>>, Vec<u8>) {
         return (Vec::new(), packed.to_vec());
     }
     let rest = &packed[4..];
-    for &pf in &[456usize, 440usize] {
-        let need = pf * 32;
-        if rest.len() >= need {
-            let pis_len = rest.len() - need;
-            if pis_len % 32 == 0 {
-                let mut pub_inputs_bytes: Vec<Vec<u8>> = Vec::with_capacity(pis_len / 32);
-                for chunk in rest[..pis_len].chunks(32) {
-                    pub_inputs_bytes.push(chunk.to_vec());
-                }
-                let proof_bytes = rest[pis_len..].to_vec();
-                return (pub_inputs_bytes, proof_bytes);
+    const PROOF_FIELDS: usize = 456;
+    let need = PROOF_FIELDS * 32;
+    if rest.len() >= need {
+        let pis_len = rest.len() - need;
+        if pis_len % 32 == 0 {
+            let mut pub_inputs_bytes: Vec<Vec<u8>> = Vec::with_capacity(pis_len / 32);
+            for chunk in rest[..pis_len].chunks(32) {
+                pub_inputs_bytes.push(chunk.to_vec());
             }
+            let proof_bytes = rest[pis_len..].to_vec();
+            return (pub_inputs_bytes, proof_bytes);
         }
     }
     (Vec::new(), rest.to_vec())

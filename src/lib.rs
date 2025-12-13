@@ -727,26 +727,24 @@ impl UltraHonkVerifierContract {
 
     /// Split a packed [4-byte count][public_inputs][proof] buffer into
     /// (public_inputs as 32-byte big-endian slices, proof bytes).
-    /// Accepts proof sections of either 440 or 456 field elements (BN254), to be
-    /// compatible with differing bb versions.
+    /// Accepts proof sections of 456 field elements (BN254).
     fn split_inputs_and_proof_bytes(packed: &[u8]) -> (StdVec<StdVec<u8>>, StdVec<u8>) {
         if packed.len() < 4 {
             return (StdVec::new(), packed.to_vec());
         }
         let rest = &packed[4..];
-        for &pf in &[456usize, 440usize] {
-            let need = pf * 32;
-            if rest.len() >= need {
-                let pis_len = rest.len() - need;
-                if pis_len % 32 == 0 {
-                    let mut pub_inputs_bytes: StdVec<StdVec<u8>> =
-                        StdVec::with_capacity(pis_len / 32);
-                    for chunk in rest[..pis_len].chunks(32) {
-                        pub_inputs_bytes.push(chunk.to_vec());
-                    }
-                    let proof_bytes = rest[pis_len..].to_vec();
-                    return (pub_inputs_bytes, proof_bytes);
+        const PROOF_FIELDS: usize = 456;
+        let need = PROOF_FIELDS * 32;
+        if rest.len() >= need {
+            let pis_len = rest.len() - need;
+            if pis_len % 32 == 0 {
+                let mut pub_inputs_bytes: StdVec<StdVec<u8>> =
+                    StdVec::with_capacity(pis_len / 32);
+                for chunk in rest[..pis_len].chunks(32) {
+                    pub_inputs_bytes.push(chunk.to_vec());
                 }
+                let proof_bytes = rest[pis_len..].to_vec();
+                return (pub_inputs_bytes, proof_bytes);
             }
         }
         (StdVec::new(), rest.to_vec())
@@ -764,7 +762,7 @@ impl UltraHonkVerifierContract {
         // Verifier (moves vk)
         let verifier = UltraHonkVerifier::new_with_vk(vk);
 
-        // Proof & public inputs (tolerate 440 or 456 field proofs)
+        // Proof & public inputs
         let (pub_inputs_bytes, proof_bytes) = Self::split_inputs_and_proof_bytes(&proof_vec);
 
         // Verify

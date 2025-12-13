@@ -23,7 +23,7 @@ fn verify_simple_circuit_proof_succeeds() {
     // Prepare inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
     // Pack into bytes_and_fields: [u32_be total_fields][public_inputs][proof]
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
@@ -54,7 +54,7 @@ fn verify_fib_chain_proof_succeeds() {
 
     // Prepare inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
@@ -91,7 +91,7 @@ fn print_budget_for_deploy_and_verify() {
 
     // Prepare proof inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
