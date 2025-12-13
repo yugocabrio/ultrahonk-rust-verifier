@@ -742,12 +742,10 @@ impl UltraHonkVerifierContract {
         }
         (StdVec::new(), rest.to_vec())
     }
-    /// Verify an UltraHonk proof; on success store proof_id (= soroban sha256(proof_blob))
-    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+    /// Verify an UltraHonk proof.
+    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<(), Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
-
-        let proof_hash: BytesN<32> = env.crypto().keccak256(&proof_blob).into();
         let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
 
         // Deserialize preprocessed verification key bytes
@@ -764,11 +762,7 @@ impl UltraHonkVerifierContract {
         verifier
             .verify(&proof_bytes, &pub_inputs_bytes)
             .map_err(|_| Error::VerificationFailed)?;
-
-        // Persist success
-        env.storage().instance().set(&proof_hash, &true);
-
-        Ok(proof_hash)
+        Ok(())
     }
 
     /// Set preprocessed verification key bytes and cache its hash. Returns vk_hash
@@ -780,17 +774,12 @@ impl UltraHonkVerifierContract {
     }
 
     /// Verify using the on-chain stored VK
-    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<(), Error> {
         let vk_bytes: Bytes = env
             .storage()
             .instance()
             .get(&Self::key_vk())
             .ok_or(Error::VkNotSet)?;
         Self::verify_proof(env, vk_bytes, proof_blob)
-    }
-
-    /// Query if a proof_id was previously verified
-    pub fn is_verified(env: Env, proof_id: BytesN<32>) -> bool {
-        env.storage().instance().get(&proof_id).unwrap_or(false)
     }
 }

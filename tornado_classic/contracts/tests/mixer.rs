@@ -114,7 +114,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
 
-    let _pid = env.as_contract(&mixer_id, || MixerContract::withdraw(
+    env.as_contract(&mixer_id, || MixerContract::withdraw(
         env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone()
     )).expect("withdraw ok");
 

@@ -27,16 +27,11 @@ fn verify_proof_direct_with_vk_json() {
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
-    let proof_id: BytesN<32> = env
+    env
         .as_contract(&verifier_id, || {
             UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes.clone(), proof_bytes.clone())
         })
         .expect("verification should succeed");
-
-    let verified = env.as_contract(&verifier_id, || {
-        UltraHonkVerifierContract::is_verified(env.clone(), proof_id.clone())
-    });
-    assert!(verified);
 }
 
 // Verifier: store VK on-chain and use stored VK path
@@ -66,12 +61,7 @@ fn verify_proof_with_stored_vk_path() {
         .expect("set_vk ok");
 
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
-    let proof_id: BytesN<32> = env
+    env
         .as_contract(&verifier_id, || UltraHonkVerifierContract::verify_proof_with_stored_vk(env.clone(), proof_bytes.clone()))
         .expect("verification ok");
-
-    let verified = env.as_contract(&verifier_id, || {
-        UltraHonkVerifierContract::is_verified(env.clone(), proof_id.clone())
-    });
-    assert!(verified);
 }

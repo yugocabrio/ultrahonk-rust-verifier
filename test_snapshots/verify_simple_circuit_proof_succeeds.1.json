@@ -6,7 +6,6 @@
   },
   "auth": [
     [],
-    [],
     []
   ],
   "ledger": {
@@ -41,16 +40,7 @@
                     "executable": {
                       "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
                     },
-                    "storage": [
-                      {
-                        "key": {
-                          "bytes": "1cad3550e5cd845da5e676a357dff53ec679f4cbe18762779cf101e87ef89195"
-                        },
-                        "val": {
-                          "bool": true
-                        }
-                      }
-                    ]
+                    "storage": null
                   }
                 }
               }

@@ -8,8 +8,7 @@
  *
  * This script can:
  *   * pack the simple_circuit (or other) artifacts into the expected blob format
- *   * compute the proof_id (Keccak-256 of the packed proof blob)
- *   * drive the `stellar contract invoke` CLI for verify_proof + is_verified
+ *   * drive the `stellar contract invoke` CLI for verify_proof
  *
  * Example (local Quickstart):
  *     npx ts-node invoke_ultrahonk.ts invoke \
@@ -311,11 +310,7 @@ async function invokeWithVariants(
 
 // === Commands ================================================================
 
-function printSummary(
-  artifacts: PackedArtifacts,
-  proofBlob: Buffer,
-  proofId: Buffer
-): void {
+function printSummary(artifacts: PackedArtifacts, proofBlob: Buffer): void {
   console.log('vk_json:', artifacts.vkJsonPath);
   console.log('public inputs bytes:', artifacts.publicInputsBytes.length);
   console.log('proof bytes:', artifacts.proofBytes.length);
@@ -323,8 +318,6 @@ function printSummary(
   console.log('public input fields:', getPublicInputFields(artifacts));
   console.log('total fields:', getProofFields(artifacts) + getPublicInputFields(artifacts));
   console.log('proof blob bytes:', proofBlob.length);
-  console.log('proof_id (hex):', proofId.toString('hex'));
-  console.log('proof_id (base64):', proofId.toString('base64'));
 }
 
 async function commandPrepare(args: any): Promise<number> {
@@ -336,9 +329,7 @@ async function commandPrepare(args: any): Promise<number> {
       args.proof
     );
     const proofBlob = buildProofBlob(artifacts);
-    const proofId = keccak256(proofBlob);
-
-    printSummary(artifacts, proofBlob, proofId);
+    printSummary(artifacts, proofBlob);
 
     if (args.output) {
       const outPath = path.resolve(args.output);
@@ -369,8 +360,7 @@ async function commandInvoke(args: any): Promise<number> {
       args.proof
     );
     const proofBlob = buildProofBlob(artifacts);
-    const proofId = keccak256(proofBlob);
-    printSummary(artifacts, proofBlob, proofId);
+    printSummary(artifacts, proofBlob);
 
     if (args.proof_blob_file) {
       const outPath = path.resolve(args.proof_blob_file);
@@ -403,19 +393,6 @@ async function commandInvoke(args: any): Promise<number> {
     const result = await invokeWithVariants(baseCmd, 'verify_proof', verifyArgs, args.dry_run);
     if (result.returncode !== 0) {
       return result.returncode;
-    }
-
-    if (!args.skip_is_verified) {
-      const proofIdHex = proofId.toString('hex');
-      const checkResult = await invokeWithVariants(
-        baseCmd,
-        'is_verified',
-        ['--proof-id', proofIdHex],
-        args.dry_run
-      );
-      if (checkResult.returncode !== 0) {
-        return checkResult.returncode;
-      }
     }
 
     return 0;
@@ -518,7 +495,7 @@ function buildParser(): ArgumentParser {
   });
 
   const invoke = subparsers.add_parser('invoke', {
-    help: 'Invoke verify_proof (and optionally is_verified).',
+    help: 'Invoke verify_proof on the contract.',
   });
   addArtifactArgs(invoke);
   invoke.add_argument('--contract-id', {
@@ -547,10 +524,6 @@ function buildParser(): ArgumentParser {
     type: 'str',
     help: 'Write packed proof blob to this path and reuse it instead of a temporary file.',
     default: null,
-  });
-  invoke.add_argument('--skip-is-verified', {
-    action: 'store_true',
-    help: 'Do not perform the follow-up is_verified check.',
   });
   invoke.add_argument('--dry-run', {
     action: 'store_true',
