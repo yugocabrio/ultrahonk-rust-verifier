@@ -71,7 +71,7 @@ if [[ "${NARGO_VERSION_RAW}" != *"${REQUIRED_NARGO_VERSION}"* ]]; then
 fi
 
 BB_VERSION_RAW="$(${BB_BIN} --version 2>/dev/null | head -n1)"
-if [[ "${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" ]]; then
+if [[ "${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" && "v${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" ]]; then
   echo "[!] Expected bb ${REQUIRED_BB_VERSION}, but got '${BB_VERSION_RAW}'" >&2
   exit 1
 fi
