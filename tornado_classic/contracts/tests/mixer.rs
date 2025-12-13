@@ -1,9 +1,21 @@
 use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{testutils::Address as TestAddress, Address, Bytes, BytesN, Env};
 
+use std::sync::{Mutex, OnceLock};
+
 use tornado_classic_contracts::hash2::permute_2_bytes_be;
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
-use ultrahonk_soroban_contract::UltraHonkVerifierContract;
+use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+
+fn verify_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
+    let blob = preprocess_vk_json(json).expect("valid vk json");
+    Bytes::from_slice(env, &blob)
+}
 
 fn be32_from_u64(x: u64) -> [u8; 32] {
     let mut a = [0u8; 32];
@@ -66,7 +78,9 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
 /// Happy-path withdraw followed by a double-spend attempt confirms the nullifier is enforced.
 #[test]
 fn mixer_withdraw_and_double_spend_rejected() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
+    env.budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Artifacts
@@ -108,7 +122,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
     // Store VK and withdraw
-    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
+    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())).expect("set_vk ok");
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -142,7 +156,9 @@ fn set_root_requires_admin_configuration() {
 /// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
 #[test]
 fn withdraw_rejects_nullifier_mismatch() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
+    env.budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
@@ -178,7 +194,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     packed.extend_from_slice(proof_bin);
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
-    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
+    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
@@ -222,7 +238,9 @@ fn configure_twice_is_rejected() {
 /// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
 fn withdraw_rejects_root_mismatch() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
+    env.budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
@@ -257,7 +275,7 @@ fn withdraw_rejects_root_mismatch() {
     packed.extend_from_slice(proof_bin);
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
-    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_fields_json.as_bytes());
+    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
