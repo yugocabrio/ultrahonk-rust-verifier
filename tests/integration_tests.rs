@@ -36,18 +36,11 @@ fn verify_simple_circuit_proof_succeeds() {
     // Register to obtain a contract ID for storage namespace
     let contract_id = env.register(UltraHonkVerifierContract, ());
 
-    // Verify should succeed and return a proof_id (call contract impl directly under contract context)
-    let proof_id = env
-        .as_contract(&contract_id, || {
-            UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
-        })
-        .expect("verification should succeed");
-
-    // Contract should record verification status under proof_id
-    let verified = env.as_contract(&contract_id, || {
-        UltraHonkVerifierContract::is_verified(env.clone(), proof_id)
-    });
-    assert!(verified, "expected proof_id to be marked verified");
+    // Verify should succeed (call contract impl directly under contract context)
+    env.as_contract(&contract_id, || {
+        UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
+    })
+    .expect("verification should succeed");
 }
 
 #[test]
@@ -74,18 +67,11 @@ fn verify_fib_chain_proof_succeeds() {
     // Register to obtain a contract ID for storage namespace
     let contract_id = env.register(UltraHonkVerifierContract, ());
 
-    // Verify should succeed and return a proof_id (call contract impl directly under contract context)
-    let proof_id = env
-        .as_contract(&contract_id, || {
-            UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
-        })
-        .expect("verification should succeed");
-
-    // Contract should record verification status under proof_id
-    let verified = env.as_contract(&contract_id, || {
-        UltraHonkVerifierContract::is_verified(env.clone(), proof_id)
-    });
-    assert!(verified, "expected proof_id to be marked verified");
+    // Verify should succeed and not panic
+    env.as_contract(&contract_id, || {
+        UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
+    })
+    .expect("verification should succeed");
 }
 
 #[test]
@@ -117,16 +103,10 @@ fn print_budget_for_deploy_and_verify() {
 
     // Measure verify_proof invocation budget usage in isolation.
     env.budget().reset_unlimited();
-    let proof_id = env
-        .as_contract(&contract_id, || {
-            UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
-        })
-        .expect("verification should succeed");
+    env.as_contract(&contract_id, || {
+        UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
+    })
+    .expect("verification should succeed");
     println!("=== verify_proof budget usage ===");
     env.cost_estimate().budget().print();
-
-    let verified = env.as_contract(&contract_id, || {
-        UltraHonkVerifierContract::is_verified(env.clone(), proof_id)
-    });
-    assert!(verified, "expected proof_id to be marked verified");
 }

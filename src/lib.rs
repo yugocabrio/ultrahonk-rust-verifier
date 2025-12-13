@@ -3,14 +3,14 @@ extern crate alloc;
 
 use alloc::{boxed::Box, string::String as StdString, vec::Vec as StdVec};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short,
+    contract, contracterror, contractimpl,
     crypto::bn254::{Fr as HostFr, G1Affine as HostG1Affine, G2Affine as HostG2Affine},
-    Bytes, BytesN, Env, Symbol, Vec as SorobanVec,
+    symbol_short, Bytes, BytesN, Env, Symbol, Vec as SorobanVec,
 };
 
 use ark_bn254::{Fq, Fq2, G1Affine as ArkG1Affine, G2Affine as ArkG2Affine};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_ff::{PrimeField, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use ultrahonk_rust_verifier::{
     ec::{self, Bn254Ops},
@@ -149,10 +149,7 @@ fn g1_point_from_bytes(bytes: &[u8; 64]) -> Result<G1Point, ()> {
         });
     }
     let aff = ArkG1Affine::deserialize_uncompressed(&bytes[..]).map_err(|_| ())?;
-    Ok(G1Point {
-        x: aff.x,
-        y: aff.y,
-    })
+    Ok(G1Point { x: aff.x, y: aff.y })
 }
 
 fn ark_fr_to_host(env: &Env, scalar: &ArkFr) -> HostFr {
@@ -650,11 +647,7 @@ impl SorobanBn254 {
         self.env.clone()
     }
 
-    fn pairing_check_impl(
-        &self,
-        p0: &ArkG1Affine,
-        p1: &ArkG1Affine,
-    ) -> Result<bool, StdString> {
+    fn pairing_check_impl(&self, p0: &ArkG1Affine, p1: &ArkG1Affine) -> Result<bool, StdString> {
         let env = self.env();
         let mut g1_points = SorobanVec::new(&env);
         g1_points.push_back(ark_g1_to_host(&env, p0));
@@ -742,12 +735,10 @@ impl UltraHonkVerifierContract {
         }
         (StdVec::new(), rest.to_vec())
     }
-    /// Verify an UltraHonk proof; on success store proof_id (= soroban sha256(proof_blob))
-    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+    /// Verify an UltraHonk proof.
+    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<(), Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
-
-        let proof_hash: BytesN<32> = env.crypto().keccak256(&proof_blob).into();
         let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
 
         // Deserialize preprocessed verification key bytes
@@ -764,11 +755,7 @@ impl UltraHonkVerifierContract {
         verifier
             .verify(&proof_bytes, &pub_inputs_bytes)
             .map_err(|_| Error::VerificationFailed)?;
-
-        // Persist success
-        env.storage().instance().set(&proof_hash, &true);
-
-        Ok(proof_hash)
+        Ok(())
     }
 
     /// Set preprocessed verification key bytes and cache its hash. Returns vk_hash
@@ -780,17 +767,12 @@ impl UltraHonkVerifierContract {
     }
 
     /// Verify using the on-chain stored VK
-    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<BytesN<32>, Error> {
+    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<(), Error> {
         let vk_bytes: Bytes = env
             .storage()
             .instance()
             .get(&Self::key_vk())
             .ok_or(Error::VkNotSet)?;
         Self::verify_proof(env, vk_bytes, proof_blob)
-    }
-
-    /// Query if a proof_id was previously verified
-    pub fn is_verified(env: Env, proof_id: BytesN<32>) -> bool {
-        env.storage().instance().get(&proof_id).unwrap_or(false)
     }
 }

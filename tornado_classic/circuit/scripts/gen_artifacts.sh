@@ -3,13 +3,47 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-export PATH="${SCRIPT_DIR}:${PATH}"
+export PATH="$HOME/.nargo/bin:$HOME/.bb/bin:${SCRIPT_DIR}:${PATH}"
 cd "${PROJECT_ROOT}"
 
-NARGO_BIN="${NARGO:-${HOME}/.nargo/bin/nargo}"
-BB_BIN="${BB:-${HOME}/.bb/bb}"
 REQUIRED_NARGO_VERSION="1.0.0-beta.9"
 REQUIRED_BB_VERSION="v0.87.0"
+
+install_nargo() {
+  if ! command -v nargo >/dev/null 2>&1; then
+    echo "• installing nargo ${REQUIRED_NARGO_VERSION}"
+    curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | \
+      NOIR_VERSION="${REQUIRED_NARGO_VERSION}" bash
+    noirup -v "${REQUIRED_NARGO_VERSION}"
+  fi
+}
+
+install_bb() {
+  if command -v bb >/dev/null 2>&1; then return; fi
+
+  echo "• installing bb ${REQUIRED_BB_VERSION}"
+  mkdir -p "$HOME/.bb/bin"
+
+  uname_s=$(uname -s | tr '[:upper:]' '[:lower:]')
+  uname_m=$(uname -m)
+  case "${uname_s}_${uname_m}" in
+    linux_x86_64)  file="barretenberg-amd64-linux.tar.gz" ;;
+    darwin_arm64)  file="barretenberg-arm64-darwin.tar.gz" ;;
+    darwin_x86_64) file="barretenberg-amd64-darwin.tar.gz" ;;
+    *)             echo "unsupported platform"; exit 1 ;;
+  esac
+
+  url="https://github.com/AztecProtocol/aztec-packages/releases/download/${REQUIRED_BB_VERSION}/${file}"
+  curl -L "$url" -o /tmp/bb.tar.gz
+  tar -xzf /tmp/bb.tar.gz -C "$HOME/.bb/bin"
+  chmod +x "$HOME/.bb/bin/bb"
+}
+
+install_nargo
+install_bb
+
+NARGO_BIN="${NARGO:-$(command -v nargo || echo "${HOME}/.nargo/bin/nargo")}"
+BB_BIN="${BB:-$(command -v bb || echo "${HOME}/.bb/bin/bb")}"
 
 PROJECT_NAME="${NAME:-}"
 if [[ -z "${PROJECT_NAME}" ]]; then
@@ -37,7 +71,7 @@ if [[ "${NARGO_VERSION_RAW}" != *"${REQUIRED_NARGO_VERSION}"* ]]; then
 fi
 
 BB_VERSION_RAW="$(${BB_BIN} --version 2>/dev/null | head -n1)"
-if [[ "${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" ]]; then
+if [[ "${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" && "v${BB_VERSION_RAW}" != "${REQUIRED_BB_VERSION}" ]]; then
   echo "[!] Expected bb ${REQUIRED_BB_VERSION}, but got '${BB_VERSION_RAW}'" >&2
   exit 1
 fi

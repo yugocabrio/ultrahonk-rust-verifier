@@ -1,6 +1,6 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Symbol,
-    IntoVal, Vec as SorobanVec, Val,
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
+    IntoVal, Symbol, Vec as SorobanVec, Val,
 };
 
 #[contract]
@@ -149,9 +149,10 @@ impl MixerContract {
         verifier: Address,
         proof_blob: Bytes,
         nullifier_hash: BytesN<32>,
-    ) -> Result<BytesN<32>, MixerError> {
+    ) -> Result<(), MixerError> {
         // Split packed `[public_inputs][proof]` so we can validate the fields first.
-        let packed_vec: Vec<u8> = proof_blob.to_alloc_vec();
+        let mut packed_vec = vec![0u8; proof_blob.len() as usize];
+        proof_blob.copy_into_slice(&mut packed_vec);
         let (pub_inputs, _proof_bytes) = split_inputs_and_proof_bytes(&packed_vec);
         if pub_inputs.len() < 3 {
             return Err(MixerError::VerificationFailed);
@@ -189,13 +190,15 @@ impl MixerContract {
         // Verify proof against the stored VK on the external verifier contract.
         let mut args: SorobanVec<Val> = SorobanVec::new(&env);
         args.push_back(proof_blob.into_val(&env));
-        let proof_id: BytesN<32> = env.invoke_contract(&verifier, &Symbol::new(&env, "verify_proof_with_stored_vk"), args);
+        env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof_with_stored_vk"), args)
+            .map_err(|_| MixerError::VerificationFailed)?
+            .map_err(|_| MixerError::VerificationFailed)?;
         // Mark nullifier as spent and emit withdraw event containing recipient.
         env.storage().instance().set(&nf_key, &true);
         let rcpt = BytesN::from_array(&env, &rcpt_arr);
         env.events()
             .publish((symbol_short!("withdraw"), nf_from_proof.clone()), rcpt);
-        Ok(proof_id)
+        Ok(())
     }
 
     /// Returns true if the commitment has been seen in the tree.

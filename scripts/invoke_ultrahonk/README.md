@@ -18,7 +18,7 @@ npm install
 
 ## Usage
 
-### Prepare (Pack artifacts and compute proof_id)
+### Prepare (Pack artifacts and compute proof hash)
 
 ```bash
 npx ts-node invoke_ultrahonk.ts prepare
@@ -54,7 +54,6 @@ Options:
 - `--send <yes|no|default>`: Control transaction submission
 - `--cost`: Include `--cost` flag when calling stellar CLI
 - `--proof-blob-file <path>`: Save the packed proof blob to a file
-- `--skip-is-verified`: Skip the follow-up `is_verified` check
 - `--dry-run`: Print CLI commands without executing them
 
 Example (dry run):
@@ -75,6 +74,4 @@ npx ts-node invoke_ultrahonk.ts invoke \
 
 The script will:
 1. Load and pack the proof artifacts
-2. Compute the `proof_id` (Keccak-256 hash of the proof blob)
-3. Call `verify_proof` on the contract
-4. (Optional) Call `is_verified` to confirm the proof was stored
+2. Call `verify_proof` on the contract

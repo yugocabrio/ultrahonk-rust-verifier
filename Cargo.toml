@@ -18,7 +18,7 @@ ark-serialize = { version = "0.5", default-features = false }
 [dev-dependencies]
 # Enable test helpers for local unit tests
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3cf10a984dba03f68b4f2ed653b715063e983bba", features = ["testutils"] }
-soroban-env-host = "23.0.0-rc.2"
+soroban-env-host = { git = "https://github.com/stellar/rs-soroban-env", rev = "0a0c2df704edeb3cdafabfcc759eddccd6775337" }
 
 [profile.release]
 opt-level = "z"
