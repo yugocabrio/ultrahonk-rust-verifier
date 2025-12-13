@@ -111,7 +111,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     .expect("set_root ok");
 
     // Pack proof bytes
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
@@ -184,7 +184,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     })
     .expect("set_root ok");
 
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
@@ -265,7 +265,7 @@ fn withdraw_rejects_root_mismatch() {
     })
     .expect("set_root ok");
 
-    const PROOF_NUM_FIELDS: u32 = 440;
+    const PROOF_NUM_FIELDS: u32 = 456;
     assert!(pub_inputs_bin.len() % 32 == 0);
     let num_inputs = (pub_inputs_bin.len() / 32) as u32;
     let total_fields = PROOF_NUM_FIELDS + num_inputs;
