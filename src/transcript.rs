@@ -3,7 +3,7 @@
 use crate::trace;
 use crate::{
     field::Fr,
-    hash::hash32,
+    hash::{hash32, HashInput},
     types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
 };
 use ark_bn254::G1Affine;
@@ -11,15 +11,53 @@ use ark_bn254::G1Affine;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-fn push_point(buf: &mut Vec<u8>, pt: &G1Affine) {
-    // Serialize an Fq coordinate into two bn254::Fr limbs (lo136, hi<=118)
-    use crate::utils::fq_to_halves_be;
-    let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
-    let (y_lo, y_hi) = fq_to_halves_be(&pt.y);
-    buf.extend_from_slice(&x_lo);
-    buf.extend_from_slice(&x_hi);
-    buf.extend_from_slice(&y_lo);
-    buf.extend_from_slice(&y_hi);
+struct HashBuf {
+    bytes: Vec<u8>,
+    fields: Vec<Fr>,
+}
+
+impl HashBuf {
+    fn new() -> Self {
+        Self {
+            bytes: Vec::new(),
+            fields: Vec::new(),
+        }
+    }
+
+    fn push_fr(&mut self, fr: &Fr) {
+        let arr = fr.to_bytes();
+        self.bytes.extend_from_slice(&arr);
+        self.fields.push(*fr);
+    }
+
+    fn push_u64(&mut self, value: u64) {
+        let arr = u64_to_be32(value);
+        self.bytes.extend_from_slice(&arr);
+        self.fields.push(Fr::from_bytes(&arr));
+    }
+
+    fn push_bytes32(&mut self, bytes: &[u8; 32]) {
+        self.bytes.extend_from_slice(bytes);
+        self.fields.push(Fr::from_bytes(bytes));
+    }
+
+    fn push_pub_input(&mut self, bytes: &[u8]) {
+        assert!(bytes.len() % 32 == 0);
+        for chunk in bytes.chunks(32) {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(chunk);
+            self.push_bytes32(&arr);
+        }
+    }
+
+    fn push_point(&mut self, pt: &G1Affine) {
+        use crate::utils::fq_to_halves_be;
+        let (x_lo, x_hi) = fq_to_halves_be(&pt.x);
+        let (y_lo, y_hi) = fq_to_halves_be(&pt.y);
+        for limb in [x_lo, x_hi, y_lo, y_hi] {
+            self.push_bytes32(&limb);
+        }
+    }
 }
 
 fn split(fr: Fr) -> (Fr, Fr) {
@@ -32,8 +70,17 @@ fn split(fr: Fr) -> (Fr, Fr) {
 }
 
 #[inline(always)]
-fn hash_to_fr(bytes: &[u8]) -> Fr {
-    Fr::from_bytes(&hash32(bytes))
+fn hash_to_fr(buf: &HashBuf) -> Fr {
+    Fr::from_bytes(&hash32(&HashInput {
+        bytes: &buf.bytes,
+        fields: &buf.fields,
+    }))
+}
+
+fn hash_single(fr: &Fr) -> Fr {
+    let mut buf = HashBuf::new();
+    buf.push_fr(fr);
+    hash_to_fr(&buf)
 }
 
 fn u64_to_be32(x: u64) -> [u8; 32] {
@@ -49,24 +96,24 @@ fn gen_eta(
     pis_total: u64,
     offset: u64,
 ) -> (RelationParameters, Fr) {
-    let mut data = Vec::new();
-    data.extend_from_slice(&u64_to_be32(cs));
-    data.extend_from_slice(&u64_to_be32(pis_total));
-    data.extend_from_slice(&u64_to_be32(offset));
+    let mut data = HashBuf::new();
+    data.push_u64(cs);
+    data.push_u64(pis_total);
+    data.push_u64(offset);
     for pi in pub_inputs {
-        data.extend_from_slice(pi);
+        data.push_pub_input(pi);
     }
     // Append pairing point object (16 Fr) after public inputs
     for fr in &proof.pairing_point_object {
-        data.extend_from_slice(&fr.to_bytes());
+        data.push_fr(fr);
     }
     for w in &[&proof.w1, &proof.w2, &proof.w3] {
-        push_point(&mut data, &w.to_affine());
+        data.push_point(&w.to_affine());
     }
 
     let h = hash_to_fr(&data);
     let (eta, eta_two) = split(h);
-    let h2 = hash_to_fr(&h.to_bytes());
+    let h2 = hash_single(&h);
     let (eta_three, _) = split(h2);
 
     (
@@ -83,13 +130,14 @@ fn gen_eta(
 }
 
 fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
-    let mut data = prev.to_bytes().to_vec();
+    let mut data = HashBuf::new();
+    data.push_fr(&prev);
     for w in &[
         &proof.lookup_read_counts,
         &proof.lookup_read_tags,
         &proof.w4,
     ] {
-        push_point(&mut data, &w.to_affine());
+        data.push_point(&w.to_affine());
     }
     let h = hash_to_fr(&data);
     let (beta, gamma) = split(h);
@@ -97,9 +145,10 @@ fn gen_beta_gamma(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
 }
 
 fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
-    let mut data = prev.to_bytes().to_vec();
+    let mut data = HashBuf::new();
+    data.push_fr(&prev);
     for w in &[&proof.lookup_inverses, &proof.z_perm] {
-        push_point(&mut data, &w.to_affine());
+        data.push_point(&w.to_affine());
     }
     let mut cur = hash_to_fr(&data);
 
@@ -109,7 +158,7 @@ fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     alphas.push(a1);
 
     while alphas.len() < 25 {
-        cur = hash_to_fr(&cur.to_bytes());
+        cur = hash_single(&cur);
         let (lo, hi) = split(cur);
         alphas.push(lo);
         if alphas.len() < 25 {
@@ -122,7 +171,7 @@ fn gen_alphas(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
 fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
     let mut out = Vec::with_capacity(rounds);
     for _ in 0..rounds {
-        cur = hash_to_fr(&cur.to_bytes());
+        cur = hash_single(&cur);
         out.push(split(cur).0);
     }
     (out, cur)
@@ -157,11 +206,12 @@ pub fn generate_transcript(
         let mut t = cur;
         let mut vs = Vec::with_capacity(CONST_PROOF_SIZE_LOG_N);
         for r in 0..CONST_PROOF_SIZE_LOG_N {
-            let mut d = t.to_bytes().to_vec();
+            let mut buf = HashBuf::new();
+            buf.push_fr(&t);
             for &c in &proof.sumcheck_univariates[r] {
-                d.extend_from_slice(&c.to_bytes());
+                buf.push_fr(&c);
             }
-            t = hash_to_fr(&d);
+            t = hash_to_fr(&buf);
             vs.push(split(t).0);
             cur = t; // update cur at each iteration
         }
@@ -169,32 +219,39 @@ pub fn generate_transcript(
     };
 
     // 6) ρ
-    let mut data = cur.to_bytes().to_vec();
+    let mut data = HashBuf::new();
+    data.push_fr(&cur);
     for &e in &proof.sumcheck_evaluations {
-        data.extend_from_slice(&e.to_bytes());
+        data.push_fr(&e);
     }
-    let rho = split(hash_to_fr(&data)).0;
-    cur = hash_to_fr(&data);
+    let hashed = hash_to_fr(&data);
+    let rho = split(hashed).0;
+    cur = hashed;
 
     // 7) gemini_r
-    let mut data = cur.to_bytes().to_vec();
+    let mut data = HashBuf::new();
+    data.push_fr(&cur);
     for pt in &proof.gemini_fold_comms {
-        push_point(&mut data, &pt.to_affine());
+        data.push_point(&pt.to_affine());
     }
-    let gemini_r = split(hash_to_fr(&data)).0;
-    cur = hash_to_fr(&data);
+    let hashed = hash_to_fr(&data);
+    let gemini_r = split(hashed).0;
+    cur = hashed;
 
     // 8) shplonk_nu
-    let mut data = cur.to_bytes().to_vec();
+    let mut data = HashBuf::new();
+    data.push_fr(&cur);
     for &a in &proof.gemini_a_evaluations {
-        data.extend_from_slice(&a.to_bytes());
+        data.push_fr(&a);
     }
-    let shplonk_nu = split(hash_to_fr(&data)).0;
-    cur = hash_to_fr(&data);
+    let hashed = hash_to_fr(&data);
+    let shplonk_nu = split(hashed).0;
+    cur = hashed;
 
     // 9) shplonk_z
-    let mut data = cur.to_bytes().to_vec();
-    push_point(&mut data, &proof.shplonk_q.to_affine());
+    let mut data = HashBuf::new();
+    data.push_fr(&cur);
+    data.push_point(&proof.shplonk_q.to_affine());
     let shplonk_z = split(hash_to_fr(&data)).0;
 
     trace!("===== TRANSCRIPT PARAMETERS =====");

@@ -3,17 +3,22 @@
 #[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 use sha3::{Digest, Keccak256};
 
+use crate::field::Fr;
+
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 use alloc::boxed::Box;
 #[cfg(all(feature = "soroban-precompile", feature = "std"))]
 use std::boxed::Box;
 
-#[cfg(feature = "soroban-precompile")]
-use once_cell::race::OnceBox;
-
 /// Transcript hash backend abstraction trait.
 pub trait HashOps: Send + Sync {
-    fn hash(&self, data: &[u8]) -> [u8; 32];
+    fn hash(&self, input: &HashInput) -> [u8; 32];
+}
+
+/// Data passed to a hash backend: both bytes (for Keccak) and bn254 field (for Poseidon2).
+pub struct HashInput<'a> {
+    pub bytes: &'a [u8],
+    pub fields: &'a [Fr],
 }
 
 #[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
@@ -22,9 +27,9 @@ pub struct KeccakBackend;
 #[cfg(any(not(feature = "soroban-precompile"), feature = "std", test))]
 impl HashOps for KeccakBackend {
     #[inline(always)]
-    fn hash(&self, data: &[u8]) -> [u8; 32] {
+    fn hash(&self, input: &HashInput) -> [u8; 32] {
         let mut hasher = Keccak256::new();
-        hasher.update(data);
+        hasher.update(input.bytes);
         let result = hasher.finalize();
         let mut out = [0u8; 32];
         out.copy_from_slice(&result);
@@ -36,17 +41,19 @@ impl HashOps for KeccakBackend {
 static KECCAK_BACKEND: KeccakBackend = KeccakBackend;
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
-static BACKEND: OnceBox<Box<dyn HashOps>> = OnceBox::new();
+static mut BACKEND: Option<Box<dyn HashOps>> = None;
 
 #[inline(always)]
 fn backend() -> &'static dyn HashOps {
     // Pure Soroban (no_std + soroban-precompile, non-test): rely on host backend.
     #[cfg(all(feature = "soroban-precompile", not(feature = "std"), not(test)))]
     {
-        if let Some(b) = BACKEND.get() {
-            return &**b;
+        unsafe {
+            if let Some(b) = BACKEND.as_deref() {
+                return b;
+            }
+            core::hint::unreachable_unchecked()
         }
-        unsafe { core::hint::unreachable_unchecked() }
     }
 
     // All other configurations (including tests) use the built-in Keccak backend.
@@ -58,14 +65,16 @@ fn backend() -> &'static dyn HashOps {
 
 /// Compute the active backend hash of the given data
 #[inline(always)]
-pub fn hash32(data: &[u8]) -> [u8; 32] {
-    backend().hash(data)
+pub fn hash32(input: &HashInput) -> [u8; 32] {
+    backend().hash(input)
 }
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 /// Register a custom hash backend (Soroban precompile bridge).
 pub fn set_backend(ops: Box<dyn HashOps>) {
-    let _ = BACKEND.set(Box::new(ops));
+    unsafe {
+        BACKEND = Some(ops);
+    }
 }
 
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
