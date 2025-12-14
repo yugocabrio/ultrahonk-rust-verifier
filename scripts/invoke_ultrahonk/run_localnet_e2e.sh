@@ -26,8 +26,11 @@ stellar network use "$NETWORK_NAME"
 
 echo "Waiting for local network to become healthy..."
 HEALTHY=0
+HEALTH_STATUS=""
 for attempt in $(seq 1 60); do
-  if stellar network health --network "$NETWORK_NAME" --output json >/dev/null 2>&1; then
+  HEALTH_JSON=$(stellar network health --network "$NETWORK_NAME" --output json 2>/dev/null || true)
+  if echo "$HEALTH_JSON" | grep -q '"status":"healthy"'; then
+    HEALTH_STATUS="$HEALTH_JSON"
     HEALTHY=1
     break
   fi
@@ -39,7 +42,7 @@ if [[ "$HEALTHY" -ne 1 ]]; then
   stellar container logs "$CONTAINER_NAME" | tail -n 200 || true
   exit 1
 fi
-stellar network health --network "$NETWORK_NAME" --output json
+echo "$HEALTH_STATUS"
 
 echo "Preparing source account..."
 stellar keys generate "$SOURCE_ACCOUNT" >/dev/null 2>&1 || true

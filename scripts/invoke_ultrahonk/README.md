@@ -7,7 +7,7 @@ Helper utility for invoking the UltraHonk verifier contract on Soroban.
 - Node.js (v18+) and npm
 - `stellar` CLI installed and configured
 - A running Soroban network (local, testnet, etc.)
-- Rust toolchain (the script shell-outs to `cargo run --bin preprocess_vk` to build the VK bytes)
+- Rust toolchain (the script shell-outs to `cargo run --manifest-path preprocess_vk_cli/Cargo.toml` from the `ultrahonk_soroban_contract` directory to build the VK bytes)
 
 ## Setup
 
@@ -49,7 +49,7 @@ npx ts-node invoke_ultrahonk.ts invoke \
 
 When you run the command above the script will:
 
-1. Execute `cargo run --quiet --bin preprocess_vk -- <vk_json> <output>` in the repo root to convert `vk_fields.json` into the exact byte layout that the Soroban contract expects.  
+1. Execute `cargo run --quiet --manifest-path preprocess_vk_cli/Cargo.toml -- <vk_json> <output>` from the `ultrahonk_soroban_contract` directory to convert `vk_fields.json` into the exact byte layout that the Soroban contract expects.  
    ↳ Make sure `cargo` is on your `$PATH`; the helper binary is compiled automatically if it does not exist yet.
 2. Pack the proof/public-input artifacts into the `(u32 | inputs | proof)` blob.
 3. Write both blobs to temporary files and invoke `stellar contract invoke ... -- verify_proof --vk_bytes-file-path <tmp> --proof_blob-file-path <tmp>`.

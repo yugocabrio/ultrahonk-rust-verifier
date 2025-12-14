@@ -1,0 +1,7 @@
+[package]
+name = "preprocess_vk_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ultrahonk_soroban_contract = { path = ".." }
