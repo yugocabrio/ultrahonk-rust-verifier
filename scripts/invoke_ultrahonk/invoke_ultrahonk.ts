@@ -19,13 +19,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import * as os from 'os';
+import { spawn, spawnSync } from 'child_process';
 import { ArgumentParser } from 'argparse';
 
 // === Constants ===============================================================
 
 const DEFAULT_CONTRACT_ID = 'CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP';
-const REPO_ROOT = path.resolve(process.cwd(), '../..');
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'tests', 'simple_circuit', 'target');
 
 // === Minimal Keccak-256 implementation (no external deps) ====================
@@ -159,6 +160,24 @@ interface PackedArtifacts {
   proofBytes: Buffer;
 }
 
+function preprocessVkBytes(vkJsonPath: string): Buffer {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preprocess-vk-'));
+  const outPath = path.join(tmpDir, 'vk.bin');
+  try {
+    const result = spawnSync(
+      'cargo',
+      ['run', '--quiet', '--bin', 'preprocess_vk', '--', vkJsonPath, outPath],
+      { cwd: REPO_ROOT, stdio: 'inherit' }
+    );
+    if (result.status !== 0) {
+      throw new Error('preprocess_vk failed');
+    }
+    return fs.readFileSync(outPath);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 function getProofFields(artifacts: PackedArtifacts): number {
   if (artifacts.proofBytes.length % 32 !== 0) {
     throw new Error('Proof blob is not a multiple of 32 bytes.');
@@ -213,7 +232,7 @@ function loadArtifacts(
 
   return {
     vkJsonPath: resolvedVkJson,
-    vkBytes: fs.readFileSync(resolvedVkJson),
+    vkBytes: preprocessVkBytes(resolvedVkJson),
     publicInputsBytes: fs.readFileSync(resolvedPublicInputs),
     proofBytes: fs.readFileSync(resolvedProof),
   };
@@ -368,9 +387,6 @@ async function commandInvoke(args: any): Promise<number> {
       console.log(`Wrote proof blob to ${outPath}`);
     }
 
-    const vkHex = artifacts.vkBytes.toString('hex');
-    const proofHex = proofBlob.toString('hex');
-
     const baseCmd: string[] = [
       'stellar',
       'contract',
@@ -389,10 +405,25 @@ async function commandInvoke(args: any): Promise<number> {
       baseCmd.push('--cost');
     }
 
-    const verifyArgs = ['--vk-json', vkHex, '--proof-blob', proofHex];
-    const result = await invokeWithVariants(baseCmd, 'verify_proof', verifyArgs, args.dry_run);
-    if (result.returncode !== 0) {
-      return result.returncode;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultrahonk-'));
+    try {
+      const vkFile = path.join(tmpDir, 'vk.bin');
+      const proofFile = path.join(tmpDir, 'proof_blob.bin');
+      fs.writeFileSync(vkFile, artifacts.vkBytes);
+      fs.writeFileSync(proofFile, proofBlob);
+
+      const verifyArgs = [
+        '--vk_bytes-file-path',
+        vkFile,
+        '--proof_blob-file-path',
+        proofFile,
+      ];
+      const result = await invokeWithVariants(baseCmd, 'verify_proof', verifyArgs, args.dry_run);
+      if (result.returncode !== 0) {
+        return result.returncode;
+      }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
 
     return 0;
@@ -412,8 +443,6 @@ async function commandSetVk(args: any): Promise<number> {
     );
 
     console.log('vk_json:', artifacts.vkJsonPath);
-    const vkHex = artifacts.vkBytes.toString('hex');
-
     const baseCmd: string[] = [
       'stellar',
       'contract',
@@ -432,9 +461,16 @@ async function commandSetVk(args: any): Promise<number> {
       baseCmd.push('--cost');
     }
 
-    const setVkArgs = ['--vk-json', vkHex];
-    const result = await invokeWithVariants(baseCmd, 'set_vk', setVkArgs, args.dry_run);
-    return result.returncode;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultrahonk-'));
+    try {
+      const vkFile = path.join(tmpDir, 'vk.bin');
+      fs.writeFileSync(vkFile, artifacts.vkBytes);
+      const setVkArgs = ['--vk_bytes-file-path', vkFile];
+      const result = await invokeWithVariants(baseCmd, 'set_vk', setVkArgs, args.dry_run);
+      return result.returncode;
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   } catch (exc: any) {
     console.error(`error: ${exc.message}`);
     return 1;

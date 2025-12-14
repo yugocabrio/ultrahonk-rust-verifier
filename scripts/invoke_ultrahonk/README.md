@@ -4,10 +4,10 @@ Helper utility for invoking the UltraHonk verifier contract on Soroban.
 
 ## Prerequisites
 
-- Node.js (v18+)
-- npm
+- Node.js (v18+) and npm
 - `stellar` CLI installed and configured
 - A running Soroban network (local, testnet, etc.)
+- Rust toolchain (the script shell-outs to `cargo run --bin preprocess_vk` to build the VK bytes)
 
 ## Setup
 
@@ -47,6 +47,13 @@ npx ts-node invoke_ultrahonk.ts invoke \
   --source-account alice
 ```
 
+When you run the command above the script will:
+
+1. Execute `cargo run --quiet --bin preprocess_vk -- <vk_json> <output>` in the repo root to convert `vk_fields.json` into the exact byte layout that the Soroban contract expects.  
+   ↳ Make sure `cargo` is on your `$PATH`; the helper binary is compiled automatically if it does not exist yet.
+2. Pack the proof/public-input artifacts into the `(u32 | inputs | proof)` blob.
+3. Write both blobs to temporary files and invoke `stellar contract invoke ... -- verify_proof --vk_bytes-file-path <tmp> --proof_blob-file-path <tmp>`.
+
 Options:
 - `--contract-id <id>`: Contract ID to invoke (required)
 - `--network <name>`: Network profile (default: `local`)
@@ -55,6 +62,7 @@ Options:
 - `--cost`: Include `--cost` flag when calling stellar CLI
 - `--proof-blob-file <path>`: Save the packed proof blob to a file
 - `--dry-run`: Print CLI commands without executing them
+- `--dataset/--vk-json/...`: Same artifact overrides as `prepare`. You normally only need `--dataset` pointing to the folder containing `vk_fields.json`, `public_inputs`, and `proof`.
 
 Example (dry run):
 ```bash
@@ -73,5 +81,6 @@ npx ts-node invoke_ultrahonk.ts invoke \
 ## Output
 
 The script will:
-1. Load and pack the proof artifacts
-2. Call `verify_proof` on the contract
+1. Run the Rust preprocessing helper to derive the verification-key bytes from `vk_fields.json`
+2. Load and pack the proof artifacts (including the packed proof blob)
+3. Call `verify_proof` on the contract using the `stellar` CLI
