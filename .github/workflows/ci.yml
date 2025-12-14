@@ -29,6 +29,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
       - name: Build root circuits
         run: tests/build_circuits.sh
 

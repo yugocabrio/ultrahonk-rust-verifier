@@ -738,8 +738,7 @@ impl UltraHonkVerifierContract {
         if rest.len() >= need {
             let pis_len = rest.len() - need;
             if pis_len % 32 == 0 {
-                let mut pub_inputs_bytes: StdVec<StdVec<u8>> =
-                    StdVec::with_capacity(pis_len / 32);
+                let mut pub_inputs_bytes: StdVec<StdVec<u8>> = StdVec::with_capacity(pis_len / 32);
                 for chunk in rest[..pis_len].chunks(32) {
                     pub_inputs_bytes.push(chunk.to_vec());
                 }
