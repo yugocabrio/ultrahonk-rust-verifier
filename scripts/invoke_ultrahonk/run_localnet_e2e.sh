@@ -25,17 +25,37 @@ stellar network add "$NETWORK_NAME" \
 stellar network use "$NETWORK_NAME"
 
 echo "Waiting for local network to become healthy..."
-for _ in $(seq 1 30); do
+HEALTHY=0
+for attempt in $(seq 1 60); do
   if stellar network health --network "$NETWORK_NAME" --output json >/dev/null 2>&1; then
+    HEALTHY=1
     break
   fi
-  sleep 2
+  echo "  network not ready yet (attempt $attempt), waiting..."
+  sleep 5
 done
+if [[ "$HEALTHY" -ne 1 ]]; then
+  echo "Network failed to become healthy in time" >&2
+  stellar container logs "$CONTAINER_NAME" | tail -n 200 || true
+  exit 1
+fi
 stellar network health --network "$NETWORK_NAME" --output json
 
 echo "Preparing source account..."
 stellar keys generate "$SOURCE_ACCOUNT" >/dev/null 2>&1 || true
-stellar keys fund "$SOURCE_ACCOUNT" --network "$NETWORK_NAME"
+FUND_OK=0
+for attempt in $(seq 1 10); do
+  if stellar keys fund "$SOURCE_ACCOUNT" --network "$NETWORK_NAME"; then
+    FUND_OK=1
+    break
+  fi
+  echo "  friendbot not ready yet (attempt $attempt), waiting..."
+  sleep 5
+done
+if [[ "$FUND_OK" -ne 1 ]]; then
+  echo "Failed to fund $SOURCE_ACCOUNT" >&2
+  exit 1
+fi
 
 echo "Building contract (optimized)..."
 stellar contract build --optimize
