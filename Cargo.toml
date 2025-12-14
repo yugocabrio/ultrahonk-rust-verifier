@@ -6,6 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "preprocess_vk"
+path = "src/bin/preprocess_vk.rs"
+
 [dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "e516750bd3e2d7624096b9681ad4174f6a7011a0", default-features = false, features = ["alloc"] }
 ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", branch = "main", default-features = false, features = ["alloc", "soroban-precompile"] }
