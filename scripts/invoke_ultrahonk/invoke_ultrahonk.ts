@@ -27,6 +27,7 @@ import { ArgumentParser } from 'argparse';
 
 const DEFAULT_CONTRACT_ID = 'CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP';
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const PREPROCESS_MANIFEST = path.resolve(REPO_ROOT, 'preprocess_vk_cli', 'Cargo.toml');
 const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'tests', 'simple_circuit', 'target');
 
 // === Minimal Keccak-256 implementation (no external deps) ====================
@@ -166,8 +167,8 @@ function preprocessVkBytes(vkJsonPath: string): Buffer {
   try {
     const result = spawnSync(
       'cargo',
-      ['run', '--quiet', '--bin', 'preprocess_vk', '--', vkJsonPath, outPath],
-      { cwd: REPO_ROOT, stdio: 'inherit' }
+      ['run', '--quiet', '--manifest-path', PREPROCESS_MANIFEST, '--', vkJsonPath, outPath],
+      { stdio: 'inherit' }
     );
     if (result.status !== 0) {
       throw new Error('preprocess_vk failed');
