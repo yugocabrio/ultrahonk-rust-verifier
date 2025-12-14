@@ -61,6 +61,7 @@ if [[ "$FUND_OK" -ne 1 ]]; then
 fi
 
 echo "Building contract (optimized)..."
+rustup target add wasm32v1-none >/dev/null 2>&1 || true
 stellar contract build --optimize
 
 echo "Deploying contract..."
