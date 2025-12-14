@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTAINER_NAME="${STELLAR_CONTAINER_NAME:-stellar-local}"
 NETWORK_NAME="${STELLAR_NETWORK_NAME:-local}"
 SOURCE_ACCOUNT="${STELLAR_SOURCE_ACCOUNT:-alice}"
@@ -86,3 +86,14 @@ npx ts-node scripts/invoke_ultrahonk/invoke_ultrahonk.ts invoke \
   --source "$SOURCE_ACCOUNT" \
   --send yes \
   --cost
+
+echo "Measuring RPC costs via measurement script..."
+SOURCE_SECRET=$(stellar keys secret "$SOURCE_ACCOUNT" | tail -n 1 | tr -d '[:space:]')
+pushd "$ROOT_DIR/scripts/measure_ultrahonk_costs" >/dev/null
+npm run measure -- \
+  --contract-id "$CONTRACT_ID" \
+  --source-secret "$SOURCE_SECRET" \
+  --rpc-url "$RPC_URL" \
+  --dataset "$DATASET_DIR" \
+  --network-passphrase "$NETWORK_PASSPHRASE"
+popd >/dev/null
