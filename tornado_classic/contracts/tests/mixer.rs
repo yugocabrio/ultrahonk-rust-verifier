@@ -296,6 +296,77 @@ fn withdraw_rejects_root_mismatch() {
 }
 
 #[test]
+fn print_budget_for_deposit_and_withdraw() {
+    let _guard = verify_lock().lock().unwrap();
+    let env = Env::default();
+    env.budget().reset_unlimited();
+    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
+
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
+    let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
+
+    let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
+    let mixer_id: Address = env.register(MixerContract, ());
+
+    let admin = <Address as TestAddress>::generate(&env);
+    let _auth = env.mock_all_auths();
+    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
+        .expect("configure ok");
+
+    // Measure deposit budget usage
+    env.budget().reset_unlimited();
+    let commitment = BytesN::from_array(&env, &[0x55; 32]);
+    env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment.clone()))
+        .expect("deposit ok");
+    println!("=== deposit budget usage ===");
+    env.cost_estimate().budget().print();
+
+    // Prepare proof inputs
+    assert!(pub_inputs_bin.len() >= 64);
+    let mut root_arr = [0u8; 32];
+    root_arr.copy_from_slice(&pub_inputs_bin[..32]);
+    env.as_contract(&mixer_id, || {
+        MixerContract::set_root(env.clone(), BytesN::from_array(&env, &root_arr))
+    })
+    .expect("set_root ok");
+
+    const PROOF_NUM_FIELDS: u32 = 456;
+    assert!(pub_inputs_bin.len() % 32 == 0);
+    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
+    let total_fields = PROOF_NUM_FIELDS + num_inputs;
+    let mut packed: Vec<u8> =
+        Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
+    packed.extend_from_slice(&total_fields.to_be_bytes());
+    packed.extend_from_slice(pub_inputs_bin);
+    packed.extend_from_slice(proof_bin);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+
+    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    env.as_contract(&verifier_id, || {
+        UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())
+    })
+    .expect("set_vk ok");
+
+    let mut nf_arr = [0u8; 32];
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    let nf = BytesN::from_array(&env, &nf_arr);
+
+    env.budget().reset_unlimited();
+    env.as_contract(&mixer_id, || {
+        MixerContract::withdraw(
+            env.clone(),
+            verifier_id.clone(),
+            proof_bytes.clone(),
+            nf.clone(),
+        )
+    })
+    .expect("withdraw ok");
+    println!("=== withdraw budget usage ===");
+    env.cost_estimate().budget().print();
+}
+
+#[test]
 fn deposit_rejects_duplicate_commitment() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);

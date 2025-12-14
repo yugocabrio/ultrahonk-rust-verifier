@@ -103,10 +103,26 @@ fn print_budget_for_deploy_and_verify() {
 
     // Measure verify_proof invocation budget usage in isolation.
     env.budget().reset_unlimited();
+    let vk_for_direct = vk_bytes.clone();
+    let proof_for_direct = proof_bytes.clone();
     env.as_contract(&contract_id, || {
-        UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes, proof_bytes)
+        UltraHonkVerifierContract::verify_proof(env.clone(), vk_for_direct, proof_for_direct)
     })
     .expect("verification should succeed");
     println!("=== verify_proof budget usage ===");
+    env.cost_estimate().budget().print();
+
+    env.budget().reset_unlimited();
+    env.as_contract(&contract_id, || {
+        UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())
+    })
+    .expect("set_vk should succeed");
+
+    env.budget().reset_unlimited();
+    env.as_contract(&contract_id, || {
+        UltraHonkVerifierContract::verify_proof_with_stored_vk(env.clone(), proof_bytes.clone())
+    })
+    .expect("verify_proof_with_stored_vk should succeed");
+    println!("=== verify_proof_with_stored_vk budget usage ===");
     env.cost_estimate().budget().print();
 }
