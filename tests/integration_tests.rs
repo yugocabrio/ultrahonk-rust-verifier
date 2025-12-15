@@ -1,7 +1,7 @@
 use soroban_sdk::{Bytes, Env};
-use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract, UltraHonkVerifierContractClient};
 
-const CONTRACT_WASM: &[u8] = include_bytes!("../out/ultrahonk_soroban_contract.wasm");
+const CONTRACT_WASM: &[u8] = include_bytes!("../target/wasm32v1-none/release/ultrahonk_soroban_contract.optimized.wasm");
 
 fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
     let vk_blob = preprocess_vk_json(json).expect("valid vk json");
@@ -102,7 +102,7 @@ fn print_budget_for_deploy_and_verify() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
 
     // Measure verify_proof invocation budget usage in isolation.
-    env.budget().reset_unlimited();
+    // env.budget().reset_unlimited();
     let vk_for_direct = vk_bytes.clone();
     let proof_for_direct = proof_bytes.clone();
     env.as_contract(&contract_id, || {
@@ -112,17 +112,54 @@ fn print_budget_for_deploy_and_verify() {
     println!("=== verify_proof budget usage ===");
     env.cost_estimate().budget().print();
 
-    env.budget().reset_unlimited();
+    // env.budget().reset_unlimited();
     env.as_contract(&contract_id, || {
         UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())
     })
     .expect("set_vk should succeed");
 
-    env.budget().reset_unlimited();
+    // env.budget().reset_unlimited();
     env.as_contract(&contract_id, || {
         UltraHonkVerifierContract::verify_proof_with_stored_vk(env.clone(), proof_bytes.clone())
     })
     .expect("verify_proof_with_stored_vk should succeed");
     println!("=== verify_proof_with_stored_vk budget usage ===");
+    env.cost_estimate().budget().print();
+}
+
+
+mod ultrahonk_contract {
+    soroban_sdk::contractimport!(file = "target/wasm32v1-none/release/ultrahonk_soroban_contract.optimized.wasm");
+}
+
+#[test]
+fn basic_verify_budget_test() {
+    let vk_fields_json: &str = include_str!("simple_circuit/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
+    let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
+
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let contract_id = env.register(CONTRACT_WASM, ());
+    let client = ultrahonk_contract::Client::new(&env, &contract_id);
+
+    
+    // Prepare proof inputs
+    let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
+    const PROOF_NUM_FIELDS: u32 = 456;
+    assert!(pub_inputs_bin.len() % 32 == 0);
+    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
+    let total_fields = PROOF_NUM_FIELDS + num_inputs;
+    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
+    packed.extend_from_slice(&total_fields.to_be_bytes());
+    packed.extend_from_slice(pub_inputs_bin);
+    packed.extend_from_slice(proof_bin);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    let vk_for_direct = vk_bytes.clone();
+    let proof_for_direct = proof_bytes.clone();
+
+
+    client.verify_proof(&vk_for_direct, &proof_for_direct);
     env.cost_estimate().budget().print();
 }
