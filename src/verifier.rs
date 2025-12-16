@@ -61,10 +61,25 @@ impl UltraHonkVerifier {
         // 1) parse proof
         let proof = load_proof(proof_bytes);
 
-        // 2) sanity on public inputs
-        // If VK metadata is missing/zero, fall back to actual provided public inputs.
-        // Newer bb versions may omit header fields in vk_fields.json.
-        // We avoid failing hard here and instead trust caller-provided inputs.
+        // 2) sanity on public inputs (length and VK metadata if present)
+        if public_inputs_bytes
+            .iter()
+            .any(|pi| pi.len() != 32)
+        {
+            return Err(VerifyError::InvalidInput(
+                "public inputs must be 32 bytes each".into(),
+            ));
+        }
+        if self.vk.public_inputs_size != 0 {
+            let expected = self.vk.public_inputs_size.saturating_sub(16);
+            let provided = public_inputs_bytes.len() as u64;
+            if expected != provided {
+                return Err(VerifyError::InvalidInput(format!(
+                    "public inputs count mismatch (vk: {}, provided: {})",
+                    expected, provided
+                )));
+            }
+        }
 
         // 3) Fiat–Shamir transcript
         // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
