@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "e516750bd3e2d7624096b9681ad4174f6a7011a0", default-features = false, features = ["alloc"] }
-ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", branch = "clean1216", default-features = false, features = ["alloc", "soroban-precompile", "serde_json", "serde"] }
+ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", branch = "main", default-features = false, features = ["alloc", "soroban-precompile", "serde_json", "serde"] }
 
 ark-bn254 = { version = "0.5", default-features = false }
 ark-ff = { version = "0.5", default-features = false }
