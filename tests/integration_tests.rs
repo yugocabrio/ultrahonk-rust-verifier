@@ -1,10 +1,13 @@
 use soroban_sdk::{Bytes, Env};
 use ultrahonk_soroban_contract::preprocess_vk_json;
 
-const CONTRACT_WASM: &[u8] = include_bytes!("../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm");
+const CONTRACT_WASM: &[u8] =
+    include_bytes!("../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm");
 
 mod ultrahonk_contract {
-    soroban_sdk::contractimport!(file = "target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm");
+    soroban_sdk::contractimport!(
+        file = "target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+    );
 }
 
 fn register_client<'a>(env: &'a Env) -> ultrahonk_contract::Client<'a> {
@@ -128,7 +131,6 @@ fn basic_verify_budget_test() {
     let contract_id = env.register(CONTRACT_WASM, ());
     let client = ultrahonk_contract::Client::new(&env, &contract_id);
 
-    
     // Prepare proof inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
     const PROOF_NUM_FIELDS: u32 = 456;
@@ -142,7 +144,6 @@ fn basic_verify_budget_test() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
     let vk_for_direct = vk_bytes.clone();
     let proof_for_direct = proof_bytes.clone();
-
 
     client.verify_proof(&vk_for_direct, &proof_for_direct);
     env.cost_estimate().budget().print();
