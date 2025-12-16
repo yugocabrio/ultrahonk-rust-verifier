@@ -347,4 +347,3 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         lagrange_last,
     }
 }
-

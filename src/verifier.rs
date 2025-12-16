@@ -62,10 +62,7 @@ impl UltraHonkVerifier {
         let proof = load_proof(proof_bytes);
 
         // 2) sanity on public inputs (length and VK metadata if present)
-        if public_inputs_bytes
-            .iter()
-            .any(|pi| pi.len() != 32)
-        {
+        if public_inputs_bytes.iter().any(|pi| pi.len() != 32) {
             return Err(VerifyError::InvalidInput(
                 "public inputs must be 32 bytes each".into(),
             ));
