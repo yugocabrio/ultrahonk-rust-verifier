@@ -20,6 +20,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install wasm32v1 target
+        run: rustup target add wasm32v1-none
+
       - name: Cache cargo directories
         uses: actions/cache@v3
         with:
