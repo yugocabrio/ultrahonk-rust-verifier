@@ -35,11 +35,11 @@ const DEFAULT_DATASET_DIR = path.join(PROJECT_ROOT, 'tests', 'simple_circuit', '
 const DEFAULT_RPC_URL = 'http://localhost:8000/soroban/rpc';
 const DEFAULT_NETWORK_PASSPHRASE = Networks.STANDALONE;
 const FIELD_BYTES = 32;
-const PROOF_NUM_FIELDS = 456;
 
 interface Artifacts {
   vkBytes: Buffer;
-  proofBlob: Buffer;
+  publicInputs: Buffer;
+  proofBytes: Buffer;
 }
 
 interface MeasureResult {
@@ -69,20 +69,6 @@ function runPreprocessVk(vkJsonPath: string): Buffer {
   }
 }
 
-function buildProofBlob(publicInputs: Buffer, proof: Buffer): Buffer {
-  if (publicInputs.length % FIELD_BYTES !== 0) {
-    throw new Error('public_inputs length is not a multiple of 32 bytes');
-  }
-  if (proof.length % FIELD_BYTES !== 0) {
-    throw new Error('proof length is not a multiple of 32 bytes');
-  }
-  const publicInputFields = publicInputs.length / FIELD_BYTES;
-  const totalFields = PROOF_NUM_FIELDS + publicInputFields;
-  const header = Buffer.alloc(4);
-  header.writeUInt32BE(totalFields, 0);
-  return Buffer.concat([header, publicInputs, proof]);
-}
-
 function loadArtifacts(datasetDir: string): Artifacts {
   const vkJsonPath = path.resolve(datasetDir, 'vk_fields.json');
   const proofPath = path.resolve(datasetDir, 'proof');
@@ -94,9 +80,14 @@ function loadArtifacts(datasetDir: string): Artifacts {
   }
   const vkBytes = runPreprocessVk(vkJsonPath);
   const proofBytes = fs.readFileSync(proofPath);
-  const publicInputsBytes = fs.readFileSync(publicInputsPath);
-  const proofBlob = buildProofBlob(publicInputsBytes, proofBytes);
-  return { vkBytes, proofBlob };
+  const publicInputs = fs.readFileSync(publicInputsPath);
+  if (publicInputs.length % FIELD_BYTES !== 0) {
+    throw new Error('public_inputs length is not a multiple of 32 bytes');
+  }
+  if (proofBytes.length % FIELD_BYTES !== 0) {
+    throw new Error('proof length is not a multiple of 32 bytes');
+  }
+  return { vkBytes, publicInputs, proofBytes };
 }
 
 function bigIntFromXdr(value?: xdr.Int64 | xdr.Uint64 | number | string | null): bigint {
@@ -181,7 +172,8 @@ async function main() {
   const server = new SorobanRpc.Server(args.rpc_url, { allowHttp: true });
   const keypair = Keypair.fromSecret(args.source_secret);
   const vkScVal = nativeToScVal(artifacts.vkBytes, { type: 'bytes' });
-  const proofBlobScVal = nativeToScVal(artifacts.proofBlob, { type: 'bytes' });
+  const publicInputsScVal = nativeToScVal(artifacts.publicInputs, { type: 'bytes' });
+  const proofBytesScVal = nativeToScVal(artifacts.proofBytes, { type: 'bytes' });
 
   console.log(`Dataset       : ${args.dataset}`);
   console.log(`Contract ID   : ${args.contract_id}`);
@@ -203,7 +195,7 @@ async function main() {
     args.network_passphrase,
     args.contract_id,
     'verify_proof',
-    [vkScVal, proofBlobScVal]
+    [vkScVal, publicInputsScVal, proofBytesScVal]
   );
   printResult('verify_proof', verifyResult);
 }
