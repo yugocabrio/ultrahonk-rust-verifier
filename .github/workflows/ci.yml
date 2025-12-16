@@ -29,8 +29,19 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install Stellar CLI
+        run: |
+          curl -Ls https://github.com/stellar/stellar-cli/releases/download/v23.3.0/stellar-cli-23.3.0-x86_64-unknown-linux-gnu.tar.gz -o /tmp/stellar-cli.tar.gz
+          mkdir -p $HOME/.local/bin
+          tar -xzf /tmp/stellar-cli.tar.gz -C $HOME/.local/bin stellar
+          chmod +x $HOME/.local/bin/stellar
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Build optimized contract Wasm
+        run: stellar contract build --optimize
 
       - name: Build root circuits
         run: tests/build_circuits.sh
@@ -56,14 +67,6 @@ jobs:
       - name: Install measurement helper dependencies
         run: npm ci
         working-directory: scripts/measure_ultrahonk_costs
-
-      - name: Install Stellar CLI
-        run: |
-          curl -Ls https://github.com/stellar/stellar-cli/releases/download/v23.3.0/stellar-cli-23.3.0-x86_64-unknown-linux-gnu.tar.gz -o /tmp/stellar-cli.tar.gz
-          mkdir -p $HOME/.local/bin
-          tar -xzf /tmp/stellar-cli.tar.gz -C $HOME/.local/bin stellar
-          chmod +x $HOME/.local/bin/stellar
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Run localnet end-to-end verify_proof + measurement
         env:
