@@ -1744,6 +1744,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "once_cell",
+ "serde",
  "serde_json",
  "sha3",
 ]
