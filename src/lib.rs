@@ -16,7 +16,7 @@ use ultrahonk_rust_verifier::{
     field::Fr as ArkFr,
     hash::{self, HashOps},
     types::{G1Point, VerificationKey},
-    UltraHonkVerifier,
+    UltraHonkVerifier, PROOF_BYTES,
 };
 
 const VK_HEADER_WORDS: usize = 4;
@@ -725,34 +725,29 @@ impl UltraHonkVerifierContract {
         symbol_short!("vk_hash")
     }
 
-    /// Split a packed [4-byte count][public_inputs][proof] buffer into
-    /// (public_inputs as 32-byte big-endian slices, proof bytes).
-    /// Accepts proof sections of 456 field elements (BN254).
-    fn split_inputs_and_proof_bytes(packed: &[u8]) -> (StdVec<StdVec<u8>>, StdVec<u8>) {
-        if packed.len() < 4 {
-            return (StdVec::new(), packed.to_vec());
+    fn parse_public_inputs(bytes: &[u8]) -> Result<StdVec<StdVec<u8>>, Error> {
+        if bytes.len() % 32 != 0 {
+            return Err(Error::ProofParseError);
         }
-        let rest = &packed[4..];
-        const PROOF_FIELDS: usize = 456;
-        let need = PROOF_FIELDS * 32;
-        if rest.len() >= need {
-            let pis_len = rest.len() - need;
-            if pis_len % 32 == 0 {
-                let mut pub_inputs_bytes: StdVec<StdVec<u8>> = StdVec::with_capacity(pis_len / 32);
-                for chunk in rest[..pis_len].chunks(32) {
-                    pub_inputs_bytes.push(chunk.to_vec());
-                }
-                let proof_bytes = rest[pis_len..].to_vec();
-                return (pub_inputs_bytes, proof_bytes);
-            }
+        let mut out = StdVec::with_capacity(bytes.len() / 32);
+        for chunk in bytes.chunks(32) {
+            out.push(chunk.to_vec());
         }
-        (StdVec::new(), rest.to_vec())
+        Ok(out)
     }
     /// Verify an UltraHonk proof.
-    pub fn verify_proof(env: Env, vk_bytes: Bytes, proof_blob: Bytes) -> Result<(), Error> {
+    pub fn verify_proof(
+        env: Env,
+        vk_bytes: Bytes,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
+    ) -> Result<(), Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
-        let proof_vec: StdVec<u8> = proof_blob.to_alloc_vec();
+        let proof_vec: StdVec<u8> = proof_bytes.to_alloc_vec();
+        if proof_vec.len() != PROOF_BYTES {
+            return Err(Error::ProofParseError);
+        }
 
         // Deserialize preprocessed verification key bytes
         let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
@@ -762,11 +757,12 @@ impl UltraHonkVerifierContract {
         let verifier = UltraHonkVerifier::new_with_vk(vk);
 
         // Proof & public inputs
-        let (pub_inputs_bytes, proof_bytes) = Self::split_inputs_and_proof_bytes(&proof_vec);
+        let pub_inputs_bytes = Self::parse_public_inputs(&public_inputs.to_alloc_vec())
+            .map_err(|_| Error::ProofParseError)?;
 
         // Verify
         verifier
-            .verify(&proof_bytes, &pub_inputs_bytes)
+            .verify(&proof_vec, &pub_inputs_bytes)
             .map_err(|_| Error::VerificationFailed)?;
         Ok(())
     }
@@ -780,12 +776,16 @@ impl UltraHonkVerifierContract {
     }
 
     /// Verify using the on-chain stored VK
-    pub fn verify_proof_with_stored_vk(env: Env, proof_blob: Bytes) -> Result<(), Error> {
+    pub fn verify_proof_with_stored_vk(
+        env: Env,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
+    ) -> Result<(), Error> {
         let vk_bytes: Bytes = env
             .storage()
             .instance()
             .get(&Self::key_vk())
             .ok_or(Error::VkNotSet)?;
-        Self::verify_proof(env, vk_bytes, proof_blob)
+        Self::verify_proof(env, vk_bytes, public_inputs, proof_bytes)
     }
 }

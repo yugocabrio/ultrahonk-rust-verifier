@@ -4,6 +4,7 @@ use soroban_sdk::{Address, Bytes, Env};
 use std::sync::{Mutex, OnceLock};
 
 use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+use ultrahonk_rust_verifier::PROOF_BYTES;
 
 fn verify_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -27,23 +28,21 @@ fn verify_proof_direct_with_vk_json() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    // Pack inputs: [u32_be total_fields][public_inputs][proof]
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     env
         .as_contract(&verifier_id, || {
-            UltraHonkVerifierContract::verify_proof(env.clone(), vk_bytes.clone(), proof_bytes.clone())
+            UltraHonkVerifierContract::verify_proof(
+                env.clone(),
+                vk_bytes.clone(),
+                public_inputs.clone(),
+                proof_bytes.clone(),
+            )
         })
         .expect("verification should succeed");
 }
@@ -60,14 +59,7 @@ fn verify_proof_with_stored_vk_path() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
 
@@ -76,8 +68,15 @@ fn verify_proof_with_stored_vk_path() {
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
     env
-        .as_contract(&verifier_id, || UltraHonkVerifierContract::verify_proof_with_stored_vk(env.clone(), proof_bytes.clone()))
+        .as_contract(&verifier_id, || {
+            UltraHonkVerifierContract::verify_proof_with_stored_vk(
+                env.clone(),
+                public_inputs.clone(),
+                proof_bytes.clone(),
+            )
+        })
         .expect("verification ok");
 }

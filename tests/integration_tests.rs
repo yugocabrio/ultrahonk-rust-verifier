@@ -1,4 +1,5 @@
 use soroban_sdk::{Bytes, Env};
+use ultrahonk_rust_verifier::PROOF_BYTES;
 use ultrahonk_soroban_contract::preprocess_vk_json;
 
 const CONTRACT_WASM: &[u8] =
@@ -32,22 +33,15 @@ fn verify_simple_circuit_proof_succeeds() {
 
     let env = Env::default();
     env.budget().reset_unlimited();
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    // Pack into bytes_and_fields: [u32_be total_fields][public_inputs][proof]
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let client = register_client(&env);
-    client.verify_proof(&vk_bytes, &proof_bytes);
+    client.verify_proof(&vk_bytes, &public_inputs, &proof_bytes);
 }
 
 #[test]
@@ -58,21 +52,15 @@ fn verify_fib_chain_proof_succeeds() {
 
     let env = Env::default();
     env.budget().reset_unlimited();
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let client = register_client(&env);
-    client.verify_proof(&vk_bytes, &proof_bytes);
+    client.verify_proof(&vk_bytes, &public_inputs, &proof_bytes);
 }
 
 #[test]
@@ -83,30 +71,22 @@ fn print_budget_for_deploy_and_verify() {
 
     let env = Env::default();
 
-    // Measure deploy (upload wasm + register) budget usage.
+    // Measure deploy budget usage.
     env.budget().reset_unlimited();
-    let wasm_bytes = Bytes::from_slice(&env, CONTRACT_WASM);
-    let contract_id = env.register_contract_wasm(None, wasm_bytes);
-    let client = ultrahonk_contract::Client::new(&env, &contract_id);
+    let client = register_client(&env);
 
     println!("=== Deploy budget usage ===");
     env.cost_estimate().budget().print();
 
     // Prepare proof inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     // Measure verify_proof invocation budget usage in isolation.
     env.budget().reset_unlimited();
-    client.verify_proof(&vk_bytes, &proof_bytes);
+    client.verify_proof(&vk_bytes, &public_inputs, &proof_bytes);
     println!("=== verify_proof budget usage ===");
     env.cost_estimate().budget().print();
 
@@ -114,7 +94,7 @@ fn print_budget_for_deploy_and_verify() {
     client.set_vk(&vk_bytes);
 
     env.budget().reset_unlimited();
-    client.verify_proof_with_stored_vk(&proof_bytes);
+    client.verify_proof_with_stored_vk(&public_inputs, &proof_bytes);
     println!("=== verify_proof_with_stored_vk budget usage ===");
     env.cost_estimate().budget().print();
 }
@@ -128,23 +108,17 @@ fn basic_verify_budget_test() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
 
-    let contract_id = env.register(CONTRACT_WASM, ());
-    let client = ultrahonk_contract::Client::new(&env, &contract_id);
+    let client = register_client(&env);
 
     // Prepare proof inputs
     let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
     let vk_for_direct = vk_bytes.clone();
     let proof_for_direct = proof_bytes.clone();
+    let public_inputs_for_direct = public_inputs.clone();
 
-    client.verify_proof(&vk_for_direct, &proof_for_direct);
+    client.verify_proof(&vk_for_direct, &public_inputs_for_direct, &proof_for_direct);
     env.cost_estimate().budget().print();
 }

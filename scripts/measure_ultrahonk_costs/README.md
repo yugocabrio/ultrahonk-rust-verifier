@@ -29,9 +29,8 @@ Options:
 - `--rpc-url` – Soroban RPC endpoint (default `http://localhost:8000/soroban/rpc`)
 - `--network-passphrase` – network passphrase (default Standalone)
 - `--dataset` – dataset directory (default `../../tests/simple_circuit/target`)
-- `--skip-verify-with-stored` – omit `verify_proof_with_stored_vk`
 
-The script simulates `set_vk`, `verify_proof`, and—unless skipped—`verify_proof_with_stored_vk`. If `verify_proof_with_stored_vk` fails because no VK is stored, run the invoke helper to call `set_vk` first:
+The script simulates `set_vk` followed by `verify_proof` using the dataset’s `public_inputs` and `proof` files. If you want to call `verify_proof_with_stored_vk` yourself, make sure to store a VK first (e.g. via the invoke helper):
 
 ```bash
 cd scripts/invoke_ultrahonk

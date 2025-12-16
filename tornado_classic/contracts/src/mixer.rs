@@ -2,6 +2,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
     IntoVal, Symbol, Vec as SorobanVec, Val,
 };
+use ultrahonk_rust_verifier::PROOF_BYTES;
 
 #[contract]
 pub struct MixerContract;
@@ -60,25 +61,17 @@ fn zero_at(env: &Env, level: u32) -> BytesN<32> {
     z
 }
 
-fn split_inputs_and_proof_bytes(packed: &[u8]) -> (Vec<Vec<u8>>, Vec<u8>) {
-    if packed.len() < 4 {
-        return (Vec::new(), packed.to_vec());
+fn parse_public_inputs(bytes: &[u8]) -> Result<Vec<[u8; 32]>, MixerError> {
+    if bytes.len() % 32 != 0 {
+        return Err(MixerError::VerificationFailed);
     }
-    let rest = &packed[4..];
-    const PROOF_FIELDS: usize = 456;
-    let need = PROOF_FIELDS * 32;
-    if rest.len() >= need {
-        let pis_len = rest.len() - need;
-        if pis_len % 32 == 0 {
-            let mut pub_inputs_bytes: Vec<Vec<u8>> = Vec::with_capacity(pis_len / 32);
-            for chunk in rest[..pis_len].chunks(32) {
-                pub_inputs_bytes.push(chunk.to_vec());
-            }
-            let proof_bytes = rest[pis_len..].to_vec();
-            return (pub_inputs_bytes, proof_bytes);
-        }
+    let mut out = Vec::with_capacity(bytes.len() / 32);
+    for chunk in bytes.chunks(32) {
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(chunk);
+        out.push(arr);
     }
-    (Vec::new(), rest.to_vec())
+    Ok(out)
 }
 
 #[contractimpl]
@@ -142,21 +135,21 @@ impl MixerContract {
     }
 
     /// Verifies a proof with the stored verification key and marks the nullifier spent.
-    /// The packed public inputs are ordered as `[root, nullifier_hash, recipient]`.
+    /// The public inputs are ordered as `[root, nullifier_hash, recipient]`.
     pub fn withdraw(
         env: Env,
         verifier: Address,
-        proof_blob: Bytes,
+        public_inputs: Bytes,
+        proof_bytes: Bytes,
         nullifier_hash: BytesN<32>,
     ) -> Result<(), MixerError> {
-        // Split packed `[public_inputs][proof]` so we can validate the fields first.
-        let mut packed_vec = vec![0u8; proof_blob.len() as usize];
-        proof_blob.copy_into_slice(&mut packed_vec);
-        let (pub_inputs, _proof_bytes) = split_inputs_and_proof_bytes(&packed_vec);
-        if pub_inputs.len() < 3 {
+        if proof_bytes.len() as usize != PROOF_BYTES {
             return Err(MixerError::VerificationFailed);
         }
-        if pub_inputs[0].len() != 32 || pub_inputs[1].len() != 32 || pub_inputs[2].len() != 32 {
+        let mut pis_buf = vec![0u8; public_inputs.len() as usize];
+        public_inputs.copy_into_slice(&mut pis_buf);
+        let pub_inputs = parse_public_inputs(&pis_buf)?;
+        if pub_inputs.len() < 3 {
             return Err(MixerError::VerificationFailed);
         }
         // Interpret public inputs as `[root, nullifier_hash, recipient]`.
@@ -188,7 +181,8 @@ impl MixerContract {
         }
         // Verify proof against the stored VK on the external verifier contract.
         let mut args: SorobanVec<Val> = SorobanVec::new(&env);
-        args.push_back(proof_blob.into_val(&env));
+        args.push_back(public_inputs.into_val(&env));
+        args.push_back(proof_bytes.into_val(&env));
         env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof_with_stored_vk"), args)
             .map_err(|_| MixerError::VerificationFailed)?
             .map_err(|_| MixerError::VerificationFailed)?;

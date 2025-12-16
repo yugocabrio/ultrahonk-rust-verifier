@@ -6,6 +6,7 @@ use std::sync::{Mutex, OnceLock};
 use tornado_classic_contracts::hash2::permute_2_bytes_be;
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+use ultrahonk_rust_verifier::PROOF_BYTES;
 
 fn verify_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -110,16 +111,9 @@ fn mixer_withdraw_and_double_spend_rejected() {
     })
     .expect("set_root ok");
 
-    // Pack proof bytes
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     // Store VK and withdraw
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
@@ -129,12 +123,20 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let nf = BytesN::from_array(&env, &nf_arr);
 
     env.as_contract(&mixer_id, || MixerContract::withdraw(
-        env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone()
+        env.clone(),
+        verifier_id.clone(),
+        public_inputs.clone(),
+        proof_bytes.clone(),
+        nf.clone()
     )).expect("withdraw ok");
 
     // Double-spend attempt with same nullifier must fail
     let err = env.as_contract(&mixer_id, || MixerContract::withdraw(
-        env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone()
+        env.clone(),
+        verifier_id.clone(),
+        public_inputs.clone(),
+        proof_bytes.clone(),
+        nf.clone()
     )).err().expect("expected error");
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
@@ -184,15 +186,9 @@ fn withdraw_rejects_nullifier_mismatch() {
     })
     .expect("set_root ok");
 
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
@@ -201,7 +197,13 @@ fn withdraw_rejects_nullifier_mismatch() {
     let wrong_nf = BytesN::from_array(&env, &[0xAA; 32]);
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw(env.clone(), verifier_id.clone(), proof_bytes.clone(), wrong_nf.clone())
+            MixerContract::withdraw(
+                env.clone(),
+                verifier_id.clone(),
+                public_inputs.clone(),
+                proof_bytes.clone(),
+                wrong_nf.clone(),
+            )
         })
         .err()
         .expect("expected nullifier mismatch");
@@ -265,15 +267,9 @@ fn withdraw_rejects_root_mismatch() {
     })
     .expect("set_root ok");
 
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> = Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
@@ -285,7 +281,13 @@ fn withdraw_rejects_root_mismatch() {
 
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw(env.clone(), verifier_id.clone(), proof_bytes.clone(), nf.clone())
+            MixerContract::withdraw(
+                env.clone(),
+                verifier_id.clone(),
+                public_inputs.clone(),
+                proof_bytes.clone(),
+                nf.clone(),
+            )
         })
         .err()
         .expect("expected root mismatch");
@@ -331,16 +333,9 @@ fn print_budget_for_deposit_and_withdraw() {
     })
     .expect("set_root ok");
 
-    const PROOF_NUM_FIELDS: u32 = 456;
-    assert!(pub_inputs_bin.len() % 32 == 0);
-    let num_inputs = (pub_inputs_bin.len() / 32) as u32;
-    let total_fields = PROOF_NUM_FIELDS + num_inputs;
-    let mut packed: Vec<u8> =
-        Vec::with_capacity(4 + pub_inputs_bin.len() + proof_bin.len());
-    packed.extend_from_slice(&total_fields.to_be_bytes());
-    packed.extend_from_slice(pub_inputs_bin);
-    packed.extend_from_slice(proof_bin);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, &packed);
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
     env.as_contract(&verifier_id, || {
@@ -357,6 +352,7 @@ fn print_budget_for_deposit_and_withdraw() {
         MixerContract::withdraw(
             env.clone(),
             verifier_id.clone(),
+            public_inputs.clone(),
             proof_bytes.clone(),
             nf.clone(),
         )

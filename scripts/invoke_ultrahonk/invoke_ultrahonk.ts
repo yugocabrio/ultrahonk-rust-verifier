@@ -2,12 +2,13 @@
 /**
  * Helper utilities for invoking the UltraHonk verifier contract.
  *
- * The contract expects two byte arguments:
- *   1. vk_json    → raw contents of `vk_fields.json`
- *   2. proof_blob → (u32_be total_fields) || public_inputs || proof
+ * The contract expects three byte arguments:
+ *   1. vk_bytes        → preprocessed verification key bytes
+ *   2. public_inputs   → concatenated public inputs (32-byte each)
+ *   3. proof_bytes     → raw proof bytes
  *
  * This script can:
- *   * pack the simple_circuit (or other) artifacts into the expected blob format
+ *   * prepare/print artifacts for inspection
  *   * drive the `stellar contract invoke` CLI for verify_proof
  *
  * Example (local Quickstart):
@@ -193,15 +194,6 @@ function getPublicInputFields(artifacts: PackedArtifacts): number {
   return artifacts.publicInputsBytes.length / 32;
 }
 
-function buildProofBlob(artifacts: PackedArtifacts): Buffer {
-  const proofFields = getProofFields(artifacts);
-  const publicInputFields = getPublicInputFields(artifacts);
-  const totalFields = proofFields + publicInputFields;
-  const header = Buffer.alloc(4);
-  header.writeUInt32BE(totalFields, 0);
-  return Buffer.concat([header, artifacts.publicInputsBytes, artifacts.proofBytes]);
-}
-
 function loadArtifacts(
   dataset: string | null,
   vkJson: string | null,
@@ -330,14 +322,13 @@ async function invokeWithVariants(
 
 // === Commands ================================================================
 
-function printSummary(artifacts: PackedArtifacts, proofBlob: Buffer): void {
+function printSummary(artifacts: PackedArtifacts): void {
   console.log('vk_json:', artifacts.vkJsonPath);
   console.log('public inputs bytes:', artifacts.publicInputsBytes.length);
   console.log('proof bytes:', artifacts.proofBytes.length);
   console.log('proof fields:', getProofFields(artifacts));
   console.log('public input fields:', getPublicInputFields(artifacts));
   console.log('total fields:', getProofFields(artifacts) + getPublicInputFields(artifacts));
-  console.log('proof blob bytes:', proofBlob.length);
 }
 
 async function commandPrepare(args: any): Promise<number> {
@@ -348,21 +339,7 @@ async function commandPrepare(args: any): Promise<number> {
       args.public_inputs,
       args.proof
     );
-    const proofBlob = buildProofBlob(artifacts);
-    printSummary(artifacts, proofBlob);
-
-    if (args.output) {
-      const outPath = path.resolve(args.output);
-      fs.writeFileSync(outPath, proofBlob);
-      console.log(`Wrote proof blob to ${outPath}`);
-    }
-
-    if (args.print_base64) {
-      console.log('proof_blob (base64):', proofBlob.toString('base64'));
-    }
-    if (args.print_hex) {
-      console.log('proof_blob (hex):', proofBlob.toString('hex'));
-    }
+    printSummary(artifacts);
 
     return 0;
   } catch (exc: any) {
@@ -379,14 +356,7 @@ async function commandInvoke(args: any): Promise<number> {
       args.public_inputs,
       args.proof
     );
-    const proofBlob = buildProofBlob(artifacts);
-    printSummary(artifacts, proofBlob);
-
-    if (args.proof_blob_file) {
-      const outPath = path.resolve(args.proof_blob_file);
-      fs.writeFileSync(outPath, proofBlob);
-      console.log(`Wrote proof blob to ${outPath}`);
-    }
+    printSummary(artifacts);
 
     const baseCmd: string[] = [
       'stellar',
@@ -409,14 +379,18 @@ async function commandInvoke(args: any): Promise<number> {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultrahonk-'));
     try {
       const vkFile = path.join(tmpDir, 'vk.bin');
-      const proofFile = path.join(tmpDir, 'proof_blob.bin');
       fs.writeFileSync(vkFile, artifacts.vkBytes);
-      fs.writeFileSync(proofFile, proofBlob);
+      const publicInputsFile = path.join(tmpDir, 'public_inputs.bin');
+      fs.writeFileSync(publicInputsFile, artifacts.publicInputsBytes);
+      const proofFile = path.join(tmpDir, 'proof.bin');
+      fs.writeFileSync(proofFile, artifacts.proofBytes);
 
       const verifyArgs = [
         '--vk_bytes-file-path',
         vkFile,
-        '--proof_blob-file-path',
+        '--public_inputs-file-path',
+        publicInputsFile,
+        '--proof_bytes-file-path',
         proofFile,
       ];
       const result = await invokeWithVariants(baseCmd, 'verify_proof', verifyArgs, args.dry_run);
@@ -514,22 +488,9 @@ function buildParser(): ArgumentParser {
   };
 
   const prepare = subparsers.add_parser('prepare', {
-    help: 'Pack artifacts and print proof blob/proof id.',
+    help: 'Load artifacts and print a summary.',
   });
   addArtifactArgs(prepare);
-  prepare.add_argument('--output', {
-    type: 'str',
-    help: 'Optional file to write the packed proof blob.',
-    default: null,
-  });
-  prepare.add_argument('--print-base64', {
-    action: 'store_true',
-    help: 'Print proof blob as base64.',
-  });
-  prepare.add_argument('--print-hex', {
-    action: 'store_true',
-    help: 'Print proof blob as hex.',
-  });
 
   const invoke = subparsers.add_parser('invoke', {
     help: 'Invoke verify_proof on the contract.',
@@ -556,11 +517,6 @@ function buildParser(): ArgumentParser {
   invoke.add_argument('--cost', {
     action: 'store_true',
     help: 'Include `--cost` when calling stellar CLI.',
-  });
-  invoke.add_argument('--proof-blob-file', {
-    type: 'str',
-    help: 'Write packed proof blob to this path and reuse it instead of a temporary file.',
-    default: null,
   });
   invoke.add_argument('--dry-run', {
     action: 'store_true',
