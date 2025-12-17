@@ -16,7 +16,7 @@ fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
     Bytes::from_slice(env, &blob)
 }
 
-// Verifier: direct call with vk_json + packed bytes
+// Verifier: direct call with vk_json + (public_inputs, proof) buffers
 #[test]
 fn verify_proof_direct_with_vk_json() {
     let _guard = verify_lock().lock().unwrap();

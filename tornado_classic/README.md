@@ -27,7 +27,7 @@ cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
 ```
 Key checks:
 - `deposit` appends to the frontier and updates the on-chain root.
-- `withdraw` expects packed bytes `[u32_be total_fields][public_inputs][proof]` with public inputs `[root, nullifier_hash, recipient]`.
+- `withdraw` takes separate `public_inputs` (three 32-byte values ordered `[root, nullifier_hash, recipient]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
 - Nullifier mismatches or double spends fail; overwriting the root requires a configured admin actor.
 
 Quick Usage Notes
