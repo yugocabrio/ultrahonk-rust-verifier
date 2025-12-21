@@ -20,6 +20,7 @@ path = "lib.rs"
 
 [features]
 std = []
+wasm-cost = []
 
 [[example]]
 name = "populate_publics"
