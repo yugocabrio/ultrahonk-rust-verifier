@@ -1,3 +1,6 @@
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
     IntoVal, Symbol, Vec as SorobanVec, Val,

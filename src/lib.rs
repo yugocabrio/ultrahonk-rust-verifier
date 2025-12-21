@@ -8,7 +8,7 @@ use soroban_sdk::{
 
 use ultrahonk_rust_verifier::{
     ec,
-    hash::{self, HashOps},
+    hash,
     UltraHonkVerifier, PROOF_BYTES,
 };
 
