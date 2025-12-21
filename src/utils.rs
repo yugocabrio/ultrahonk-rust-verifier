@@ -51,7 +51,7 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
     (to_arr(low), to_arr(high))
 }
 
-/// Load a Proof from a byte array (e.g. read from proof.bin).
+/// Load a Proof from a byte array.
 ///
 /// Note (bb v0.87.0): G1 coordinates are encoded as two limbs per coordinate
 /// using the (lo136, hi<=118) split and stored in the order (x_lo, x_hi, y_lo, y_hi).
@@ -114,21 +114,9 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         sumcheck_univariates.push(row);
     }
 
-    // 6) sumcheck_evaluations: auto-detect 40 or 41 entries from total file length
-    let mut sumcheck_evaluations = Vec::new();
-    let size_40 = 16 * 32 /*pairing*/
-        + 8 * 128 /*wires & lookups before univariates*/
-        + 28 * 8 * 32 /*univariates*/
-        + 40 * 32 /*evals*/
-        + 27 * 128 /*fold comms*/
-        + 28 * 32 /*A evals*/
-        + 2 * 128; /*Q + quotient*/
-    let evals_to_read = if proof_bytes.len() >= size_40 + 32 {
-        41
-    } else {
-        40
-    };
-    for _ in 0..evals_to_read {
+    // 6) sumcheck_evaluations
+    let mut sumcheck_evaluations = Vec::with_capacity(40);
+    for _ in 0..40 {
         sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
     }
 
