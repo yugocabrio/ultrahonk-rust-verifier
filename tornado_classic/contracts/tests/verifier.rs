@@ -21,7 +21,7 @@ fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
 fn verify_proof_direct_with_vk_json() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
@@ -52,7 +52,7 @@ fn verify_proof_direct_with_vk_json() {
 fn verify_proof_with_stored_vk_path() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");

@@ -1,3 +1,6 @@
+extern crate alloc;
+
+use alloc::{vec, vec::Vec};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
     IntoVal, Symbol, Vec as SorobanVec, Val,
@@ -32,7 +35,7 @@ fn key_next_index() -> Symbol { symbol_short!("idx") }
 fn key_ci_prefix() -> Symbol { symbol_short!("ci") }
 fn key_admin() -> Symbol { symbol_short!("adm") }
 
-const TREE_DEPTH: u32 = 20; // match circuit depth for now
+const TREE_DEPTH: u32 = 10; // match circuit depth for now
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
 
 fn bytesn_to_arr(b: &BytesN<32>) -> [u8; 32] {
@@ -229,7 +232,7 @@ impl MixerContract {
             .get(&key_admin())
             .ok_or(MixerError::AdminNotConfigured)?;
         admin.require_auth();
-        if !cfg!(debug_assertions) {
+        if !cfg!(debug_assertions) && !cfg!(feature = "wasm-cost") {
             return Err(MixerError::RootOverrideDisabled);
         }
         env.storage().instance().set(&key_root(), &root);

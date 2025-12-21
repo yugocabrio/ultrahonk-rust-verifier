@@ -1,170 +1,87 @@
 #![allow(clippy::needless_range_loop)]
 
-use num_bigint::BigUint;
-use std::str::FromStr;
+extern crate alloc;
 
-// BN254 prime modulus
-const P: &str = "21888242871839275222246405745257275088548364400416034343698204186575808495617";
+use alloc::vec::Vec;
+use ark_bn254::Fr;
+use ark_ff::{Field, PrimeField};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct Fq {
-    value: [u64; 4], // Little-endian representation
+type FieldElement = Fr;
+
+fn from_hex_be(hex: &str) -> FieldElement {
+    let hex = hex.strip_prefix("0x").unwrap_or(hex);
+    let mut bytes: Vec<u8> = Vec::with_capacity((hex.len() + 1) / 2);
+    let mut i = 0;
+    if hex.len() % 2 == 1 {
+        // leading single nibble
+        let v = hex_nibble(hex.as_bytes()[0]);
+        bytes.push(v);
+        i = 1;
+    }
+    while i + 1 < hex.len() {
+        let hi = hex_nibble(hex.as_bytes()[i]);
+        let lo = hex_nibble(hex.as_bytes()[i + 1]);
+        bytes.push((hi << 4) | lo);
+        i += 2;
+    }
+    let mut be = [0u8; 32];
+    let start = 32 - bytes.len();
+    be[start..].copy_from_slice(&bytes);
+    FieldElement::from_be_bytes_mod_order(&be)
 }
 
-impl Fq {
-    const ZERO: Self = Self { value: [0, 0, 0, 0] };
-    const ONE: Self = Self { value: [1, 0, 0, 0] };
-
-    fn from_u64(n: u64) -> Self {
-        Self {
-            value: [n, 0, 0, 0],
-        }
-    }
-
-    fn from_hex(hex: &str) -> Self {
-        let hex = hex.strip_prefix("0x").unwrap_or(hex);
-        let big = BigUint::parse_bytes(hex.as_bytes(), 16).expect("Invalid hex");
-        let p = BigUint::from_str(P).unwrap();
-        let reduced = big % p;
-        
-        let bytes = reduced.to_bytes_le();
-        let mut value = [0u64; 4];
-        
-        for (i, chunk) in bytes.chunks(8).enumerate() {
-            if i >= 4 { break; }
-            let mut word = 0u64;
-            for (j, &byte) in chunk.iter().enumerate() {
-                word |= (byte as u64) << (j * 8);
-            }
-            value[i] = word;
-        }
-        
-        Self { value }
-    }
-
-    fn to_hex(&self) -> String {
-        let mut bytes = Vec::new();
-        for &word in self.value.iter() {
-            bytes.extend_from_slice(&word.to_le_bytes());
-        }
-        
-        // Remove trailing zeros
-        while bytes.len() > 1 && bytes.last() == Some(&0) {
-            bytes.pop();
-        }
-        
-        let big = BigUint::from_bytes_le(&bytes);
-        format!("0x{:x}", big)
-    }
-
-    fn add(self, other: Self) -> Self {
-        // Simple addition using BigUint for correctness
-        let a = self.to_biguint();
-        let b = other.to_biguint();
-        let p = BigUint::from_str(P).unwrap();
-        let result = (a + b) % p;
-        Self::from_biguint(result)
-    }
-
-    fn mul(self, other: Self) -> Self {
-        let a = self.to_biguint();
-        let b = other.to_biguint();
-        let p = BigUint::from_str(P).unwrap();
-        let result = (a * b) % p;
-        Self::from_biguint(result)
-    }
-
-    fn pow5(self) -> Self {
-        let x2 = self.mul(self);
-        let x4 = x2.mul(x2);
-        x4.mul(self)
-    }
-
-    fn to_biguint(self) -> BigUint {
-        let mut bytes = Vec::new();
-        for &word in self.value.iter() {
-            bytes.extend_from_slice(&word.to_le_bytes());
-        }
-        BigUint::from_bytes_le(&bytes)
-    }
-
-    fn from_biguint(big: BigUint) -> Self {
-        let bytes = big.to_bytes_le();
-        let mut value = [0u64; 4];
-        
-        for (i, chunk) in bytes.chunks(8).enumerate() {
-            if i >= 4 { break; }
-            let mut word = 0u64;
-            for (j, &byte) in chunk.iter().enumerate() {
-                word |= (byte as u64) << (j * 8);
-            }
-            value[i] = word;
-        }
-        
-        Self { value }
-    }
-
-    fn from_be_bytes_mod_p(bytes: &[u8; 32]) -> Self {
-        let big = BigUint::from_bytes_be(bytes);
-        let p = BigUint::from_str(P).unwrap();
-        let reduced = big % p;
-        Self::from_biguint(reduced)
-    }
-
-    fn to_be_bytes32(self) -> [u8; 32] {
-        let big = self.to_biguint();
-        let mut be = big.to_bytes_be();
-        if be.len() > 32 {
-            be = be[be.len() - 32..].to_vec();
-        }
-        let mut out = [0u8; 32];
-        let start = 32 - be.len();
-        out[start..].copy_from_slice(&be);
-        out
+fn hex_nibble(b: u8) -> u8 {
+    match b {
+        b'0'..=b'9' => b - b'0',
+        b'a'..=b'f' => 10 + (b - b'a'),
+        b'A'..=b'F' => 10 + (b - b'A'),
+        _ => 0,
     }
 }
 
-impl std::ops::Add for Fq {
-    type Output = Self;
-    fn add(self, rhs: Self) -> Self {
-        self.add(rhs)
-    }
+fn fq_from_be_bytes(bytes: &[u8; 32]) -> FieldElement {
+    FieldElement::from_be_bytes_mod_order(bytes)
 }
 
-impl std::ops::Mul for Fq {
-    type Output = Self;
-    fn mul(self, rhs: Self) -> Self {
-        self.mul(rhs)
+fn fq_to_be_bytes(fe: &FieldElement) -> [u8; 32] {
+    let limbs = fe.into_bigint();
+    let mut out = [0u8; 32];
+    for (i, limb) in limbs.0.iter().enumerate() {
+        let bytes = limb.to_be_bytes();
+        let dst = 32 - (i + 1) * 8;
+        out[dst..dst + 8].copy_from_slice(&bytes);
     }
-}
-
-impl std::ops::AddAssign for Fq {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
+    out
 }
 
 #[inline(always)]
-fn sbox2(state: &mut [Fq; 2]) {
-    state[0] = state[0].pow5();
-    state[1] = state[1].pow5();
+fn pow5(x: FieldElement) -> FieldElement {
+    let x2 = x.square();
+    let x4 = x2.square();
+    x4 * x
 }
 
 #[inline(always)]
-fn sbox_e(x: Fq) -> Fq {
-    x.pow5()
+fn sbox2(state: &mut [FieldElement; 2]) {
+    state[0] = pow5(state[0]);
+    state[1] = pow5(state[1]);
+}
+
+#[inline(always)]
+fn sbox_e(x: FieldElement) -> FieldElement {
+    pow5(x)
 }
 
 // t=2 external mix: [a+sum, b+sum] where sum=a+b
 #[inline(always)]
-fn external_2(state: [Fq; 2]) -> [Fq; 2] {
+fn external_2(state: [FieldElement; 2]) -> [FieldElement; 2] {
     let sum = state[0] + state[1];
     [state[0] + sum, state[1] + sum]
 }
 
 // t=2 internal mix: [x+sum, 2*y + sum] where sum=x+y
 #[inline(always)]
-fn internal_2(state: [Fq; 2]) -> [Fq; 2] {
+fn internal_2(state: [FieldElement; 2]) -> [FieldElement; 2] {
     let x = state[0];
     let y = state[1];
     let sum = x + y;
@@ -270,29 +187,29 @@ const SECOND_FULL_RC_HEX: [[&str; 2]; 4] = [
 ];
 
 /// Poseidon2 t=2 permutation
-pub fn permute_2(mut state: [Fq; 2]) -> [Fq; 2] {
+pub fn permute_2(mut state: [FieldElement; 2]) -> [FieldElement; 2] {
     // initial external mix
     state = external_2(state);
 
     // first 4 full rounds
     for r in 0..4 {
-        state[0] += Fq::from_hex(FIRST_FULL_RC_HEX[r][0]);
-        state[1] += Fq::from_hex(FIRST_FULL_RC_HEX[r][1]);
+        state[0] += from_hex_be(FIRST_FULL_RC_HEX[r][0]);
+        state[1] += from_hex_be(FIRST_FULL_RC_HEX[r][1]);
         sbox2(&mut state);
         state = external_2(state);
     }
 
     // 56 partial rounds
     for &rc_hex in PARTIAL_HEX.iter() {
-        state[0] += Fq::from_hex(rc_hex);
+        state[0] += from_hex_be(rc_hex);
         state[0] = sbox_e(state[0]);
         state = internal_2(state);
     }
 
     // final 4 full rounds
     for r in 0..4 {
-        state[0] += Fq::from_hex(SECOND_FULL_RC_HEX[r][0]);
-        state[1] += Fq::from_hex(SECOND_FULL_RC_HEX[r][1]);
+        state[0] += from_hex_be(SECOND_FULL_RC_HEX[r][0]);
+        state[1] += from_hex_be(SECOND_FULL_RC_HEX[r][1]);
         sbox2(&mut state);
         state = external_2(state);
     }
@@ -302,10 +219,10 @@ pub fn permute_2(mut state: [Fq; 2]) -> [Fq; 2] {
 
 /// Convenience: Poseidon2 hash2 compatible compressor output (first limb) from 32-byte BE inputs
 pub fn permute_2_bytes_be(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-    let s0 = Fq::from_be_bytes_mod_p(a);
-    let s1 = Fq::from_be_bytes_mod_p(b);
+    let s0 = fq_from_be_bytes(a);
+    let s1 = fq_from_be_bytes(b);
     let out = permute_2([s0, s1]);
-    out[0].to_be_bytes32()
+    fq_to_be_bytes(&out[0])
 }
 
 #[cfg(test)]
@@ -314,78 +231,78 @@ mod tests {
 
     #[test]
     fn t2_fixtures() {
-        let out = permute_2([Fq::from_hex("0x0"), Fq::from_hex("0x1")]);
-        assert_eq!(out[0], Fq::from_hex("0x1d01e56f49579cec72319e145f06f6177f6c5253206e78c2689781452a31878b"));
-        assert_eq!(out[1], Fq::from_hex("0x0d189ec589c41b8cffa88cfc523618a055abe8192c70f75aa72fc514560f6c61"));
+        let out = permute_2([from_hex_be("0x0"), from_hex_be("0x1")]);
+        assert_eq!(out[0], from_hex_be("0x1d01e56f49579cec72319e145f06f6177f6c5253206e78c2689781452a31878b"));
+        assert_eq!(out[1], from_hex_be("0x0d189ec589c41b8cffa88cfc523618a055abe8192c70f75aa72fc514560f6c61"));
 
         let out = permute_2([
-            Fq::from_hex("0x0ae097f5ad29d8a8329dc964d961c9933a57667122baa88351719021510aadcc"),
-            Fq::from_hex("0x1db0afb64a7847b404e509b8076ea6f113e0dc33c8d8923850288b297b366a96"),
+            from_hex_be("0x0ae097f5ad29d8a8329dc964d961c9933a57667122baa88351719021510aadcc"),
+            from_hex_be("0x1db0afb64a7847b404e509b8076ea6f113e0dc33c8d8923850288b297b366a96"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x234411a64c9117a670dcbb2e32887c05695108becb3746a4b63a5e0c64abf213"));
-        assert_eq!(out[1], Fq::from_hex("0x0aeacd239c8086b9199880f4c20576cab326b06c4692d3dec9e13a35228a2a47"));
+        assert_eq!(out[0], from_hex_be("0x234411a64c9117a670dcbb2e32887c05695108becb3746a4b63a5e0c64abf213"));
+        assert_eq!(out[1], from_hex_be("0x0aeacd239c8086b9199880f4c20576cab326b06c4692d3dec9e13a35228a2a47"));
 
         let out = permute_2([
-            Fq::from_hex("0x190e9f8d74c3ee7e6f9a5fc4f3e9aea43e4c636652d64732663ce4d4e9a82dfc"),
-            Fq::from_hex("0x116d4666591fd484d3f63b2143851ecf51790d344f076703aff0ea2ae73d84c0"),
+            from_hex_be("0x190e9f8d74c3ee7e6f9a5fc4f3e9aea43e4c636652d64732663ce4d4e9a82dfc"),
+            from_hex_be("0x116d4666591fd484d3f63b2143851ecf51790d344f076703aff0ea2ae73d84c0"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x184f08154e7c0ae8d1dd611de726a33b46e83c881e7dcc83969ab5225bb1ffd2"));
-        assert_eq!(out[1], Fq::from_hex("0x1c869eaf711604998e0015346275a1df87c872497cf501796b5c665bac5e6c51"));
+        assert_eq!(out[0], from_hex_be("0x184f08154e7c0ae8d1dd611de726a33b46e83c881e7dcc83969ab5225bb1ffd2"));
+        assert_eq!(out[1], from_hex_be("0x1c869eaf711604998e0015346275a1df87c872497cf501796b5c665bac5e6c51"));
 
         let out = permute_2([
-            Fq::from_hex("0x0765449fba54a8f027fdfc4bba2251e13867d2999658961503e1c552eb8d30f0"),
-            Fq::from_hex("0x2458fc60fe06af665be546da89f792db27ba8122735483b028f7945b79a0121d"),
+            from_hex_be("0x0765449fba54a8f027fdfc4bba2251e13867d2999658961503e1c552eb8d30f0"),
+            from_hex_be("0x2458fc60fe06af665be546da89f792db27ba8122735483b028f7945b79a0121d"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x00b99fef7542031ec0fc94e798c29b8d270ae80b0496316c722f149ddbd24c10"));
-        assert_eq!(out[1], Fq::from_hex("0x05a9add2dfce4303c28124e1165154fcf44b7784d3adcc56f505d4e5917b8096"));
+        assert_eq!(out[0], from_hex_be("0x00b99fef7542031ec0fc94e798c29b8d270ae80b0496316c722f149ddbd24c10"));
+        assert_eq!(out[1], from_hex_be("0x05a9add2dfce4303c28124e1165154fcf44b7784d3adcc56f505d4e5917b8096"));
 
         let out = permute_2([
-            Fq::from_hex("0x05df817f34e9cc11af435dd58951c0dc120a9637f1625dae110c900fd64fac01"),
-            Fq::from_hex("0x165798534b555615e2d3a7c0371d7c6b37814e4816dfcbcce9a7f5134166bf95"),
+            from_hex_be("0x05df817f34e9cc11af435dd58951c0dc120a9637f1625dae110c900fd64fac01"),
+            from_hex_be("0x165798534b555615e2d3a7c0371d7c6b37814e4816dfcbcce9a7f5134166bf95"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x2383496930a272a7d99e2db4dcfbe427ac7ece01dbb2c74e0393f44807131987"));
-        assert_eq!(out[1], Fq::from_hex("0x238c2be5f5769977c50e089de45933dc1a00ef4f451497fa67b880fcbb5086da"));
+        assert_eq!(out[0], from_hex_be("0x2383496930a272a7d99e2db4dcfbe427ac7ece01dbb2c74e0393f44807131987"));
+        assert_eq!(out[1], from_hex_be("0x238c2be5f5769977c50e089de45933dc1a00ef4f451497fa67b880fcbb5086da"));
 
         let out = permute_2([
-            Fq::from_hex("0x278ab5ceb7ccf50051df09e958a60cdc29304d5a8bc5f512e8c05e4e8344b494"),
-            Fq::from_hex("0x0691450210975cfd5ad15ad9b7b8d2c0b0e15bc964511530830691b9bdb1deab"),
+            from_hex_be("0x278ab5ceb7ccf50051df09e958a60cdc29304d5a8bc5f512e8c05e4e8344b494"),
+            from_hex_be("0x0691450210975cfd5ad15ad9b7b8d2c0b0e15bc964511530830691b9bdb1deab"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x267529bf7c33acceb53850eba2b713f4449a04d168f90b211c9cbfc2977955e8"));
-        assert_eq!(out[1], Fq::from_hex("0x0dd91eb3904b8fd295abae96ce1e387d3ce1c06f1e68b8b14567c283a2719c10"));
+        assert_eq!(out[0], from_hex_be("0x267529bf7c33acceb53850eba2b713f4449a04d168f90b211c9cbfc2977955e8"));
+        assert_eq!(out[1], from_hex_be("0x0dd91eb3904b8fd295abae96ce1e387d3ce1c06f1e68b8b14567c283a2719c10"));
 
         let out = permute_2([
-            Fq::from_hex("0x0c19d1ab43ce3d913418687b4a60b758e2be814434c5310c7f0a6f5813befa40"),
-            Fq::from_hex("0x0cff2930faece292fb8ef0447faa51eca7538b91999d308c914ffe166deae4b2"),
+            from_hex_be("0x0c19d1ab43ce3d913418687b4a60b758e2be814434c5310c7f0a6f5813befa40"),
+            from_hex_be("0x0cff2930faece292fb8ef0447faa51eca7538b91999d308c914ffe166deae4b2"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x1ac275a60d969f95feead488e81955aa70680121066220a8e313309e76ce8c59"));
-        assert_eq!(out[1], Fq::from_hex("0x05119d1c349bf5ad1b9af9ca6f17c40cd378cf971125709f1905b68d5172826c"));
+        assert_eq!(out[0], from_hex_be("0x1ac275a60d969f95feead488e81955aa70680121066220a8e313309e76ce8c59"));
+        assert_eq!(out[1], from_hex_be("0x05119d1c349bf5ad1b9af9ca6f17c40cd378cf971125709f1905b68d5172826c"));
 
         let out = permute_2([
-            Fq::from_hex("0x23b96a10b3a6b5cb32a4a48ba9e2c7fd95a0381977051d377aba654ce3f46d3f"),
-            Fq::from_hex("0x12c4411263a01236387f3ad010243a44ac532a834589d6d7a38a0149748bf187"),
+            from_hex_be("0x23b96a10b3a6b5cb32a4a48ba9e2c7fd95a0381977051d377aba654ce3f46d3f"),
+            from_hex_be("0x12c4411263a01236387f3ad010243a44ac532a834589d6d7a38a0149748bf187"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x26603ba36cd41bdbde16e06c6f1ec040743059b6ce45fe6f34e00bcb6e535b04"));
-        assert_eq!(out[1], Fq::from_hex("0x0301f7923f6d373b7a36ce42a8f8be025d3f88e0abcd0b54e78ebfbf9116a9bf"));
+        assert_eq!(out[0], from_hex_be("0x26603ba36cd41bdbde16e06c6f1ec040743059b6ce45fe6f34e00bcb6e535b04"));
+        assert_eq!(out[1], from_hex_be("0x0301f7923f6d373b7a36ce42a8f8be025d3f88e0abcd0b54e78ebfbf9116a9bf"));
 
         let out = permute_2([
-            Fq::from_hex("0x2f1df4234732c49ac7567c29d2e066308f807e1bbf0951136b7fccba2602ea9e"),
-            Fq::from_hex("0x04a23083267080ae4ee1a3cb4173dbce507c86edcfdd02853b0399cdab611517"),
+            from_hex_be("0x2f1df4234732c49ac7567c29d2e066308f807e1bbf0951136b7fccba2602ea9e"),
+            from_hex_be("0x04a23083267080ae4ee1a3cb4173dbce507c86edcfdd02853b0399cdab611517"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x0d6e20ac92800c7b08438805fe94a871c5f756ec07a919923c4e007cf01fa87e"));
-        assert_eq!(out[1], Fq::from_hex("0x0d0e60f1acb65d948e7ff874e255c2c07a0f0ecc15e4d14209bc5d5715951ccb"));
+        assert_eq!(out[0], from_hex_be("0x0d6e20ac92800c7b08438805fe94a871c5f756ec07a919923c4e007cf01fa87e"));
+        assert_eq!(out[1], from_hex_be("0x0d0e60f1acb65d948e7ff874e255c2c07a0f0ecc15e4d14209bc5d5715951ccb"));
 
         let out = permute_2([
-            Fq::from_hex("0x106babe89343a47ce296eed78129b6f7af056b46ad808b2cabb66f371180dd17"),
-            Fq::from_hex("0x2f01d999b6e58284d87640c08c49e96d538ba3ffba0c544090fe858dbb5bc28e"),
+            from_hex_be("0x106babe89343a47ce296eed78129b6f7af056b46ad808b2cabb66f371180dd17"),
+            from_hex_be("0x2f01d999b6e58284d87640c08c49e96d538ba3ffba0c544090fe858dbb5bc28e"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x08d523548b9f396c877536b5f96fdfd1826ecdc0c806e24ae328586e8a405d8f"));
-        assert_eq!(out[1], Fq::from_hex("0x1c1c5eeb613b596dd524fe59264ae5ef173cbd271e7f476a5f15d56175cb7478"));
+        assert_eq!(out[0], from_hex_be("0x08d523548b9f396c877536b5f96fdfd1826ecdc0c806e24ae328586e8a405d8f"));
+        assert_eq!(out[1], from_hex_be("0x1c1c5eeb613b596dd524fe59264ae5ef173cbd271e7f476a5f15d56175cb7478"));
 
         let out = permute_2([
-            Fq::from_hex("0x299c0a40411ed9d7de7792fa299b262937b21fabfa386fa761e3f079c1d9045f"),
-            Fq::from_hex("0x2ace2e81e39d97a8e6d83c9e50a8643f4bf01a1465177518558305e7ab254c62"),
+            from_hex_be("0x299c0a40411ed9d7de7792fa299b262937b21fabfa386fa761e3f079c1d9045f"),
+            from_hex_be("0x2ace2e81e39d97a8e6d83c9e50a8643f4bf01a1465177518558305e7ab254c62"),
         ]);
-        assert_eq!(out[0], Fq::from_hex("0x2c62b5c08ee75aa967809de58131cb38e953fdbdccb9140ed92ea89adebcda85"));
-        assert_eq!(out[1], Fq::from_hex("0x2c507b864995a399f7c1143f8c9dc67b7aca63419a2443a879715404a16ec6b8"));
+        assert_eq!(out[0], from_hex_be("0x2c62b5c08ee75aa967809de58131cb38e953fdbdccb9140ed92ea89adebcda85"));
+        assert_eq!(out[1], from_hex_be("0x2c507b864995a399f7c1143f8c9dc67b7aca63419a2443a879715404a16ec6b8"));
     }
 }

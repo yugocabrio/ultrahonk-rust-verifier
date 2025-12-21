@@ -46,6 +46,10 @@ jobs:
       - name: Build optimized contract Wasm
         run: stellar contract build --optimize
 
+      - name: Build tornado contracts Wasm (wasm-cost)
+        run: stellar contract build --optimize --features wasm-cost
+        working-directory: tornado_classic/contracts
+
       - name: Build root circuits
         run: tests/build_circuits.sh
 
@@ -57,6 +61,9 @@ jobs:
 
       - name: Run tornado classic tests
         run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
+
+      - name: Run tornado classic wasm-cost tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features wasm-cost -- --nocapture
 
       - name: Install Node.js
         uses: actions/setup-node@v4

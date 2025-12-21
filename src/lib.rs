@@ -6,11 +6,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
 };
 
-use ultrahonk_rust_verifier::{
-    ec,
-    hash::{self, HashOps},
-    UltraHonkVerifier, PROOF_BYTES,
-};
+use ultrahonk_rust_verifier::{ec, hash, UltraHonkVerifier, PROOF_BYTES};
 
 mod backend;
 mod vk;

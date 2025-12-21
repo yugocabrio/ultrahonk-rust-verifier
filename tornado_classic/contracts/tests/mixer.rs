@@ -8,6 +8,31 @@ use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
+const TREE_DEPTH_TEST: u32 = 10;
+
+#[cfg(feature = "wasm-cost")]
+mod wasm_artifacts {
+    pub const VERIFIER_WASM: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+    ));
+    pub const MIXER_WASM: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/wasm32v1-none/release/tornado_classic_contracts.wasm"
+    ));
+
+    pub mod ultrahonk_contract {
+        soroban_sdk::contractimport!(
+            file = "../../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+        );
+    }
+    pub mod mixer_contract {
+        soroban_sdk::contractimport!(
+            file = "target/wasm32v1-none/release/tornado_classic_contracts.wasm"
+        );
+    }
+}
+
 fn verify_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -56,6 +81,23 @@ fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
     root
 }
 
+fn register_verifier(env: &Env) -> Address { env.register(UltraHonkVerifierContract, ()) }
+fn register_mixer(env: &Env) -> Address { env.register(MixerContract, ()) }
+
+#[cfg(feature = "wasm-cost")]
+fn register_wasm_verifier<'a>(env: &'a Env) -> (wasm_artifacts::ultrahonk_contract::Client<'a>, Address) {
+    let wasm_bytes = Bytes::from_slice(env, wasm_artifacts::VERIFIER_WASM);
+    let contract_id = env.register_contract_wasm(None, wasm_bytes);
+    (wasm_artifacts::ultrahonk_contract::Client::new(env, &contract_id), contract_id)
+}
+
+#[cfg(feature = "wasm-cost")]
+fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Client<'a>, Address) {
+    let wasm_bytes = Bytes::from_slice(env, wasm_artifacts::MIXER_WASM);
+    let contract_id = env.register_contract_wasm(None, wasm_bytes);
+    (wasm_artifacts::mixer_contract::Client::new(env, &contract_id), contract_id)
+}
+
 /// Deposits a sequence of leaves and checks the contract frontier updates match a reference implementation.
 #[test]
 fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
@@ -69,7 +111,7 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
     for (n, leaf) in leaves.iter().enumerate() {
         env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), BytesN::from_array(&env, leaf))).unwrap();
         let onchain_root = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone())).unwrap();
-        let expected_root = frontier_root_from_leaves(&leaves[0..=n], 20);
+        let expected_root = frontier_root_from_leaves(&leaves[0..=n], TREE_DEPTH_TEST);
         assert_eq!(onchain_root, BytesN::from_array(&env, &expected_root));
         let got_cm = env.as_contract(&mixer_id, || MixerContract::get_commitment_by_index(env.clone(), n as u32)).unwrap();
         assert_eq!(got_cm, BytesN::from_array(&env, leaf));
@@ -81,7 +123,7 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
 fn mixer_withdraw_and_double_spend_rejected() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Artifacts
@@ -160,7 +202,7 @@ fn set_root_requires_admin_configuration() {
 fn withdraw_rejects_nullifier_mismatch() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
@@ -242,7 +284,7 @@ fn configure_twice_is_rejected() {
 fn withdraw_rejects_root_mismatch() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
@@ -301,15 +343,16 @@ fn withdraw_rejects_root_mismatch() {
 fn print_budget_for_deposit_and_withdraw() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
-    let mixer_id: Address = env.register(MixerContract, ());
+    // Register real WASM contracts so WasmInsnExec is included in the budget.
+    let verifier_id = register_verifier(&env);
+    let mixer_id = register_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
     let _auth = env.mock_all_auths();
@@ -317,7 +360,7 @@ fn print_budget_for_deposit_and_withdraw() {
         .expect("configure ok");
 
     // Measure deposit budget usage
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let commitment = BytesN::from_array(&env, &[0x55; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment.clone()))
         .expect("deposit ok");
@@ -338,16 +381,14 @@ fn print_budget_for_deposit_and_withdraw() {
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
-    env.as_contract(&verifier_id, || {
-        UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())
-    })
-    .expect("set_vk ok");
+    env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
+        .expect("set_vk ok");
 
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
 
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     env.as_contract(&mixer_id, || {
         MixerContract::withdraw(
             env.clone(),
@@ -360,6 +401,35 @@ fn print_budget_for_deposit_and_withdraw() {
     .expect("withdraw ok");
     println!("=== withdraw budget usage ===");
     env.cost_estimate().budget().print();
+}
+
+/// Measure deposit/withdraw budget using WASM contracts (requires built artifacts).
+#[cfg(feature = "wasm-cost")]
+#[test]
+fn print_wasm_budget_for_deposit_and_withdraw() {
+    let _guard = verify_lock().lock().unwrap();
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
+
+    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
+    let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
+
+    let (verifier, verifier_id) = register_wasm_verifier(&env);
+    let (mixer, _) = register_wasm_mixer(&env);
+
+    let admin = <Address as TestAddress>::generate(&env);
+    let _auth = env.mock_all_auths();
+    mixer.configure(&admin);
+
+    env.cost_estimate().budget().reset_unlimited();
+    let commitment = BytesN::from_array(&env, &[0x55; 32]);
+    mixer.deposit(&commitment);
+    println!("=== wasm deposit budget usage ===");
+    env.cost_estimate().budget().print();
+
+    println!("Skipping withdraw in wasm-cost test (deposit only).");
 }
 
 #[test]
