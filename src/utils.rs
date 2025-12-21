@@ -158,110 +158,49 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
 /// Load a VerificationKey from a JSON string containing an array of hex‐encoded field‐elements.
 #[cfg(feature = "serde_json")]
 pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
-    // Parse JSON into Vec<String>
     let vk_fields: Vec<String> = serde_json::from_str(json_data).unwrap();
-    // Expect v0.87.0 header(3) + 28*4 limbs
-    assert!(vk_fields.len() >= 3, "VK JSON must contain header elements");
+    // Header (fields): [circuit_size, public_inputs_size, pub_inputs_offset, reserved]
+    const HEADER_WORDS: usize = 4;
+    const NUM_POINTS: usize = 27;
+    let expected_len = HEADER_WORDS + NUM_POINTS * 4;
+    assert!(
+        vk_fields.len() >= expected_len,
+        "VK JSON must contain at least {} elements (got {})",
+        expected_len,
+        vk_fields.len()
+    );
 
-    // Helper to parse hex field element to u64 (fits for small header values)
     fn parse_u64_hex(s: &str) -> u64 {
         let x = BigUint::from_str_radix(s.trim_start_matches("0x"), 16).unwrap();
         x.to_u64_digits().get(0).copied().unwrap_or(0)
     }
 
-    // Parse VK header (barretenberg v0.87.0):
-    //   [0] log_circuit_size, [1] num_public_inputs, [2] pub_inputs_offset
-    let h0 = parse_u64_hex(&vk_fields[0]);
-    let public_inputs_size = if vk_fields.len() > 1 {
-        parse_u64_hex(&vk_fields[1])
-    } else {
-        0
-    };
-    let pub_inputs_offset = if vk_fields.len() > 2 {
-        parse_u64_hex(&vk_fields[2])
-    } else {
-        0
-    };
-    // Some builds store circuit_size in [0], others store log2(circuit_size).
-    // If the value is a power of two, treat it as circuit_size and compute log; otherwise treat it as log value.
-    let (circuit_size_u64, log_circuit_size) = if h0 != 0 && (h0 & (h0 - 1)) == 0 {
-        let mut lg = 0u64;
-        let mut n = h0;
-        while n > 1 {
-            n >>= 1;
-            lg += 1;
-        }
-        (h0, lg)
-    } else {
-        let cs = 1u64.checked_shl(h0 as u32).expect("circuit_size too large");
-        (cs, h0)
-    };
+    let circuit_size = parse_u64_hex(&vk_fields[0]);
+    let public_inputs_size = parse_u64_hex(&vk_fields[1]);
+    let pub_inputs_offset = parse_u64_hex(&vk_fields[2]);
+    let log_circuit_size = circuit_size.trailing_zeros() as u64;
 
-    // Fixed for v0.87.0: header_len=3, limbs_per_point=4 (lo_x, hi_x, lo_y, hi_y).
-    let mut field_index = 3usize;
-    // Attempt to auto-synchronize start of G1 limbs in vk_fields.json by sliding until a valid point is found.
-    {
-        let max_probe = 16usize;
-        let len = vk_fields.len();
-        'outer: for offset in 0..max_probe {
-            if field_index + offset + 3 >= len {
-                break;
-            }
-            let ix = field_index + offset;
-            let parse = |i: usize| {
-                BigUint::from_str_radix(vk_fields[i].trim_start_matches("0x"), 16).unwrap()
-            };
-            let lx = parse(ix);
-            let hx = parse(ix + 1);
-            let ly = parse(ix + 2);
-            let hy = parse(ix + 3);
-            let pt = read_g1_from_limbs(&lx, &hx, &ly, &hy);
-            let aff = G1Affine::new_unchecked(pt.x, pt.y);
-            if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
-                field_index = ix;
-                break 'outer;
-            }
-        }
+    // Safe reader: 4 limbs → G1 using fixed v0.87.0 encoding (hi_x, lo_x, hi_y, lo_y) with 136-bit split.
+    fn read_g1_from_limbs(hx: &BigUint, lx: &BigUint, hy: &BigUint, ly: &BigUint) -> G1Point {
+        let assemble = |hi: &BigUint, lo: &BigUint| -> BigUint { hi | (lo << 136) };
+        let x = biguint_to_fq_mod(&assemble(hx, lx));
+        let y = biguint_to_fq_mod(&assemble(hy, ly));
+        G1Point { x, y }
     }
 
-    // Safe reader: 4 limbs → G1 using fixed v0.87.0 encoding (lo136, hi<=118) per coordinate.
-    // Falls back to a couple of alternative assemblies if on-curve check fails.
-    fn read_g1_from_limbs(lx: &BigUint, hx: &BigUint, ly: &BigUint, hy: &BigUint) -> G1Point {
-        // Primary: lo | (hi << 136)
-        let assemble = |lo: &BigUint, hi: &BigUint, shift: u32| -> BigUint { lo | (hi << shift) };
-        let mut try_pairs: [([&BigUint; 2], [&BigUint; 2]); 2] =
-            [([lx, hx], [ly, hy]), ([ly, hy], [lx, hx])];
-        let shifts = [136u32, 128u32];
-        for &shift in &shifts {
-            for &(ref ax, ref ay) in &try_pairs {
-                let bx = assemble(ax[0], ax[1], shift);
-                let by = assemble(ay[0], ay[1], shift);
-                let x = biguint_to_fq_mod(&bx);
-                let y = biguint_to_fq_mod(&by);
-                let aff = G1Affine::new_unchecked(x, y);
-                if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
-                    return G1Point { x: aff.x, y: aff.y };
-                }
-            }
-        }
-        G1Point {
-            x: Fq::from(0u64),
-            y: Fq::from(0u64),
-        }
-    }
-
+    let mut field_index = HEADER_WORDS;
     macro_rules! read_g1 {
         () => {{
-            let low_x = &vk_fields[field_index];
-            let high_x = &vk_fields[field_index + 1];
-            let low_y = &vk_fields[field_index + 2];
-            let high_y = &vk_fields[field_index + 3];
-            let lx = BigUint::from_str_radix(low_x.trim_start_matches("0x"), 16).unwrap();
+            let high_x = &vk_fields[field_index];
+            let low_x = &vk_fields[field_index + 1];
+            let high_y = &vk_fields[field_index + 2];
+            let low_y = &vk_fields[field_index + 3];
             let hx = BigUint::from_str_radix(high_x.trim_start_matches("0x"), 16).unwrap();
-            let ly = BigUint::from_str_radix(low_y.trim_start_matches("0x"), 16).unwrap();
+            let lx = BigUint::from_str_radix(low_x.trim_start_matches("0x"), 16).unwrap();
             let hy = BigUint::from_str_radix(high_y.trim_start_matches("0x"), 16).unwrap();
+            let ly = BigUint::from_str_radix(low_y.trim_start_matches("0x"), 16).unwrap();
             field_index += 4;
-            read_g1_from_limbs(&lx, &hx, &ly, &hy)
+            read_g1_from_limbs(&hx, &lx, &hy, &ly)
         }};
     }
 
@@ -298,7 +237,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
     let lagrange_last = read_g1!();
 
     VerificationKey {
-        circuit_size: circuit_size_u64,
+        circuit_size,
         log_circuit_size,
         public_inputs_size,
         pub_inputs_offset,
