@@ -96,7 +96,6 @@ if [[ ! -f "${WIT}" ]]; then
 fi
 
 echo "[3/4] bb write_vk --scheme ultra_honk --oracle_hash keccak"
-rm -f target/vk_fields.json target/vk
 rm -rf target/vk_fields.json target/vk
 "${BB_BIN}" write_vk \
   --scheme ultra_honk \

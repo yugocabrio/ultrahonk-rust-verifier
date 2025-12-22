@@ -126,7 +126,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Artifacts
-    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk/vk");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -204,7 +204,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk/vk");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
