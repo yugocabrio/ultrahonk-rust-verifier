@@ -19,7 +19,7 @@ fn verify_proof_direct_with_vk_json() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk/vk");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -50,7 +50,7 @@ fn verify_proof_with_stored_vk_path() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk/vk");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 

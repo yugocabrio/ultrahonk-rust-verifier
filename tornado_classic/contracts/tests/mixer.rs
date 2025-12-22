@@ -39,7 +39,7 @@ fn verify_lock() -> &'static Mutex<()> {
 }
 
 fn vk_bytes(env: &Env) -> Bytes {
-    Bytes::from_slice(env, include_bytes!("../../circuit/target/vk/vk"))
+    Bytes::from_slice(env, include_bytes!("../../circuit/target/vk"))
 }
 
 fn be32_from_u64(x: u64) -> [u8; 32] {
