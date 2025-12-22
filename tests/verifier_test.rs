@@ -7,9 +7,9 @@ fn run(dir: &str) -> Result<(), String> {
     // Proof bytes
     let proof_bytes: Vec<u8> = fs::read(path.join("proof")).map_err(|e| e.to_string())?;
 
-    // Use JSON VK
-    let vk_json = fs::read_to_string(path.join("vk_fields.json")).map_err(|e| e.to_string())?;
-    let verifier = UltraHonkVerifier::new_from_json(&vk_json);
+    // Use binary VK
+    let vk_bytes = fs::read(path.join("vk")).map_err(|e| e.to_string())?;
+    let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes);
 
     // Public inputs bytes
     let buf = fs::read(path.join("public_inputs")).map_err(|e| e.to_string())?;

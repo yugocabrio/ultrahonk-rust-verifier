@@ -27,7 +27,7 @@ lazy_static = { version = "1.4", optional = true }
 once_cell = { version = "1.19", default-features = false, features = ["alloc", "race"] }
 
 [features]
-default = ["alloc", "serde", "serde_json"]
+default = ["alloc"]
 # Soroban BN254 precompile integration switch
 soroban-precompile = []
 std = [
@@ -37,8 +37,6 @@ std = [
     "ark-serialize/std",
     "ark-std/std",
     "ark-bn254/std",
-    "serde",
-    "serde_json",
     "hex/std",
     "num-bigint/std",
     "num-traits/std",
@@ -48,7 +46,6 @@ std = [
 trace = []
 
 alloc = [
-    "serde_json/alloc",
     "hex/alloc",
     "once_cell/alloc",
 ]

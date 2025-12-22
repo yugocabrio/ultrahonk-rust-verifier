@@ -6,8 +6,8 @@ Rust verifier library for proofs generated from Noir (UltraHonk) on BN254, with 
 ## Features
 - Verifies proofs generated from Noir (UltraHonk) using Nargo 1.0.0-beta.9 / barretenberg v0.87.0  
 - Pure Rust core; `no_std` + `alloc` friendly  
-- Supports bb `write_vk --output_format bytes_and_fields` (`vk_fields.json`)  
-- Example verification inputs under `circuits/simple_circuit/target` (for tests)
+- Expects `bb write_vk`
+- Example verification artifacts under `circuits/simple_circuit/target` (for tests)
 
 ---
 
@@ -19,12 +19,11 @@ cargo test
 ```
 
 ## How It Works
-- Typical pipeline: Noir circuit → Nargo prove → bb emits `proof`, `public_inputs`, `vk_fields.json` → this library verifies the proof.
+- Typical pipeline: Noir circuit → Nargo prove → bb emits `proof`, `public_inputs`, and `vk` → this library verifies the proof.
 - Test data (already checked in) lives at `circuits/simple_circuit/target` and includes:
-  - `proof` (raw bytes)
-  - `public_inputs` (raw bytes) or `public_inputs_fields.json`
-- `vk_fields.json` (array of hex field elements; Noir/Nargo 1.0.0-beta.9 + bb v0.87.0 layout)
-- The test at `tests/verifier_test.rs` loads these files and calls the Rust verifier.
+  - `proof`
+  - `public_inputs`
+  - `vk`
 
 ---
 
@@ -35,9 +34,8 @@ Add the dependency from a git path or local path. The crate exposes a small API:
 ```rust
 use ultrahonk_rust_verifier::UltraHonkVerifier;
 
-// If you have a vk_fields.json string (Noir/Nargo 1.0.0-beta.9, bb v0.87.0)
-let vk_json = std::fs::read_to_string("vk_fields.json").unwrap();
-let verifier = UltraHonkVerifier::new_from_json(&vk_json);
+let vk_bytes = std::fs::read("vk").unwrap();
+let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes);
 
 // Load proof bytes and public inputs as 32‑byte big‑endian chunks
 let proof_bytes = std::fs::read("proof").unwrap();
@@ -53,11 +51,11 @@ verifier.verify(&proof_bytes, &public_inputs_bytes).unwrap();
 Notes:
 - Library scope: verification only (not a prover or circuit compiler). Input files must be produced by Noir/Nargo 1.0.0-beta.9 + bb v0.87.0.
 - The verifier internally re-derives the Fiat–Shamir transcript and checks both Sum‑check and Shplonk batch openings over BN254.
-- `std` feature enables file I/O and serde JSON; the core logic is `no_std` + `alloc` friendly.
+- `std` feature enables file I/O helpers; the core logic is `no_std` + `alloc` friendly.
 - Enable the `trace` feature to print step-by-step internals for cross‑checking with Solidity outputs.
 
 ## Cargo Features
-- `std`: enables I/O and serde for convenient loading.
+- `std`: enables std I/O helpers for convenient loading.
 - `trace`: prints detailed verifier internals (for debugging); off by default.
 - `alloc` (default): required for `no_std` collections.
 - `soroban-precompile`: routes MSM + pairing calls through a backend facade intended for a Soroban host precompile.

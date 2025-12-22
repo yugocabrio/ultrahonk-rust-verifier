@@ -3,9 +3,8 @@
 use crate::field::Fr;
 use crate::types::{G1Point, Proof, VerificationKey};
 use ark_bn254::{Fq, G1Affine};
-use ark_ff::{BigInteger256, PrimeField};
+use ark_ff::{BigInteger256, PrimeField, Zero};
 use num_bigint::BigUint;
-use num_traits::Num;
 
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, vec::Vec};
@@ -155,86 +154,84 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     }
 }
 
-/// Load a VerificationKey from a JSON string containing an array of hex‐encoded field‐elements.
-#[cfg(feature = "serde_json")]
-pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
-    let vk_fields: Vec<String> = serde_json::from_str(json_data).unwrap();
-    // Header (fields): [circuit_size, public_inputs_size, pub_inputs_offset, reserved]
+/// Load a VerificationKey.
+pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     const HEADER_WORDS: usize = 4;
     const NUM_POINTS: usize = 27;
-    let expected_len = HEADER_WORDS + NUM_POINTS * 4;
+    const EXPECTED_LEN: usize = HEADER_WORDS * 8 + NUM_POINTS * 64;
     assert!(
-        vk_fields.len() >= expected_len,
-        "VK JSON must contain at least {} elements (got {})",
-        expected_len,
-        vk_fields.len()
+        bytes.len() == EXPECTED_LEN,
+        "vk bytes must be {} bytes (got {})",
+        EXPECTED_LEN,
+        bytes.len()
     );
 
-    fn parse_u64_hex(s: &str) -> u64 {
-        let x = BigUint::from_str_radix(s.trim_start_matches("0x"), 16).unwrap();
-        x.to_u64_digits().get(0).copied().unwrap_or(0)
+    fn read_u64(bytes: &[u8], idx: &mut usize) -> u64 {
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&bytes[*idx..*idx + 8]);
+        *idx += 8;
+        u64::from_be_bytes(arr)
+    }
+    fn read_point(bytes: &[u8], idx: &mut usize) -> G1Point {
+        let mut x_bytes = [0u8; 32];
+        let mut y_bytes = [0u8; 32];
+        x_bytes.copy_from_slice(&bytes[*idx..*idx + 32]);
+        y_bytes.copy_from_slice(&bytes[*idx + 32..*idx + 64]);
+        *idx += 64;
+
+        let x = Fq::from_be_bytes_mod_order(&x_bytes);
+        let y = Fq::from_be_bytes_mod_order(&y_bytes);
+
+        if x.is_zero() && y.is_zero() {
+            return G1Point { x, y };
+        }
+
+        let aff = G1Affine::new_unchecked(x, y);
+        assert!(aff.is_on_curve(), "vk point not on curve");
+        assert!(
+            aff.is_in_correct_subgroup_assuming_on_curve(),
+            "vk point not in subgroup"
+        );
+        G1Point { x: aff.x, y: aff.y }
     }
 
-    let circuit_size = parse_u64_hex(&vk_fields[0]);
-    let public_inputs_size = parse_u64_hex(&vk_fields[1]);
-    let pub_inputs_offset = parse_u64_hex(&vk_fields[2]);
-    let log_circuit_size = circuit_size.trailing_zeros() as u64;
+    let mut idx = 0usize;
+    let circuit_size = read_u64(bytes, &mut idx);
+    let log_circuit_size = read_u64(bytes, &mut idx);
+    let public_inputs_size = read_u64(bytes, &mut idx);
+    let pub_inputs_offset = read_u64(bytes, &mut idx);
 
-    // Safe reader: 4 limbs → G1 using fixed v0.87.0 encoding (hi_x, lo_x, hi_y, lo_y) with 136-bit split.
-    fn read_g1_from_limbs(hx: &BigUint, lx: &BigUint, hy: &BigUint, ly: &BigUint) -> G1Point {
-        let assemble = |hi: &BigUint, lo: &BigUint| -> BigUint { hi | (lo << 136) };
-        let x = biguint_to_fq_mod(&assemble(hx, lx));
-        let y = biguint_to_fq_mod(&assemble(hy, ly));
-        G1Point { x, y }
-    }
-
-    let mut field_index = HEADER_WORDS;
-    macro_rules! read_g1 {
-        () => {{
-            let high_x = &vk_fields[field_index];
-            let low_x = &vk_fields[field_index + 1];
-            let high_y = &vk_fields[field_index + 2];
-            let low_y = &vk_fields[field_index + 3];
-            let hx = BigUint::from_str_radix(high_x.trim_start_matches("0x"), 16).unwrap();
-            let lx = BigUint::from_str_radix(low_x.trim_start_matches("0x"), 16).unwrap();
-            let hy = BigUint::from_str_radix(high_y.trim_start_matches("0x"), 16).unwrap();
-            let ly = BigUint::from_str_radix(low_y.trim_start_matches("0x"), 16).unwrap();
-            field_index += 4;
-            read_g1_from_limbs(&hx, &lx, &hy, &ly)
-        }};
-    }
-
-    // Follow bb v0.87.0 vk_fields.json order (wire/commitment order in fields file):
-    // qm, qc, ql, qr, qo, q4, q_lookup, q_arith, q_delta_range, q_elliptic, q_memory(qAux),
-    // q_poseidon2_external, q_poseidon2_internal, s1..s4, id1..id4, t1..t4, lagrange_first, lagrange_last
-    let qm = read_g1!();
-    let qc = read_g1!();
-    let ql = read_g1!();
-    let qr = read_g1!();
-    let qo = read_g1!();
-    let q4 = read_g1!();
-    let q_lookup = read_g1!();
-    let q_arith = read_g1!();
-    let q_delta_range = read_g1!();
-    let q_elliptic = read_g1!();
-    let q_memory = read_g1!(); // qAux
-    let q_poseidon2_external = read_g1!();
-    let q_poseidon2_internal = read_g1!();
-    let s1 = read_g1!();
-    let s2 = read_g1!();
-    let s3 = read_g1!();
-    let s4 = read_g1!();
-    // bb v0.87.0 order: IDs come before table commitments
-    let id1 = read_g1!();
-    let id2 = read_g1!();
-    let id3 = read_g1!();
-    let id4 = read_g1!();
-    let t1 = read_g1!();
-    let t2 = read_g1!();
-    let t3 = read_g1!();
-    let t4 = read_g1!();
-    let lagrange_first = read_g1!();
-    let lagrange_last = read_g1!();
+    let qm = read_point(bytes, &mut idx);
+    let qc = read_point(bytes, &mut idx);
+    let ql = read_point(bytes, &mut idx);
+    let qr = read_point(bytes, &mut idx);
+    let qo = read_point(bytes, &mut idx);
+    let q4 = read_point(bytes, &mut idx);
+    let q_lookup = read_point(bytes, &mut idx);
+    let q_arith = read_point(bytes, &mut idx);
+    let q_delta_range = read_point(bytes, &mut idx);
+    let q_elliptic = read_point(bytes, &mut idx);
+    let q_memory = read_point(bytes, &mut idx);
+    let q_nnf = G1Point {
+        x: Fq::from(0u64),
+        y: Fq::from(0u64),
+    };
+    let q_poseidon2_external = read_point(bytes, &mut idx);
+    let q_poseidon2_internal = read_point(bytes, &mut idx);
+    let s1 = read_point(bytes, &mut idx);
+    let s2 = read_point(bytes, &mut idx);
+    let s3 = read_point(bytes, &mut idx);
+    let s4 = read_point(bytes, &mut idx);
+    let id1 = read_point(bytes, &mut idx);
+    let id2 = read_point(bytes, &mut idx);
+    let id3 = read_point(bytes, &mut idx);
+    let id4 = read_point(bytes, &mut idx);
+    let t1 = read_point(bytes, &mut idx);
+    let t2 = read_point(bytes, &mut idx);
+    let t3 = read_point(bytes, &mut idx);
+    let t4 = read_point(bytes, &mut idx);
+    let lagrange_first = read_point(bytes, &mut idx);
+    let lagrange_last = read_point(bytes, &mut idx);
 
     VerificationKey {
         circuit_size,
@@ -252,10 +249,7 @@ pub fn load_vk_from_json(json_data: &str) -> VerificationKey {
         q_delta_range,
         q_elliptic,
         q_memory,
-        q_nnf: G1Point {
-            x: Fq::from(0u64),
-            y: Fq::from(0u64),
-        },
+        q_nnf,
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,

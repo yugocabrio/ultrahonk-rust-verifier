@@ -1,16 +1,15 @@
 //! UltraHonk verifier
 
 use crate::{
-    field::Fr, shplemini::verify_shplemini, sumcheck::verify_sumcheck,
-    transcript::generate_transcript, utils::load_proof,
+    field::Fr,
+    shplemini::verify_shplemini,
+    sumcheck::verify_sumcheck,
+    transcript::generate_transcript,
+    utils::{load_proof, load_vk_from_bytes},
 };
-
-#[cfg(feature = "serde_json")]
-use crate::utils::load_vk_from_json;
 
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec::Vec};
-// ===============================================
 
 /// Error type describing the specific reason verification failed.
 #[derive(Debug)]
@@ -40,10 +39,9 @@ impl UltraHonkVerifier {
         Self { vk }
     }
 
-    #[cfg(feature = "serde_json")]
-    pub fn new_from_json(json_data: &str) -> Self {
+    pub fn new_from_bytes(vk_bytes: &[u8]) -> Self {
         Self {
-            vk: load_vk_from_json(json_data),
+            vk: load_vk_from_bytes(vk_bytes),
         }
     }
 
