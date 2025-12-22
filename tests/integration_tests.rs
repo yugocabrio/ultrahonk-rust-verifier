@@ -1,6 +1,5 @@
 use soroban_sdk::{Bytes, Env};
 use ultrahonk_rust_verifier::PROOF_BYTES;
-use ultrahonk_soroban_contract::preprocess_vk_json;
 
 const CONTRACT_WASM: &[u8] =
     include_bytes!("../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm");
@@ -17,17 +16,9 @@ fn register_client<'a>(env: &'a Env) -> ultrahonk_contract::Client<'a> {
     ultrahonk_contract::Client::new(env, &contract_id)
 }
 
-fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
-    let vk_blob = preprocess_vk_json(json).expect("valid vk json");
-    assert_eq!(vk_blob.len(), 1824, "unexpected VK byte length");
-    let bytes = Bytes::from_slice(env, &vk_blob);
-    assert_eq!(bytes.len(), 1824, "unexpected Bytes len");
-    bytes
-}
-
 #[test]
 fn verify_simple_circuit_proof_succeeds() {
-    let vk_fields_json: &str = include_str!("simple_circuit/target/vk_fields.json");
+    let vk_bytes_raw: &[u8] = include_bytes!("simple_circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
 
@@ -36,7 +27,7 @@ fn verify_simple_circuit_proof_succeeds() {
     assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
-    let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
@@ -46,7 +37,7 @@ fn verify_simple_circuit_proof_succeeds() {
 
 #[test]
 fn verify_fib_chain_proof_succeeds() {
-    let vk_fields_json: &str = include_str!("fib_chain/target/vk_fields.json");
+    let vk_bytes_raw: &[u8] = include_bytes!("fib_chain/target/vk");
     let proof_bin: &[u8] = include_bytes!("fib_chain/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("fib_chain/target/public_inputs");
 
@@ -55,7 +46,7 @@ fn verify_fib_chain_proof_succeeds() {
     assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
-    let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
@@ -65,7 +56,7 @@ fn verify_fib_chain_proof_succeeds() {
 
 #[test]
 fn print_budget_for_deploy_and_verify() {
-    let vk_fields_json: &str = include_str!("simple_circuit/target/vk_fields.json");
+    let vk_bytes_raw: &[u8] = include_bytes!("simple_circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
 
@@ -79,7 +70,7 @@ fn print_budget_for_deploy_and_verify() {
     env.cost_estimate().budget().print();
 
     // Prepare proof inputs
-    let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
@@ -101,7 +92,7 @@ fn print_budget_for_deploy_and_verify() {
 
 #[test]
 fn basic_verify_budget_test() {
-    let vk_fields_json: &str = include_str!("simple_circuit/target/vk_fields.json");
+    let vk_bytes_raw: &[u8] = include_bytes!("simple_circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
 
@@ -111,7 +102,7 @@ fn basic_verify_budget_test() {
     let client = register_client(&env);
 
     // Prepare proof inputs
-    let vk_bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
