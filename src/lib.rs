@@ -65,7 +65,7 @@ impl UltraHonkVerifierContract {
             return Err(Error::ProofParseError);
         }
 
-        // Deserialize preprocessed verification key bytes
+        // Deserialize verification key bytes
         let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
         let vk = load_vk_from_bytes(&vk_vec);
 
@@ -83,7 +83,7 @@ impl UltraHonkVerifierContract {
         Ok(())
     }
 
-    /// Set preprocessed verification key bytes and cache its hash. Returns vk_hash
+    /// Set verification key bytes and cache its hash. Returns vk_hash
     pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<BytesN<32>, Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
         let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();

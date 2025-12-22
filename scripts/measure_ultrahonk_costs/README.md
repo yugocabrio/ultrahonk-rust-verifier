@@ -1,14 +1,13 @@
 # UltraHonk Cost Measurement
 
-TypeScript utility that simulates UltraHonk contract methods via Soroban RPC and prints CPU instructions, memory usage, and minimum resource fees. The script automatically runs the Rust `preprocess_vk` helper so the verification key matches the on-chain format.
+TypeScript utility that simulates UltraHonk contract methods via Soroban RPC and prints CPU instructions, memory usage, and minimum resource fees.
 
 ## Prerequisites
 
 - Node.js and npm (`npm install` inside this directory)
-- Rust toolchain (`cargo run --manifest-path preprocess_vk_cli/Cargo.toml` is invoked)
 - Running Soroban network (local Quickstart/Futurenet)
 - Deployed UltraHonk contract
-- Dataset containing `vk_fields.json`, `proof`, `public_inputs`
+- Dataset containing `vk`, `proof`, `public_inputs`
 
 ## Usage
 

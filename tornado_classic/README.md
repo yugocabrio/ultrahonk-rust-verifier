@@ -6,7 +6,7 @@ Scope
 - Educational sample: no token flow, trusted setup, and bn254 precompile missing on Soroban networks (devnet deploy still blocked).
 
 Layout
-- `circuit/`: Noir project + scripts to build proof artifacts (`target/vk_fields.json`, `proof`, `public_inputs`).
+- `circuit/`: Noir project + scripts to build proof artifacts (`target/vk`, `target/vk_fields.json`, `proof`, `public_inputs`).
 - `contracts/`: Rust tests wiring `UltraHonkVerifierContract` and `MixerContract` in a simulated Soroban environment.
 
 Requirements
@@ -18,7 +18,7 @@ Requirements
 Generate ZK Artifacts
 ```bash
 cd tornado_classic/circuit
-scripts/gen_artifacts.sh   # produces target/{vk_fields.json,proof,public_inputs,…}
+scripts/gen_artifacts.sh   # produces target/{vk,proof,public_inputs,…}
 ```
 
 Run Contract Tests (includes real proof verification)
