@@ -3,7 +3,7 @@
  * Helper utilities for invoking the UltraHonk verifier contract.
  *
  * The contract expects three byte arguments:
- *   1. vk_bytes        → preprocessed verification key bytes
+ *   1. vk_bytes        → verification key bytes
  *   2. public_inputs   → concatenated public inputs (32-byte each)
  *   3. proof_bytes     → raw proof bytes
  *
@@ -21,41 +21,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { ArgumentParser } from 'argparse';
 
 // === Constants ===============================================================
 
 const DEFAULT_CONTRACT_ID = 'CD6HGS5V7XJPSPJ5HHPHUZXLYGZAJJC3L6QWR4YZG4NIRO65UYQ6KIYP';
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const PREPROCESS_MANIFEST = path.resolve(REPO_ROOT, 'preprocess_vk_cli', 'Cargo.toml');
 const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'tests', 'simple_circuit', 'target');
 
 // === Data loading / packing ==================================================
 
 interface PackedArtifacts {
-  vkJsonPath: string;
+  vkPath: string;
   vkBytes: Buffer;
   publicInputsBytes: Buffer;
   proofBytes: Buffer;
-}
-
-function preprocessVkBytes(vkJsonPath: string): Buffer {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preprocess-vk-'));
-  const outPath = path.join(tmpDir, 'vk.bin');
-  try {
-    const result = spawnSync(
-      'cargo',
-      ['run', '--quiet', '--manifest-path', PREPROCESS_MANIFEST, '--', vkJsonPath, outPath],
-      { stdio: 'inherit' }
-    );
-    if (result.status !== 0) {
-      throw new Error('preprocess_vk failed');
-    }
-    return fs.readFileSync(outPath);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
 }
 
 function getProofFields(artifacts: PackedArtifacts): number {
@@ -74,7 +55,7 @@ function getPublicInputFields(artifacts: PackedArtifacts): number {
 
 function loadArtifacts(
   dataset: string | null,
-  vkJson: string | null,
+  vkPath: string | null,
   publicInputs: string | null,
   proof: string | null
 ): PackedArtifacts {
@@ -83,16 +64,16 @@ function loadArtifacts(
     datasetDir = path.resolve(process.cwd(), datasetDir);
   }
 
-  const vkJsonPath = vkJson ?? path.join(datasetDir, 'vk_fields.json');
+  const vkBinPath = vkPath ?? path.join(datasetDir, 'vk');
   const publicInputsPath = publicInputs ?? path.join(datasetDir, 'public_inputs');
   const proofPath = proof ?? path.join(datasetDir, 'proof');
 
-  const resolvedVkJson = path.resolve(vkJsonPath);
+  const resolvedVkBin = path.resolve(vkBinPath);
   const resolvedPublicInputs = path.resolve(publicInputsPath);
   const resolvedProof = path.resolve(proofPath);
 
-  if (!fs.existsSync(resolvedVkJson)) {
-    throw new Error(`vk JSON not found: ${resolvedVkJson}`);
+  if (!fs.existsSync(resolvedVkBin)) {
+    throw new Error(`vk not found: ${resolvedVkBin}`);
   }
   if (!fs.existsSync(resolvedPublicInputs)) {
     throw new Error(`public inputs not found: ${resolvedPublicInputs}`);
@@ -102,8 +83,8 @@ function loadArtifacts(
   }
 
   return {
-    vkJsonPath: resolvedVkJson,
-    vkBytes: preprocessVkBytes(resolvedVkJson),
+    vkPath: resolvedVkBin,
+    vkBytes: fs.readFileSync(resolvedVkBin),
     publicInputsBytes: fs.readFileSync(resolvedPublicInputs),
     proofBytes: fs.readFileSync(resolvedProof),
   };
@@ -201,7 +182,7 @@ async function invokeWithVariants(
 // === Commands ================================================================
 
 function printSummary(artifacts: PackedArtifacts): void {
-  console.log('vk_json:', artifacts.vkJsonPath);
+  console.log('vk:', artifacts.vkPath);
   console.log('public inputs bytes:', artifacts.publicInputsBytes.length);
   console.log('proof bytes:', artifacts.proofBytes.length);
   console.log('proof fields:', getProofFields(artifacts));
@@ -213,7 +194,7 @@ async function commandPrepare(args: any): Promise<number> {
   try {
     const artifacts = loadArtifacts(
       args.dataset,
-      args.vk_json,
+      args.vk,
       args.public_inputs,
       args.proof
     );
@@ -230,7 +211,7 @@ async function commandInvoke(args: any): Promise<number> {
   try {
     const artifacts = loadArtifacts(
       args.dataset,
-      args.vk_json,
+      args.vk,
       args.public_inputs,
       args.proof
     );
@@ -290,12 +271,12 @@ async function commandSetVk(args: any): Promise<number> {
   try {
     const artifacts = loadArtifacts(
       args.dataset,
-      args.vk_json,
+      args.vk,
       args.public_inputs,
       args.proof
     );
 
-    console.log('vk_json:', artifacts.vkJsonPath);
+    console.log('vk:', artifacts.vkPath);
     const baseCmd: string[] = [
       'stellar',
       'contract',
@@ -345,12 +326,12 @@ function buildParser(): ArgumentParser {
   const addArtifactArgs = (p: ArgumentParser): void => {
     p.add_argument('--dataset', {
       type: 'str',
-      help: `Directory containing vk_fields.json, public_inputs, and proof. Defaults to ${DEFAULT_DATASET_DIR}`,
+      help: `Directory containing vk, public_inputs, and proof. Defaults to ${DEFAULT_DATASET_DIR}`,
       default: null,
     });
-    p.add_argument('--vk-json', {
+    p.add_argument('--vk', {
       type: 'str',
-      help: 'Override vk_fields.json path.',
+      help: 'Override vk binary path.',
       default: null,
     });
     p.add_argument('--public-inputs', {

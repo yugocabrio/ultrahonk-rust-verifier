@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 
 use tornado_classic_contracts::hash2::permute_2_bytes_be;
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
-use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
 const TREE_DEPTH_TEST: u32 = 10;
@@ -38,9 +38,8 @@ fn verify_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
-fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
-    let blob = preprocess_vk_json(json).expect("valid vk json");
-    Bytes::from_slice(env, &blob)
+fn vk_bytes(env: &Env) -> Bytes {
+    Bytes::from_slice(env, include_bytes!("../../circuit/target/vk"))
 }
 
 fn be32_from_u64(x: u64) -> [u8; 32] {
@@ -127,7 +126,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     // Artifacts
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -158,7 +157,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     // Store VK and withdraw
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())).expect("set_vk ok");
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -205,7 +204,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -232,7 +231,7 @@ fn withdraw_rejects_nullifier_mismatch() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
@@ -287,7 +286,6 @@ fn withdraw_rejects_root_mismatch() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -313,7 +311,7 @@ fn withdraw_rejects_root_mismatch() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = vk_bytes(&env);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
@@ -346,7 +344,6 @@ fn print_budget_for_deposit_and_withdraw() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -380,7 +377,7 @@ fn print_budget_for_deposit_and_withdraw() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = vk_bytes(&env);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 
@@ -412,7 +409,6 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 

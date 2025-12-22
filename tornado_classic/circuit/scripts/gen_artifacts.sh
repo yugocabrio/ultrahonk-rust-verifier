@@ -96,24 +96,24 @@ if [[ ! -f "${WIT}" ]]; then
 fi
 
 echo "[3/4] bb write_vk --scheme ultra_honk --oracle_hash keccak"
-if [[ -f target/vk_fields.json ]]; then
-  rm -f target/vk_fields.json
-fi
-if [[ -d target/vk_fields.json ]]; then
-  rm -rf target/vk_fields.json
-fi
+rm -rf target/vk_fields.json target/vk
 "${BB_BIN}" write_vk \
   --scheme ultra_honk \
   --oracle_hash keccak \
   --bytecode_path "${ACIR}" \
-  --output_format fields \
-  --output_path target/vk_fields.json
+  --output_format bytes_and_fields \
+  --output_path target
 
-# bb currently writes a directory containing vk_fields.json; flatten to a single file.
+# bb may write directories; flatten to files.
 if [[ -d target/vk_fields.json && -f target/vk_fields.json/vk_fields.json ]]; then
   mv target/vk_fields.json/vk_fields.json target/vk_fields.json.tmp
   rmdir target/vk_fields.json
   mv target/vk_fields.json.tmp target/vk_fields.json
+fi
+if [[ -d target/vk && -f target/vk/vk ]]; then
+  mv target/vk/vk target/vk.tmp
+  rmdir target/vk
+  mv target/vk.tmp target/vk
 fi
 
 echo "[4/4] bb prove --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields"

@@ -14,9 +14,7 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { spawnSync } from 'child_process';
 import { ArgumentParser } from 'argparse';
 import {
   Contract,
@@ -30,7 +28,6 @@ import {
 } from '@stellar/stellar-sdk';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-const PREPROCESS_MANIFEST = path.join(PROJECT_ROOT, 'preprocess_vk_cli', 'Cargo.toml');
 const DEFAULT_DATASET_DIR = path.join(PROJECT_ROOT, 'tests', 'simple_circuit', 'target');
 const DEFAULT_RPC_URL = 'http://localhost:8000/soroban/rpc';
 const DEFAULT_NETWORK_PASSPHRASE = Networks.STANDALONE;
@@ -48,37 +45,16 @@ interface MeasureResult {
   minFee: bigint;
 }
 
-function runPreprocessVk(vkJsonPath: string): Buffer {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preprocess-vk-'));
-  const outPath = path.join(tmpDir, 'vk.bin');
-  try {
-    const result = spawnSync(
-      'cargo',
-      ['run', '--quiet', '--manifest-path', PREPROCESS_MANIFEST, '--', vkJsonPath, outPath],
-      {
-        cwd: PROJECT_ROOT,
-        stdio: 'inherit',
-      }
-    );
-    if (result.status !== 0) {
-      throw new Error('preprocess_vk CLI failed');
-    }
-    return fs.readFileSync(outPath);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-}
-
 function loadArtifacts(datasetDir: string): Artifacts {
-  const vkJsonPath = path.resolve(datasetDir, 'vk_fields.json');
+  const vkPath = path.resolve(datasetDir, 'vk');
   const proofPath = path.resolve(datasetDir, 'proof');
   const publicInputsPath = path.resolve(datasetDir, 'public_inputs');
-  for (const file of [vkJsonPath, proofPath, publicInputsPath]) {
+  for (const file of [vkPath, proofPath, publicInputsPath]) {
     if (!fs.existsSync(file)) {
       throw new Error(`Missing artifact: ${file}`);
     }
   }
-  const vkBytes = runPreprocessVk(vkJsonPath);
+  const vkBytes = fs.readFileSync(vkPath);
   const proofBytes = fs.readFileSync(proofPath);
   const publicInputs = fs.readFileSync(publicInputsPath);
   if (publicInputs.length % FIELD_BYTES !== 0) {
@@ -156,7 +132,7 @@ async function main() {
   });
   parser.add_argument('--dataset', {
     default: DEFAULT_DATASET_DIR,
-    help: 'Directory with vk_fields.json, public_inputs, proof',
+    help: 'Directory with vk, public_inputs, proof',
   });
   parser.add_argument('--rpc-url', {
     default: DEFAULT_RPC_URL,

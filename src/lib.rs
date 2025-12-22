@@ -6,14 +6,13 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
 };
 
-use ultrahonk_rust_verifier::{ec, hash, UltraHonkVerifier, PROOF_BYTES};
+use ultrahonk_rust_verifier::{
+    ec, hash, utils::load_vk_from_bytes, UltraHonkVerifier, PROOF_BYTES,
+};
 
 mod backend;
-mod vk;
 
 use backend::{SorobanBn254, SorobanKeccak};
-use vk::deserialize_vk_from_bytes;
-pub use vk::{preprocess_vk_json, serialize_vk_to_bytes};
 
 /// Contract
 #[contract]
@@ -64,9 +63,9 @@ impl UltraHonkVerifierContract {
             return Err(Error::ProofParseError);
         }
 
-        // Deserialize preprocessed verification key bytes
+        // Deserialize verification key bytes
         let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
-        let vk = deserialize_vk_from_bytes(&vk_vec).map_err(|_| Error::VkParseError)?;
+        let vk = load_vk_from_bytes(&vk_vec);
 
         // Verifier (moves vk)
         let verifier = UltraHonkVerifier::new_with_vk(vk);
@@ -82,7 +81,7 @@ impl UltraHonkVerifierContract {
         Ok(())
     }
 
-    /// Set preprocessed verification key bytes and cache its hash. Returns vk_hash
+    /// Set verification key bytes and cache its hash. Returns vk_hash
     pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<BytesN<32>, Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
         let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();

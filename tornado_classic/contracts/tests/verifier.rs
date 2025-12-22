@@ -3,17 +3,12 @@ use soroban_sdk::{Address, Bytes, Env};
 
 use std::sync::{Mutex, OnceLock};
 
-use ultrahonk_soroban_contract::{preprocess_vk_json, UltraHonkVerifierContract};
+use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
 fn verify_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn vk_bytes_from_json(env: &Env, json: &str) -> Bytes {
-    let blob = preprocess_vk_json(json).expect("valid vk json");
-    Bytes::from_slice(env, &blob)
 }
 
 // Verifier: direct call with vk_json + (public_inputs, proof) buffers
@@ -24,14 +19,14 @@ fn verify_proof_direct_with_vk_json() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
     assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
@@ -55,7 +50,7 @@ fn verify_proof_with_stored_vk_path() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
-    let vk_fields_json: &str = include_str!("../../circuit/target/vk_fields.json");
+    let vk_bin: &[u8] = include_bytes!("../../circuit/target/vk");
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
@@ -64,7 +59,7 @@ fn verify_proof_with_stored_vk_path() {
     let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
 
     // set_vk then call with stored VK
-    let vk_bytes: Bytes = vk_bytes_from_json(&env, vk_fields_json);
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
         .expect("set_vk ok");
 

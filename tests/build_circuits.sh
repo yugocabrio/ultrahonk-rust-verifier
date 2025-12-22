@@ -68,5 +68,11 @@ for dir in tests/* ; do
   bb write_vk -b "$json" -o target \
     --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
+  if [[ -d target/vk && -f target/vk/vk ]]; then
+    mv target/vk/vk target/vk.tmp
+    rmdir target/vk
+    mv target/vk.tmp target/vk
+  fi
+
   popd >/dev/null
 done
