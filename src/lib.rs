@@ -7,9 +7,7 @@ use soroban_sdk::{
 };
 
 use ultrahonk_rust_verifier::{
-    ec, hash,
-    utils::load_vk_from_bytes,
-    UltraHonkVerifier, PROOF_BYTES,
+    ec, hash, utils::load_vk_from_bytes, UltraHonkVerifier, PROOF_BYTES,
 };
 
 mod backend;
