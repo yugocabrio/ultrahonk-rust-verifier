@@ -79,11 +79,7 @@ impl UltraHonkVerifier {
         // 3) Fiat–Shamir transcript
         // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
         let pis_total = provided + 16;
-        let pub_offset = if self.vk.pub_inputs_offset != 0 {
-            self.vk.pub_inputs_offset
-        } else {
-            1
-        };
+        let pub_offset = 1;
         let mut tx = generate_transcript(
             &proof,
             public_inputs_bytes,

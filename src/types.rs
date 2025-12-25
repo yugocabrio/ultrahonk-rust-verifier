@@ -97,7 +97,6 @@ pub struct VerificationKey {
     pub q_delta_range: G1Point,
     pub q_elliptic: G1Point,
     pub q_memory: G1Point,
-    pub q_nnf: G1Point,
     pub q_poseidon2_external: G1Point,
     pub q_poseidon2_internal: G1Point,
     // Copy constraints:
@@ -136,7 +135,7 @@ pub struct Proof {
     pub z_perm: G1Point,
     // Sumcheck polynomials
     pub sumcheck_univariates: Vec<Vec<Fr>>, // 28 × 8
-    pub sumcheck_evaluations: Vec<Fr>,      // 41 (NUMBER_OF_ENTITIES)
+    pub sumcheck_evaluations: Vec<Fr>,      // 40 (NUMBER_OF_ENTITIES)
     // Gemini fold commitments
     pub gemini_fold_comms: Vec<G1Point>, // 27
     pub gemini_a_evaluations: Vec<Fr>,   // 28
