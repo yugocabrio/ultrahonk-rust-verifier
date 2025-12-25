@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String, vec::Vec};
+use alloc::{format, string::String};
 
 /// Error type describing the specific reason verification failed.
 #[derive(Debug)]
@@ -50,24 +50,24 @@ impl UltraHonkVerifier {
         &self.vk
     }
 
-    /// Top-level verify; return type changed from String to the concrete VerifyError.
+    /// Top-level verify
     pub fn verify(
         &self,
         proof_bytes: &[u8],
-        public_inputs_bytes: &[Vec<u8>],
+        public_inputs_bytes: &[u8],
     ) -> Result<(), VerifyError> {
         // 1) parse proof
         let proof = load_proof(proof_bytes);
 
         // 2) sanity on public inputs (length and VK metadata if present)
-        if public_inputs_bytes.iter().any(|pi| pi.len() != 32) {
+        if public_inputs_bytes.len() % 32 != 0 {
             return Err(VerifyError::InvalidInput(
-                "public inputs must be 32 bytes each".into(),
+                "public inputs must be 32-byte aligned".into(),
             ));
         }
+        let provided = (public_inputs_bytes.len() / 32) as u64;
         if self.vk.public_inputs_size != 0 {
             let expected = self.vk.public_inputs_size.saturating_sub(16);
-            let provided = public_inputs_bytes.len() as u64;
             if expected != provided {
                 return Err(VerifyError::InvalidInput(format!(
                     "public inputs count mismatch (vk: {}, provided: {})",
@@ -78,7 +78,7 @@ impl UltraHonkVerifier {
 
         // 3) Fiat–Shamir transcript
         // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
-        let pis_total = public_inputs_bytes.len() as u64 + 16;
+        let pis_total = provided + 16;
         let pub_offset = if self.vk.pub_inputs_offset != 0 {
             self.vk.pub_inputs_offset
         } else {
@@ -113,7 +113,7 @@ impl UltraHonkVerifier {
     }
 
     fn public_inputs_delta(
-        public_inputs: &[Vec<u8>],
+        public_inputs: &[u8],
         pairing_point_object: &[Fr],
         beta: Fr,
         gamma: Fr,
@@ -126,13 +126,15 @@ impl UltraHonkVerifier {
         let mut num_acc = gamma + beta * Fr::from_u64(n + offset);
         let mut den_acc = gamma - beta * Fr::from_u64(offset + 1);
 
-        for bytes in public_inputs {
-            let pi = Fr::from_bytes(bytes.as_slice().try_into().unwrap());
+        let mut chunks = public_inputs.chunks_exact(32);
+        for bytes in &mut chunks {
+            let pi = Fr::from_bytes(bytes.try_into().unwrap());
             num = num * (num_acc + pi);
             den = den * (den_acc + pi);
             num_acc = num_acc + beta;
             den_acc = den_acc - beta;
         }
+        debug_assert!(chunks.remainder().is_empty());
         for pi in pairing_point_object {
             num = num * (num_acc + *pi);
             den = den * (den_acc + *pi);
