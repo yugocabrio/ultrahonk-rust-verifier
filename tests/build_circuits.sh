@@ -62,5 +62,7 @@ for dir in circuits/* ; do
   bb write_vk -b "$json" -o target \
     --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
+  bb write_solidity_verifier -s ultra_honk -k target/vk -o target/Verifier.sol
+
   popd >/dev/null
 done

@@ -212,10 +212,6 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let q_delta_range = read_point(bytes, &mut idx);
     let q_elliptic = read_point(bytes, &mut idx);
     let q_memory = read_point(bytes, &mut idx);
-    let q_nnf = G1Point {
-        x: Fq::from(0u64),
-        y: Fq::from(0u64),
-    };
     let q_poseidon2_external = read_point(bytes, &mut idx);
     let q_poseidon2_internal = read_point(bytes, &mut idx);
     let s1 = read_point(bytes, &mut idx);
@@ -249,7 +245,6 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         q_delta_range,
         q_elliptic,
         q_memory,
-        q_nnf,
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,
