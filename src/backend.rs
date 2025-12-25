@@ -13,13 +13,13 @@ use ultrahonk_rust_verifier::{
     types::G1Point,
 };
 
-/// 32-byte big-endian → Fq
+/// 32-byte big-endian to Fq
 #[inline(always)]
 fn fq_from_be_bytes(bytes_be: &[u8; 32]) -> Fq {
     Fq::from_be_bytes_mod_order(bytes_be)
 }
 
-/// Fq → 32-byte big-endian
+/// Fq to 32-byte big-endian
 #[inline(always)]
 fn fq_to_be_bytes(value: &Fq) -> [u8; 32] {
     use ark_ff::BigInteger;
@@ -31,14 +31,14 @@ fn fq_to_be_bytes(value: &Fq) -> [u8; 32] {
     out
 }
 
-pub(crate) fn ark_g1_affine_to_bytes(pt: &ArkG1Affine) -> [u8; 64] {
+fn ark_g1_affine_to_bytes(pt: &ArkG1Affine) -> [u8; 64] {
     let mut out = [0u8; 64];
     out[..32].copy_from_slice(&fq_to_be_bytes(&pt.x));
     out[32..].copy_from_slice(&fq_to_be_bytes(&pt.y));
     out
 }
 
-pub(crate) fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
+fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
     let mut out = [0u8; 128];
     out[..32].copy_from_slice(&fq_to_be_bytes(&pt.x.c1));
     out[32..64].copy_from_slice(&fq_to_be_bytes(&pt.x.c0));
@@ -47,6 +47,7 @@ pub(crate) fn ark_g2_affine_to_bytes(pt: &ArkG2Affine) -> [u8; 128] {
     out
 }
 
+/// Convert Soroban host G1 to Arkworks G1 with on-curve and subgroup checks.
 pub(crate) fn host_g1_to_ark(pt: &HostG1Affine) -> Result<ArkG1Affine, StdString> {
     let mut bytes = [0u8; 64];
     pt.to_bytes().copy_into_slice(&mut bytes);
@@ -62,11 +63,13 @@ pub(crate) fn host_g1_to_ark(pt: &HostG1Affine) -> Result<ArkG1Affine, StdString
     }
 }
 
+/// Convert Arkworks G1 to Soroban host G1.
 pub(crate) fn ark_g1_to_host(env: &Env, pt: &ArkG1Affine) -> HostG1Affine {
     let bytes = ark_g1_affine_to_bytes(pt);
     HostG1Affine::from_bytes(BytesN::from_array(env, &bytes))
 }
 
+/// Convert Arkworks G2 to Soroban host G2.
 pub(crate) fn ark_g2_to_host(env: &Env, pt: &ArkG2Affine) -> HostG2Affine {
     let bytes = ark_g2_affine_to_bytes(pt);
     HostG2Affine::from_bytes(BytesN::from_array(env, &bytes))
@@ -131,6 +134,7 @@ impl Bn254Ops for SorobanBn254 {
         }
         let env = self.env();
         let bn = env.crypto().bn254();
+        // Soroban does not expose MSM, so use g1_mul plus g1_add in a loop.
         let mut acc: Option<HostG1Affine> = None;
         for (pt, scalar) in coms.iter().zip(scalars.iter()) {
             let host_pt = {
