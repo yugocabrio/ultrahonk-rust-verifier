@@ -44,7 +44,7 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
 
 fn gen_eta(
     proof: &Proof,
-    pub_inputs: &[Vec<u8>],
+    pub_inputs: &[u8],
     cs: u64,
     pis_total: u64,
     offset: u64,
@@ -53,9 +53,11 @@ fn gen_eta(
     data.extend_from_slice(&u64_to_be32(cs));
     data.extend_from_slice(&u64_to_be32(pis_total));
     data.extend_from_slice(&u64_to_be32(offset));
-    for pi in pub_inputs {
+    let mut chunks = pub_inputs.chunks_exact(32);
+    for pi in &mut chunks {
         data.extend_from_slice(pi);
     }
+    debug_assert!(chunks.remainder().is_empty());
     // Append pairing point object (16 Fr) after public inputs
     for fr in &proof.pairing_point_object {
         data.extend_from_slice(&fr.to_bytes());
@@ -130,7 +132,7 @@ fn gen_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
 
 pub fn generate_transcript(
     proof: &Proof,
-    pub_inputs: &[Vec<u8>],
+    pub_inputs: &[u8],
     cs: u64,
     pis_total: u64,
     offset: u64,

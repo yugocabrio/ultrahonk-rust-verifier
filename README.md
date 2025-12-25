@@ -36,14 +36,8 @@ use ultrahonk_rust_verifier::UltraHonkVerifier;
 
 let vk_bytes = std::fs::read("vk").unwrap();
 let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes);
-
-// Load proof bytes and public inputs as 32‑byte big‑endian chunks
 let proof_bytes = std::fs::read("proof").unwrap();
-let public_inputs_bytes: Vec<Vec<u8>> = {
-    let buf = std::fs::read("public_inputs").unwrap();
-    assert!(buf.len() % 32 == 0);
-    buf.chunks(32).map(|c| c.to_vec()).collect()
-};
+let public_inputs_bytes = std::fs::read("public_inputs").unwrap();
 
 verifier.verify(&proof_bytes, &public_inputs_bytes).unwrap();
 ```
