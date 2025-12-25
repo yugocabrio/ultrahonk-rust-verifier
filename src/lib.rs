@@ -1,9 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::{boxed::Box, vec::Vec as StdVec};
-use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Bytes, Env, Symbol};
 use ultrahonk_rust_verifier::{
     ec, hash, utils::load_vk_from_bytes, UltraHonkVerifier, PROOF_BYTES,
 };
@@ -28,10 +26,6 @@ pub enum Error {
 impl UltraHonkVerifierContract {
     fn key_vk() -> Symbol {
         symbol_short!("vk")
-    }
-
-    fn key_vk_hash() -> Symbol {
-        symbol_short!("vk_hash")
     }
 
     fn parse_public_inputs(bytes: &[u8]) -> Result<StdVec<StdVec<u8>>, Error> {
@@ -77,13 +71,11 @@ impl UltraHonkVerifierContract {
         Ok(())
     }
 
-    /// Set verification key bytes and cache its hash. Returns vk_hash.
+    /// Set verification key bytes.
     /// Note: this is permissionless; integrators should add access control or immutability.
-    pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<BytesN<32>, Error> {
+    pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
-        let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();
-        env.storage().instance().set(&Self::key_vk_hash(), &hash_bn);
-        Ok(hash_bn)
+        Ok(())
     }
 
     /// Verify using the on-chain stored VK. Permissionless; relies on whoever set VK.

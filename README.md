@@ -79,7 +79,7 @@ This contract does not enforce access control:
 - `verify_proof` accepts a VK per call.
 - `verify_proof_with_stored_vk` trusts whoever last called `set_vk`.
 
-If you need admin-only updates or immutable VKs, add that logic in your integration.
+You MUST add access control (or make the VK immutable) in your integration for any real deployment.
 
 ## Tests
 
