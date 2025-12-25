@@ -28,17 +28,6 @@ impl UltraHonkVerifierContract {
         symbol_short!("vk")
     }
 
-    fn parse_public_inputs(bytes: &[u8]) -> Result<StdVec<StdVec<u8>>, Error> {
-        if bytes.len() % 32 != 0 {
-            return Err(Error::ProofParseError);
-        }
-        let mut out = StdVec::with_capacity(bytes.len() / 32);
-        for chunk in bytes.chunks(32) {
-            out.push(chunk.to_vec());
-        }
-        Ok(out)
-    }
-
     /// Verify an UltraHonk proof.
     pub fn verify_proof(
         env: Env,
@@ -61,8 +50,7 @@ impl UltraHonkVerifierContract {
         let verifier = UltraHonkVerifier::new_with_vk(vk);
 
         // Proof & public inputs
-        let pub_inputs_bytes = Self::parse_public_inputs(&public_inputs.to_alloc_vec())
-            .map_err(|_| Error::ProofParseError)?;
+        let pub_inputs_bytes = public_inputs.to_alloc_vec();
 
         // Verify
         verifier
