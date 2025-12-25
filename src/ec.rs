@@ -19,7 +19,7 @@ use once_cell::race::OnceBox;
 /// Implement this to bridge MSM/pairing to a Soroban BN254 precompile.
 pub trait Bn254Ops {
     fn g1_msm(&self, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String>;
-    fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool;
+    fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> Result<bool, String>;
 }
 
 #[inline(always)]
@@ -155,8 +155,8 @@ impl Bn254Ops for ArkworksOps {
         ark_g1_msm(coms, scalars)
     }
     #[inline(always)]
-    fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool {
-        ark_pairing_check(p0, p1)
+    fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> Result<bool, String> {
+        Ok(ark_pairing_check(p0, p1))
     }
 }
 
@@ -187,7 +187,7 @@ pub fn g1_msm(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
 
 /// Pairing product check e(P0, rhs_g2) * e(P1, lhs_g2) == 1
 #[inline(always)]
-pub fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> bool {
+pub fn pairing_check(p0: &G1Affine, p1: &G1Affine) -> Result<bool, String> {
     backend().pairing_check(p0, p1)
 }
 

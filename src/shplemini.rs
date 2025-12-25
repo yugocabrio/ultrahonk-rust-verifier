@@ -214,7 +214,9 @@ pub fn verify_shplemini(
     // 12) MSM + pairing
     let p0 = g1_msm(&coms, &scalars)?;
     let p1 = affine_checked(&negate(&proof.kzg_quotient))?;
-    if pairing_check(&p0, &p1) {
+    let pairing_ok = pairing_check(&p0, &p1)
+        .map_err(|err| format!("Shplonk pairing backend failed: {}", err))?;
+    if pairing_ok {
         Ok(())
     } else {
         Err("Shplonk pairing check failed".into())

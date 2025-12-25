@@ -64,7 +64,7 @@ Backend contract
 - Trait: `ec::Bn254Ops` (intended to be `Send + Sync`)
   - `fn g1_msm(&self, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String>`
     - Requirements: `coms.len() == scalars.len()`. G1 inputs are affine. Reject off-curve or wrong-subgroup points.
-  - `fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool`
+  - `fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> Result<bool, String>`
     - Must verify `e(p0, rhs_g2) * e(p1, lhs_g2) == 1` using the fixed G2 constants defined in `ec.rs`.
 
 ```
@@ -85,7 +85,7 @@ Backend contract
             // host_msm(env, coms, scalars).map_err(|e| e.to_string())
             unimplemented!("call Soroban MSM precompile")
         }
-        fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool {
+        fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> Result<bool, String> {
             // host_pairing_check(env, p0, p1)
             unimplemented!("call Soroban pairing precompile")
         }
