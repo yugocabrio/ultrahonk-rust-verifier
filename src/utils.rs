@@ -7,7 +7,7 @@ use ark_ff::{BigInteger256, PrimeField, Zero};
 use num_bigint::BigUint;
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
 
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {
@@ -155,16 +155,17 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
 }
 
 /// Load a VerificationKey.
-pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
+pub fn load_vk_from_bytes(bytes: &[u8]) -> Result<VerificationKey, String> {
     const HEADER_WORDS: usize = 4;
     const NUM_POINTS: usize = 27;
     const EXPECTED_LEN: usize = HEADER_WORDS * 8 + NUM_POINTS * 64;
-    assert!(
-        bytes.len() == EXPECTED_LEN,
-        "vk bytes must be {} bytes (got {})",
-        EXPECTED_LEN,
-        bytes.len()
-    );
+    if bytes.len() != EXPECTED_LEN {
+        return Err(format!(
+            "vk bytes must be {} bytes (got {})",
+            EXPECTED_LEN,
+            bytes.len()
+        ));
+    }
 
     fn read_u64(bytes: &[u8], idx: &mut usize) -> u64 {
         let mut arr = [0u8; 8];
@@ -172,7 +173,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         *idx += 8;
         u64::from_be_bytes(arr)
     }
-    fn read_point(bytes: &[u8], idx: &mut usize) -> G1Point {
+    fn read_point(bytes: &[u8], idx: &mut usize) -> Result<G1Point, String> {
         let mut x_bytes = [0u8; 32];
         let mut y_bytes = [0u8; 32];
         x_bytes.copy_from_slice(&bytes[*idx..*idx + 32]);
@@ -183,16 +184,17 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         let y = Fq::from_be_bytes_mod_order(&y_bytes);
 
         if x.is_zero() && y.is_zero() {
-            return G1Point { x, y };
+            return Ok(G1Point { x, y });
         }
 
         let aff = G1Affine::new_unchecked(x, y);
-        assert!(aff.is_on_curve(), "vk point not on curve");
-        assert!(
-            aff.is_in_correct_subgroup_assuming_on_curve(),
-            "vk point not in subgroup"
-        );
-        G1Point { x: aff.x, y: aff.y }
+        if !aff.is_on_curve() {
+            return Err("vk point not on curve".into());
+        }
+        if !aff.is_in_correct_subgroup_assuming_on_curve() {
+            return Err("vk point not in subgroup".into());
+        }
+        Ok(G1Point { x: aff.x, y: aff.y })
     }
 
     let mut idx = 0usize;
@@ -201,39 +203,39 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let public_inputs_size = read_u64(bytes, &mut idx);
     let pub_inputs_offset = read_u64(bytes, &mut idx);
 
-    let qm = read_point(bytes, &mut idx);
-    let qc = read_point(bytes, &mut idx);
-    let ql = read_point(bytes, &mut idx);
-    let qr = read_point(bytes, &mut idx);
-    let qo = read_point(bytes, &mut idx);
-    let q4 = read_point(bytes, &mut idx);
-    let q_lookup = read_point(bytes, &mut idx);
-    let q_arith = read_point(bytes, &mut idx);
-    let q_delta_range = read_point(bytes, &mut idx);
-    let q_elliptic = read_point(bytes, &mut idx);
-    let q_memory = read_point(bytes, &mut idx);
+    let qm = read_point(bytes, &mut idx)?;
+    let qc = read_point(bytes, &mut idx)?;
+    let ql = read_point(bytes, &mut idx)?;
+    let qr = read_point(bytes, &mut idx)?;
+    let qo = read_point(bytes, &mut idx)?;
+    let q4 = read_point(bytes, &mut idx)?;
+    let q_lookup = read_point(bytes, &mut idx)?;
+    let q_arith = read_point(bytes, &mut idx)?;
+    let q_delta_range = read_point(bytes, &mut idx)?;
+    let q_elliptic = read_point(bytes, &mut idx)?;
+    let q_memory = read_point(bytes, &mut idx)?;
     let q_nnf = G1Point {
         x: Fq::from(0u64),
         y: Fq::from(0u64),
     };
-    let q_poseidon2_external = read_point(bytes, &mut idx);
-    let q_poseidon2_internal = read_point(bytes, &mut idx);
-    let s1 = read_point(bytes, &mut idx);
-    let s2 = read_point(bytes, &mut idx);
-    let s3 = read_point(bytes, &mut idx);
-    let s4 = read_point(bytes, &mut idx);
-    let id1 = read_point(bytes, &mut idx);
-    let id2 = read_point(bytes, &mut idx);
-    let id3 = read_point(bytes, &mut idx);
-    let id4 = read_point(bytes, &mut idx);
-    let t1 = read_point(bytes, &mut idx);
-    let t2 = read_point(bytes, &mut idx);
-    let t3 = read_point(bytes, &mut idx);
-    let t4 = read_point(bytes, &mut idx);
-    let lagrange_first = read_point(bytes, &mut idx);
-    let lagrange_last = read_point(bytes, &mut idx);
+    let q_poseidon2_external = read_point(bytes, &mut idx)?;
+    let q_poseidon2_internal = read_point(bytes, &mut idx)?;
+    let s1 = read_point(bytes, &mut idx)?;
+    let s2 = read_point(bytes, &mut idx)?;
+    let s3 = read_point(bytes, &mut idx)?;
+    let s4 = read_point(bytes, &mut idx)?;
+    let id1 = read_point(bytes, &mut idx)?;
+    let id2 = read_point(bytes, &mut idx)?;
+    let id3 = read_point(bytes, &mut idx)?;
+    let id4 = read_point(bytes, &mut idx)?;
+    let t1 = read_point(bytes, &mut idx)?;
+    let t2 = read_point(bytes, &mut idx)?;
+    let t3 = read_point(bytes, &mut idx)?;
+    let t4 = read_point(bytes, &mut idx)?;
+    let lagrange_first = read_point(bytes, &mut idx)?;
+    let lagrange_last = read_point(bytes, &mut idx)?;
 
-    VerificationKey {
+    Ok(VerificationKey {
         circuit_size,
         log_circuit_size,
         public_inputs_size,
@@ -266,5 +268,5 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         t4,
         lagrange_first,
         lagrange_last,
-    }
+    })
 }

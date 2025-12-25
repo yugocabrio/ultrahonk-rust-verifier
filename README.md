@@ -35,7 +35,7 @@ Add the dependency from a git path or local path. The crate exposes a small API:
 use ultrahonk_rust_verifier::UltraHonkVerifier;
 
 let vk_bytes = std::fs::read("vk").unwrap();
-let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes);
+let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes).unwrap();
 let proof_bytes = std::fs::read("proof").unwrap();
 let public_inputs_bytes = std::fs::read("public_inputs").unwrap();
 
