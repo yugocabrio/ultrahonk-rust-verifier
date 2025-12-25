@@ -1,17 +1,13 @@
 #![no_std]
 extern crate alloc;
-
 use alloc::{boxed::Box, vec::Vec as StdVec};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Bytes, BytesN, Env, Symbol,
 };
-
 use ultrahonk_rust_verifier::{
     ec, hash, utils::load_vk_from_bytes, UltraHonkVerifier, PROOF_BYTES,
 };
-
 mod backend;
-
 use backend::{SorobanBn254, SorobanKeccak};
 
 /// Contract
@@ -81,7 +77,8 @@ impl UltraHonkVerifierContract {
         Ok(())
     }
 
-    /// Set verification key bytes and cache its hash. Returns vk_hash
+    /// Set verification key bytes and cache its hash. Returns vk_hash.
+    /// Note: this is permissionless; integrators should add access control or immutability.
     pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<BytesN<32>, Error> {
         env.storage().instance().set(&Self::key_vk(), &vk_bytes);
         let hash_bn: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();
@@ -89,7 +86,7 @@ impl UltraHonkVerifierContract {
         Ok(hash_bn)
     }
 
-    /// Verify using the on-chain stored VK
+    /// Verify using the on-chain stored VK. Permissionless; relies on whoever set VK.
     pub fn verify_proof_with_stored_vk(
         env: Env,
         public_inputs: Bytes,

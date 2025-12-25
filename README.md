@@ -1,4 +1,4 @@
-# Noir(UltraHonk) Soroban Contract
+# Noir(UltraHonk) Soroban Verifier Contract
 
 Soroban contract wrapper around the Noir(UltraHonk) verifier. Inputs are `vk`, `public_inputs`, and `proof`.
 
@@ -71,6 +71,15 @@ stellar contract invoke \
   --public_inputs-file-path tests/simple_circuit/target/public_inputs \
   --proof_bytes-file-path tests/simple_circuit/target/proof
 ```
+
+## VK policy (important)
+
+This contract does not enforce access control:
+- `set_vk` is permissionless (anyone can update the stored VK).
+- `verify_proof` accepts a VK per call.
+- `verify_proof_with_stored_vk` trusts whoever last called `set_vk`.
+
+If you need admin-only updates or immutable VKs, add that logic in your integration.
 
 ## Tests
 
