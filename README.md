@@ -35,7 +35,7 @@ stellar contract deploy \
 
 ### Build ZK artifacts (vk/proof/public_inputs)
 
-From the repo root:
+From the repo root. You need Noir tooling (`nargo`) and `bb` (barretenberg). Artifacts are generated with `--oracle_hash keccak`.
 
 ```bash
 tests/build_circuits.sh
@@ -87,3 +87,15 @@ You MUST add access control (or make the VK immutable) in your integration for a
 RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
 cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
 ```
+
+## References
+
+- Noir language: https://noir-lang.org/
+- Barretenberg (bb): https://github.com/AztecProtocol/aztec-packages
+- UltraHonk Rust verifier: https://github.com/yugocabrio/ultrahonk-rust-verifier
+- Soroban documentation: https://developers.stellar.org/docs/build/smart-contracts
+- Soroban SDK (Rust): https://github.com/stellar/rs-soroban-sdk
+
+## License
+
+MIT

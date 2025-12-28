@@ -44,7 +44,7 @@ impl UltraHonkVerifierContract {
 
         // Deserialize verification key bytes
         let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
-        let vk = load_vk_from_bytes(&vk_vec);
+        let vk = load_vk_from_bytes(&vk_vec).ok_or(Error::VkParseError)?;
 
         // Verifier (moves vk)
         let verifier = UltraHonkVerifier::new_with_vk(vk);
