@@ -108,17 +108,3 @@ impl Neg for Fr {
         Fr(-self.0)
     }
 }
-
-impl CanonicalSerialize for Fr {
-    fn serialize_with_mode<W: ark_serialize::Write>(
-        &self,
-        mut writer: W,
-        _compress: ark_serialize::Compress,
-    ) -> Result<(), ark_serialize::SerializationError> {
-        self.0.serialize_compressed(&mut writer)
-    }
-
-    fn serialized_size(&self, _compress: ark_serialize::Compress) -> usize {
-        self.0.compressed_size()
-    }
-}
