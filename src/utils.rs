@@ -56,7 +56,7 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
 /// using the (lo136, hi<=118) split and stored in the order (x_lo, x_hi, y_lo, y_hi).
 pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     assert_eq!(proof_bytes.len(), PROOF_BYTES, "proof bytes len");
-    let mut cursor = 0usize;
+    let mut boundary = 0usize;
 
     // Helper: read next 128 bytes as G1Point using 136-bit limb split (x = x0 | (x1<<136))
     fn read_g1(bytes: &[u8], cur: &mut usize) -> G1Point {
@@ -84,48 +84,48 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
 
     // 0) pairing point object
     let pairing_point_object: [Fr; PAIRING_POINTS_SIZE] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
+        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
 
     // 1) w1, w2, w3
-    let w1 = read_g1(proof_bytes, &mut cursor);
-    let w2 = read_g1(proof_bytes, &mut cursor);
-    let w3 = read_g1(proof_bytes, &mut cursor);
+    let w1 = read_g1(proof_bytes, &mut boundary);
+    let w2 = read_g1(proof_bytes, &mut boundary);
+    let w3 = read_g1(proof_bytes, &mut boundary);
 
     // 2) lookup_read_counts, lookup_read_tags
-    let lookup_read_counts = read_g1(proof_bytes, &mut cursor);
-    let lookup_read_tags = read_g1(proof_bytes, &mut cursor);
+    let lookup_read_counts = read_g1(proof_bytes, &mut boundary);
+    let lookup_read_tags = read_g1(proof_bytes, &mut boundary);
 
     // 3) w4
-    let w4 = read_g1(proof_bytes, &mut cursor);
+    let w4 = read_g1(proof_bytes, &mut boundary);
 
     // 4) lookup_inverses, z_perm
-    let lookup_inverses = read_g1(proof_bytes, &mut cursor);
-    let z_perm = read_g1(proof_bytes, &mut cursor);
+    let lookup_inverses = read_g1(proof_bytes, &mut boundary);
+    let z_perm = read_g1(proof_bytes, &mut boundary);
 
     // 5) sumcheck_univariates
     let mut sumcheck_univariates =
         [[Fr::zero(); BATCHED_RELATION_PARTIAL_LENGTH]; CONST_PROOF_SIZE_LOG_N];
     for r in 0..CONST_PROOF_SIZE_LOG_N {
         for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
-            sumcheck_univariates[r][i] = read_fr(proof_bytes, &mut cursor);
+            sumcheck_univariates[r][i] = read_fr(proof_bytes, &mut boundary);
         }
     }
 
     // 6) sumcheck_evaluations
     let sumcheck_evaluations: [Fr; NUMBER_OF_ENTITIES] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
+        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
 
     // 7) gemini_fold_comms
     let gemini_fold_comms: [G1Point; CONST_PROOF_SIZE_LOG_N - 1] =
-        array::from_fn(|_| read_g1(proof_bytes, &mut cursor));
+        array::from_fn(|_| read_g1(proof_bytes, &mut boundary));
 
     // 8) gemini_a_evaluations
     let gemini_a_evaluations: [Fr; CONST_PROOF_SIZE_LOG_N] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
+        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
 
     // 9) shplonk_q, kzg_quotient
-    let shplonk_q = read_g1(proof_bytes, &mut cursor);
-    let kzg_quotient = read_g1(proof_bytes, &mut cursor);
+    let shplonk_q = read_g1(proof_bytes, &mut boundary);
+    let kzg_quotient = read_g1(proof_bytes, &mut boundary);
 
     Proof {
         pairing_point_object,
