@@ -40,10 +40,8 @@ impl UltraHonkVerifier {
         Self { vk }
     }
 
-    pub fn new_from_bytes(vk_bytes: &[u8]) -> Self {
-        Self {
-            vk: load_vk_from_bytes(vk_bytes),
-        }
+    pub fn new_from_bytes(vk_bytes: &[u8]) -> Option<Self> {
+        load_vk_from_bytes(vk_bytes).map(|vk| Self { vk })
     }
 
     /// Expose a reference to the parsed VK for debugging/inspection.
