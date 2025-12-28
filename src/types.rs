@@ -91,7 +91,6 @@ pub struct VerificationKey {
     pub circuit_size: u64,
     pub log_circuit_size: u64,
     pub public_inputs_size: u64,
-    pub pub_inputs_offset: u64,
     // Selectors and wire commitments:
     pub qm: G1Point,
     pub qc: G1Point,
@@ -103,7 +102,7 @@ pub struct VerificationKey {
     pub q_arith: G1Point,
     pub q_delta_range: G1Point,
     pub q_elliptic: G1Point,
-    pub q_memory: G1Point,
+    pub q_aux: G1Point,
     pub q_poseidon2_external: G1Point,
     pub q_poseidon2_internal: G1Point,
     // Copy constraints:

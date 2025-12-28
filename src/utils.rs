@@ -200,7 +200,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let circuit_size = read_u64(bytes, &mut idx);
     let log_circuit_size = read_u64(bytes, &mut idx);
     let public_inputs_size = read_u64(bytes, &mut idx);
-    let pub_inputs_offset = read_u64(bytes, &mut idx);
+    let _pub_inputs_offset = read_u64(bytes, &mut idx);
 
     let qm = read_point(bytes, &mut idx);
     let qc = read_point(bytes, &mut idx);
@@ -212,7 +212,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let q_arith = read_point(bytes, &mut idx);
     let q_delta_range = read_point(bytes, &mut idx);
     let q_elliptic = read_point(bytes, &mut idx);
-    let q_memory = read_point(bytes, &mut idx);
+    let q_aux = read_point(bytes, &mut idx);
     let q_poseidon2_external = read_point(bytes, &mut idx);
     let q_poseidon2_internal = read_point(bytes, &mut idx);
     let s1 = read_point(bytes, &mut idx);
@@ -234,7 +234,6 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         circuit_size,
         log_circuit_size,
         public_inputs_size,
-        pub_inputs_offset,
         qm,
         qc,
         ql,
@@ -245,7 +244,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         q_arith,
         q_delta_range,
         q_elliptic,
-        q_memory,
+        q_aux,
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,

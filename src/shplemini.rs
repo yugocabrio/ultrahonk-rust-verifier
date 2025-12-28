@@ -101,12 +101,12 @@ pub fn verify_shplemini(
         push!(qo);
         push!(q4);
         // Match Solidity VK commitment order strictly
-        // 7..13: qLookup, qArith, qDeltaRange, qElliptic, qAux (q_memory), qPoseidon2External, qPoseidon2Internal
+        // 7..13: qLookup, qArith, qDeltaRange, qElliptic, qAux, qPoseidon2External, qPoseidon2Internal
         push!(q_lookup);
         push!(q_arith);
         push!(q_delta_range);
         push!(q_elliptic);
-        push!(q_memory); // qAux in Solidity
+        push!(q_aux);
         push!(q_poseidon2_external);
         push!(q_poseidon2_internal);
         push!(s1);

@@ -77,7 +77,6 @@ impl UltraHonkVerifier {
         }
 
         // 3) Fiat–Shamir transcript
-        // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
         let pis_total = provided + PAIRING_POINTS_SIZE as u64;
         let pub_offset = 1;
         let mut tx = generate_transcript(
@@ -88,7 +87,7 @@ impl UltraHonkVerifier {
             pub_offset, // pubInputsOffset
         );
 
-        // 4) compute Δₚᵢ and inject
+        // 4) Public delta
         tx.rel_params.public_inputs_delta = Self::compute_public_input_delta(
             public_inputs_bytes,
             &proof.pairing_point_object,
@@ -99,10 +98,10 @@ impl UltraHonkVerifier {
         )
         .map_err(VerifyError::InvalidInput)?;
 
-        // 5) Sum-check: returns SumcheckFailed when this step fails.
+        // 5) Sum-check
         verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
 
-        // 6) Shplonk (batch opening): returns ShplonkFailed when this stage fails.
+        // 6) Shplonk
         verify_shplemini(&proof, &self.vk, &tx).map_err(VerifyError::ShplonkFailed)?;
 
         Ok(())
