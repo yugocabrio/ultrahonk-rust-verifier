@@ -66,14 +66,13 @@ impl UltraHonkVerifier {
             ));
         }
         let provided = (public_inputs_bytes.len() / 32) as u64;
-        if self.vk.public_inputs_size != 0 {
-            let expected = self.vk.public_inputs_size.saturating_sub(16);
-            if expected != provided {
-                return Err(VerifyError::InvalidInput(format!(
-                    "public inputs count mismatch (vk: {}, provided: {})",
-                    expected, provided
-                )));
-            }
+        let expected = self
+            .vk
+            .public_inputs_size
+            .checked_sub(16)
+            .ok_or_else(|| VerifyError::InvalidInput("vk inputs < 16".into()))?;
+        if expected != provided {
+            return Err(VerifyError::InvalidInput("public inputs mismatch".into()));
         }
 
         // 3) Fiat–Shamir transcript
