@@ -73,10 +73,7 @@ fn generate_eta_challenge(
     (eta, eta_two, eta_three, previous_challenge)
 }
 
-fn generate_beta_and_gamma_challenges(
-    previous_challenge: Fr,
-    proof: &Proof,
-) -> (Fr, Fr, Fr) {
+fn generate_beta_and_gamma_challenges(previous_challenge: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     let mut data = previous_challenge.to_bytes().to_vec();
     for w in &[
         &proof.lookup_read_counts,
@@ -148,9 +145,7 @@ fn generate_relation_parameters_challenges(
     (rp, next_previous_challenge)
 }
 
-fn generate_gate_challenges(
-    previous_challenge: Fr,
-) -> ([Fr; CONST_PROOF_SIZE_LOG_N], Fr) {
+fn generate_gate_challenges(previous_challenge: Fr) -> ([Fr; CONST_PROOF_SIZE_LOG_N], Fr) {
     let mut next_previous_challenge = previous_challenge;
     let mut gate_challenges = [Fr::zero(); CONST_PROOF_SIZE_LOG_N];
     for i in 0..CONST_PROOF_SIZE_LOG_N {
