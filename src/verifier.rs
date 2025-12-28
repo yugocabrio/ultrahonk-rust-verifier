@@ -79,7 +79,7 @@ impl UltraHonkVerifier {
         // 3) Fiat–Shamir transcript
         let pis_total = provided + PAIRING_POINTS_SIZE as u64;
         let pub_offset = 1;
-        let mut tx = generate_transcript(
+        let mut t = generate_transcript(
             &proof,
             public_inputs_bytes,
             self.vk.circuit_size,
@@ -88,21 +88,21 @@ impl UltraHonkVerifier {
         );
 
         // 4) Public delta
-        tx.rel_params.public_inputs_delta = Self::compute_public_input_delta(
+        t.rel_params.public_inputs_delta = Self::compute_public_input_delta(
             public_inputs_bytes,
             &proof.pairing_point_object,
-            tx.rel_params.beta,
-            tx.rel_params.gamma,
+            t.rel_params.beta,
+            t.rel_params.gamma,
             pub_offset,
             self.vk.circuit_size,
         )
         .map_err(VerifyError::InvalidInput)?;
 
         // 5) Sum-check
-        verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
+        verify_sumcheck(&proof, &t, &self.vk).map_err(VerifyError::SumcheckFailed)?;
 
         // 6) Shplonk
-        verify_shplemini(&proof, &self.vk, &tx).map_err(VerifyError::ShplonkFailed)?;
+        verify_shplemini(&proof, &self.vk, &t).map_err(VerifyError::ShplonkFailed)?;
 
         Ok(())
     }
