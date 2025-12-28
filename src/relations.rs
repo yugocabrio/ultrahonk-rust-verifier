@@ -4,8 +4,7 @@
 //! scalar which is then batched with the alpha challenges.
 
 use crate::field::Fr;
-use crate::types::{RelationParameters, Wire};
-use core::ops::Neg;
+use crate::types::{RelationParameters, Wire, NUMBER_OF_SUBRELATIONS};
 
 #[cfg(not(feature = "std"))]
 use alloc::vec;
@@ -13,11 +12,6 @@ use alloc::vec;
 #[cfg(feature = "std")]
 macro_rules! println {
     ($($args:tt)*) => { std::println!($($args)*) };
-}
-
-#[cfg(not(feature = "std"))]
-macro_rules! println {
-    ($($args:tt)*) => {};
 }
 
 /// Precomputed NEG_HALF = (p - 1)/2 in BN254 scalar field.
@@ -41,116 +35,146 @@ fn wire(vals: &[Fr], w: Wire) -> Fr {
 }
 
 /// Accumulate the two arithmetic subrelations (indices 0 and 1).
-fn accumulate_arithmetic(vals: &[Fr], out: &mut [Fr], d: Fr) {
-    // Subrelation 0: quadratic gate combination
+fn accumulate_arithmetic_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
+    // Relation 0
     {
-        let q = wire(vals, Wire::QArith);
-        let mut acc = (q - Fr::from_u64(3))
-            * wire(vals, Wire::Qm)
-            * wire(vals, Wire::Wr)
-            * wire(vals, Wire::Wl)
-            * neg_half();
-        acc = acc
-            + wire(vals, Wire::Ql) * wire(vals, Wire::Wl)
-            + wire(vals, Wire::Qr) * wire(vals, Wire::Wr)
-            + wire(vals, Wire::Qo) * wire(vals, Wire::Wo)
-            + wire(vals, Wire::Q4) * wire(vals, Wire::W4)
-            + wire(vals, Wire::Qc);
-        acc = (acc + (q - Fr::one()) * wire(vals, Wire::W4Shift)) * q * d;
-        out[0] = acc;
+        let q_arith = wire(p, Wire::QArith);
+        let neg_half = neg_half();
+        let mut accum = (q_arith - Fr::from_u64(3))
+            * wire(p, Wire::Qm)
+            * wire(p, Wire::Wr)
+            * wire(p, Wire::Wl)
+            * neg_half;
+        accum = accum
+            + wire(p, Wire::Ql) * wire(p, Wire::Wl)
+            + wire(p, Wire::Qr) * wire(p, Wire::Wr)
+            + wire(p, Wire::Qo) * wire(p, Wire::Wo)
+            + wire(p, Wire::Q4) * wire(p, Wire::W4)
+            + wire(p, Wire::Qc);
+        accum = (accum + (q_arith - Fr::one()) * wire(p, Wire::W4Shift)) * q_arith * domain_sep;
+        evals[0] = accum;
     }
-    // Subrelation 1: indicator for q_m
+    // Relation 1
     {
-        let q = wire(vals, Wire::QArith);
-        let mut acc = wire(vals, Wire::Wl) + wire(vals, Wire::W4) - wire(vals, Wire::WlShift)
-            + wire(vals, Wire::Qm);
-        acc = acc * (q - Fr::from_u64(2)) * (q - Fr::from_u64(1)) * q * d;
-        out[1] = acc;
+        let q_arith = wire(p, Wire::QArith);
+        let mut accum =
+            wire(p, Wire::Wl) + wire(p, Wire::W4) - wire(p, Wire::WlShift) + wire(p, Wire::Qm);
+        accum = accum
+            * (q_arith - Fr::from_u64(2))
+            * (q_arith - Fr::from_u64(1))
+            * q_arith
+            * domain_sep;
+        evals[1] = accum;
     }
 }
 
 /// Accumulate the two permutation subrelations (indices 2 and 3).
-fn accumulate_permutation(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
-    let mut num = wire(vals, Wire::Wl) + wire(vals, Wire::Id1) * rp.beta + rp.gamma;
-    num = num
-        * (wire(vals, Wire::Wr) + wire(vals, Wire::Id2) * rp.beta + rp.gamma)
-        * (wire(vals, Wire::Wo) + wire(vals, Wire::Id3) * rp.beta + rp.gamma)
-        * (wire(vals, Wire::W4) + wire(vals, Wire::Id4) * rp.beta + rp.gamma);
+fn accumulate_permutation_relation(
+    p: &[Fr],
+    rp: &RelationParameters,
+    evals: &mut [Fr],
+    domain_sep: Fr,
+) {
+    let grand_product_numerator = {
+        let mut num = wire(p, Wire::Wl) + wire(p, Wire::Id1) * rp.beta + rp.gamma;
+        num = num
+            * (wire(p, Wire::Wr) + wire(p, Wire::Id2) * rp.beta + rp.gamma)
+            * (wire(p, Wire::Wo) + wire(p, Wire::Id3) * rp.beta + rp.gamma)
+            * (wire(p, Wire::W4) + wire(p, Wire::Id4) * rp.beta + rp.gamma);
+        num
+    };
 
-    let mut den = wire(vals, Wire::Wl) + wire(vals, Wire::Sigma1) * rp.beta + rp.gamma;
-    den = den
-        * (wire(vals, Wire::Wr) + wire(vals, Wire::Sigma2) * rp.beta + rp.gamma)
-        * (wire(vals, Wire::Wo) + wire(vals, Wire::Sigma3) * rp.beta + rp.gamma)
-        * (wire(vals, Wire::W4) + wire(vals, Wire::Sigma4) * rp.beta + rp.gamma);
+    let grand_product_denominator = {
+        let mut den = wire(p, Wire::Wl) + wire(p, Wire::Sigma1) * rp.beta + rp.gamma;
+        den = den
+            * (wire(p, Wire::Wr) + wire(p, Wire::Sigma2) * rp.beta + rp.gamma)
+            * (wire(p, Wire::Wo) + wire(p, Wire::Sigma3) * rp.beta + rp.gamma)
+            * (wire(p, Wire::W4) + wire(p, Wire::Sigma4) * rp.beta + rp.gamma);
+        den
+    };
 
-    out[2] = (wire(vals, Wire::ZPerm) + wire(vals, Wire::LagrangeFirst)) * num
-        - (wire(vals, Wire::ZPermShift) + wire(vals, Wire::LagrangeLast) * rp.public_inputs_delta)
-            * den;
-    out[2] = out[2] * d;
-    out[3] = wire(vals, Wire::LagrangeLast) * wire(vals, Wire::ZPermShift) * d;
+    // Contribution 2
+    {
+        evals[2] = ((wire(p, Wire::ZPerm) + wire(p, Wire::LagrangeFirst))
+            * grand_product_numerator
+            - (wire(p, Wire::ZPermShift) + wire(p, Wire::LagrangeLast) * rp.public_inputs_delta)
+                * grand_product_denominator)
+            * domain_sep;
+    }
+
+    // Contribution 3
+    {
+        evals[3] = wire(p, Wire::LagrangeLast) * wire(p, Wire::ZPermShift) * domain_sep;
+    }
 }
 
-/// Accumulate the two lookup log‐derivative subrelations (indices 4 and 5).
-fn accumulate_lookup(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
-    let write_term = wire(vals, Wire::Table1)
+/// Accumulate the two lookup log-derivative subrelations (indices 4 and 5).
+fn accumulate_log_derivative_lookup_relation(
+    p: &[Fr],
+    rp: &RelationParameters,
+    evals: &mut [Fr],
+    domain_sep: Fr,
+) {
+    let write_term = wire(p, Wire::Table1)
         + rp.gamma
-        + wire(vals, Wire::Table2) * rp.eta
-        + wire(vals, Wire::Table3) * rp.eta_two
-        + wire(vals, Wire::Table4) * rp.eta_three;
+        + wire(p, Wire::Table2) * rp.eta
+        + wire(p, Wire::Table3) * rp.eta_two
+        + wire(p, Wire::Table4) * rp.eta_three;
 
-    let derived_entry_2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qm) * wire(vals, Wire::WrShift);
-    let derived_entry_3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qc) * wire(vals, Wire::WoShift);
+    let derived_entry_2 = wire(p, Wire::Wr) + wire(p, Wire::Qm) * wire(p, Wire::WrShift);
+    let derived_entry_3 = wire(p, Wire::Wo) + wire(p, Wire::Qc) * wire(p, Wire::WoShift);
 
-    let read_term = wire(vals, Wire::Wl)
+    let read_term = wire(p, Wire::Wl)
         + rp.gamma
-        + wire(vals, Wire::Qr) * wire(vals, Wire::WlShift)
+        + wire(p, Wire::Qr) * wire(p, Wire::WlShift)
         + derived_entry_2 * rp.eta
         + derived_entry_3 * rp.eta_two
-        + wire(vals, Wire::Qo) * rp.eta_three;
+        + wire(p, Wire::Qo) * rp.eta_three;
 
-    let inv = wire(vals, Wire::LookupInverses);
-    let inv_exists = wire(vals, Wire::LookupReadTags) + wire(vals, Wire::QLookup)
-        - wire(vals, Wire::LookupReadTags) * wire(vals, Wire::QLookup);
+    let inv = wire(p, Wire::LookupInverses);
+    let inv_exists = wire(p, Wire::LookupReadTags) + wire(p, Wire::QLookup)
+        - wire(p, Wire::LookupReadTags) * wire(p, Wire::QLookup);
 
-    out[4] = (read_term * write_term * inv - inv_exists) * d;
-    out[5] = wire(vals, Wire::QLookup) * (write_term * inv)
-        - wire(vals, Wire::LookupReadCounts) * (read_term * inv);
+    evals[4] = (read_term * write_term * inv - inv_exists) * domain_sep;
+    evals[5] = wire(p, Wire::QLookup) * (write_term * inv)
+        - wire(p, Wire::LookupReadCounts) * (read_term * inv);
 }
 
-/// Accumulate the four range‐check subrelations (indices 6..9).
-fn accumulate_range(vals: &[Fr], out: &mut [Fr], d: Fr) {
-    let deltas = [
-        wire(vals, Wire::Wr) - wire(vals, Wire::Wl),
-        wire(vals, Wire::Wo) - wire(vals, Wire::Wr),
-        wire(vals, Wire::W4) - wire(vals, Wire::Wo),
-        wire(vals, Wire::WlShift) - wire(vals, Wire::W4),
-    ];
-    let negs = [
-        Fr::from_u64(1).neg(),
-        Fr::from_u64(2).neg(),
-        Fr::from_u64(3).neg(),
-    ];
+/// Accumulate the four range-check subrelations (indices 6..9).
+fn accumulate_delta_range_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
+    let minus_one = Fr::zero() - Fr::from_u64(1);
+    let minus_two = Fr::zero() - Fr::from_u64(2);
+    let minus_three = Fr::zero() - Fr::from_u64(3);
+
+    let delta_1 = wire(p, Wire::Wr) - wire(p, Wire::Wl);
+    let delta_2 = wire(p, Wire::Wo) - wire(p, Wire::Wr);
+    let delta_3 = wire(p, Wire::W4) - wire(p, Wire::Wo);
+    let delta_4 = wire(p, Wire::WlShift) - wire(p, Wire::W4);
+    let deltas = [delta_1, delta_2, delta_3, delta_4];
+    let negs = [minus_one, minus_two, minus_three];
+
+    // Contributions 6..9
     for i in 0..4 {
         let mut acc = deltas[i];
         for &n in &negs {
             acc = acc * (deltas[i] + n);
         }
-        out[6 + i] = acc * wire(vals, Wire::QRange) * d;
+        evals[6 + i] = acc * wire(p, Wire::QRange) * domain_sep;
     }
 }
 
-/// Accumulate elliptic‐curve subrelations (indices 10..11).
-fn accumulate_elliptic(vals: &[Fr], out: &mut [Fr], d: Fr) {
-    let x1 = wire(vals, Wire::Wr);
-    let y1 = wire(vals, Wire::Wo);
-    let x2 = wire(vals, Wire::WlShift);
-    let y2 = wire(vals, Wire::W4Shift);
-    let x3 = wire(vals, Wire::WrShift);
-    let y3 = wire(vals, Wire::WoShift);
+/// Accumulate elliptic-curve subrelations (indices 10..11).
+fn accumulate_elliptic_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
+    let x1 = wire(p, Wire::Wr);
+    let y1 = wire(p, Wire::Wo);
+    let x2 = wire(p, Wire::WlShift);
+    let y2 = wire(p, Wire::W4Shift);
+    let x3 = wire(p, Wire::WrShift);
+    let y3 = wire(p, Wire::WoShift);
 
-    let q_sign = wire(vals, Wire::Ql);
-    let q_double = wire(vals, Wire::Qm);
-    let q_gate = wire(vals, Wire::QElliptic);
+    let q_sign = wire(p, Wire::Ql);
+    let q_double = wire(p, Wire::Qm);
+    let q_gate = wire(p, Wire::QElliptic);
 
     let delta_x = x2 - x1;
     let y1_sq = y1 * y1;
@@ -179,15 +203,22 @@ fn accumulate_elliptic(vals: &[Fr], out: &mut [Fr], d: Fr) {
         x1_sqr_mul_3 * (x1 - x3) - (y1 + y1) * (y1 + y3)
     };
 
-    let add_factor = (Fr::one() - q_double) * q_gate * d;
-    let double_factor = q_double * q_gate * d;
+    let add_factor = (Fr::one() - q_double) * q_gate * domain_sep;
+    let double_factor = q_double * q_gate * domain_sep;
 
-    out[10] = x_add_id * add_factor + x_double_id * double_factor;
-    out[11] = y_add_id * add_factor + y_double_id * double_factor;
+    // Contribution 10: elliptic x
+    evals[10] = x_add_id * add_factor + x_double_id * double_factor;
+    // Contribution 11: elliptic y
+    evals[11] = y_add_id * add_factor + y_double_id * double_factor;
 }
 
 /// Accumulate auxiliary subrelations (indices 12..17).
-fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
+fn accumulate_auxillary_relation(
+    p: &[Fr],
+    rp: &RelationParameters,
+    evals: &mut [Fr],
+    domain_sep: Fr,
+) {
     fn limb_size() -> Fr {
         Fr::from_str("0x100000000000000000")
     }
@@ -195,105 +226,124 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
         Fr::from_u64(1 << 14)
     }
 
-    let mut limb_subproduct = wire(vals, Wire::Wl) * wire(vals, Wire::WrShift)
-        + wire(vals, Wire::WlShift) * wire(vals, Wire::Wr);
+    let mut limb_subproduct =
+        wire(p, Wire::Wl) * wire(p, Wire::WrShift) + wire(p, Wire::WlShift) * wire(p, Wire::Wr);
 
-    let mut gate2 = wire(vals, Wire::Wl) * wire(vals, Wire::W4)
-        + wire(vals, Wire::Wr) * wire(vals, Wire::Wo)
-        - wire(vals, Wire::WoShift);
-    gate2 = gate2 * limb_size() - wire(vals, Wire::W4Shift) + limb_subproduct;
-    gate2 = gate2 * wire(vals, Wire::Q4);
+    let mut non_native_field_gate_2 = wire(p, Wire::Wl) * wire(p, Wire::W4)
+        + wire(p, Wire::Wr) * wire(p, Wire::Wo)
+        - wire(p, Wire::WoShift);
+    non_native_field_gate_2 =
+        non_native_field_gate_2 * limb_size() - wire(p, Wire::W4Shift) + limb_subproduct;
+    non_native_field_gate_2 = non_native_field_gate_2 * wire(p, Wire::Q4);
 
     limb_subproduct =
-        limb_subproduct * limb_size() + wire(vals, Wire::WlShift) * wire(vals, Wire::WrShift);
+        limb_subproduct * limb_size() + wire(p, Wire::WlShift) * wire(p, Wire::WrShift);
 
-    let gate1 =
-        (limb_subproduct - (wire(vals, Wire::Wo) + wire(vals, Wire::W4))) * wire(vals, Wire::Qo);
+    let non_native_field_gate_1 =
+        (limb_subproduct - (wire(p, Wire::Wo) + wire(p, Wire::W4))) * wire(p, Wire::Qo);
 
-    let gate3 = (limb_subproduct + wire(vals, Wire::W4)
-        - (wire(vals, Wire::WoShift) + wire(vals, Wire::W4Shift)))
-        * wire(vals, Wire::Qm);
+    let non_native_field_gate_3 = (limb_subproduct + wire(p, Wire::W4)
+        - (wire(p, Wire::WoShift) + wire(p, Wire::W4Shift)))
+        * wire(p, Wire::Qm);
 
-    let non_native_field_identity = (gate1 + gate2 + gate3) * wire(vals, Wire::Qr);
+    let non_native_field_identity =
+        (non_native_field_gate_1 + non_native_field_gate_2 + non_native_field_gate_3)
+            * wire(p, Wire::Qr);
 
-    let mut limb_acc_1 = wire(vals, Wire::WrShift) * sublimb_shift() + wire(vals, Wire::WlShift);
-    limb_acc_1 = limb_acc_1 * sublimb_shift() + wire(vals, Wire::Wo);
-    limb_acc_1 = limb_acc_1 * sublimb_shift() + wire(vals, Wire::Wr);
-    limb_acc_1 = limb_acc_1 * sublimb_shift() + wire(vals, Wire::Wl);
-    limb_acc_1 = (limb_acc_1 - wire(vals, Wire::W4)) * wire(vals, Wire::Q4);
+    let mut limb_accumulator_1 = wire(p, Wire::WrShift) * sublimb_shift() + wire(p, Wire::WlShift);
+    limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wo);
+    limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wr);
+    limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wl);
+    limb_accumulator_1 = (limb_accumulator_1 - wire(p, Wire::W4)) * wire(p, Wire::Q4);
 
-    let mut limb_acc_2 = wire(vals, Wire::WoShift) * sublimb_shift() + wire(vals, Wire::WrShift);
-    limb_acc_2 = limb_acc_2 * sublimb_shift() + wire(vals, Wire::WlShift);
-    limb_acc_2 = limb_acc_2 * sublimb_shift() + wire(vals, Wire::W4);
-    limb_acc_2 = limb_acc_2 * sublimb_shift() + wire(vals, Wire::Wo);
-    limb_acc_2 = (limb_acc_2 - wire(vals, Wire::W4Shift)) * wire(vals, Wire::Qm);
+    let mut limb_accumulator_2 = wire(p, Wire::WoShift) * sublimb_shift() + wire(p, Wire::WrShift);
+    limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::WlShift);
+    limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::W4);
+    limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::Wo);
+    limb_accumulator_2 = (limb_accumulator_2 - wire(p, Wire::W4Shift)) * wire(p, Wire::Qm);
 
-    let limb_acc_identity = (limb_acc_1 + limb_acc_2) * wire(vals, Wire::Qo);
+    let limb_accumulator_identity = (limb_accumulator_1 + limb_accumulator_2) * wire(p, Wire::Qo);
 
-    let mut mr = wire(vals, Wire::Wo) * rp.eta_three
-        + wire(vals, Wire::Wr) * rp.eta_two
-        + wire(vals, Wire::Wl) * rp.eta
-        + wire(vals, Wire::Qc);
-    let partial = mr;
-    mr = mr - wire(vals, Wire::W4);
+    let mut memory_record_check = wire(p, Wire::Wo) * rp.eta_three
+        + wire(p, Wire::Wr) * rp.eta_two
+        + wire(p, Wire::Wl) * rp.eta
+        + wire(p, Wire::Qc);
+    let partial_record_check = memory_record_check;
+    memory_record_check = memory_record_check - wire(p, Wire::W4);
 
-    let idx_delta = wire(vals, Wire::WlShift) - wire(vals, Wire::Wl);
-    let rec_delta = wire(vals, Wire::W4Shift) - wire(vals, Wire::W4);
+    let index_delta = wire(p, Wire::WlShift) - wire(p, Wire::Wl);
+    let record_delta = wire(p, Wire::W4Shift) - wire(p, Wire::W4);
 
-    let idx_inc = idx_delta * idx_delta - idx_delta;
-    let adj_match = (Fr::one() - idx_delta) * rec_delta;
+    let index_is_monotonically_increasing = index_delta * index_delta - index_delta;
+    let adjacent_values_match_if_adjacent_indices_match = (Fr::one() - index_delta) * record_delta;
 
-    out[13] = adj_match * wire(vals, Wire::Ql) * wire(vals, Wire::Qr) * wire(vals, Wire::QAux) * d;
-    out[14] = idx_inc * wire(vals, Wire::Ql) * wire(vals, Wire::Qr) * wire(vals, Wire::QAux) * d;
+    evals[13] = adjacent_values_match_if_adjacent_indices_match
+        * wire(p, Wire::Ql)
+        * wire(p, Wire::Qr)
+        * wire(p, Wire::QAux)
+        * domain_sep;
+    // Contribution 14: ROM index monotonic
+    evals[14] = index_is_monotonically_increasing
+        * wire(p, Wire::Ql)
+        * wire(p, Wire::Qr)
+        * wire(p, Wire::QAux)
+        * domain_sep;
 
-    let access_type = wire(vals, Wire::W4) - partial;
+    let access_type = wire(p, Wire::W4) - partial_record_check;
     let access_check = access_type * access_type - access_type;
 
-    let mut next_gate = wire(vals, Wire::WoShift) * rp.eta_three
-        + wire(vals, Wire::WrShift) * rp.eta_two
-        + wire(vals, Wire::WlShift) * rp.eta;
-    next_gate = wire(vals, Wire::W4Shift) - next_gate;
+    let mut next_gate_access_type = wire(p, Wire::WoShift) * rp.eta_three
+        + wire(p, Wire::WrShift) * rp.eta_two
+        + wire(p, Wire::WlShift) * rp.eta;
+    next_gate_access_type = wire(p, Wire::W4Shift) - next_gate_access_type;
 
-    let val_delta = wire(vals, Wire::WoShift) - wire(vals, Wire::Wo);
-    let adj_match2 = (Fr::one() - idx_delta) * val_delta * (Fr::one() - next_gate);
+    let value_delta = wire(p, Wire::WoShift) - wire(p, Wire::Wo);
+    let adjacent_values_match_if_adjacent_indices_match_and_next_access_is_a_read_operation =
+        (Fr::one() - index_delta) * value_delta * (Fr::one() - next_gate_access_type);
 
-    out[15] = adj_match2 * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
-    out[16] = idx_inc * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
-    out[17] =
-        (next_gate * next_gate - next_gate) * wire(vals, Wire::QArith) * wire(vals, Wire::QAux) * d;
+    // Contribution 15,16,17: RAM
+    evals[15] = adjacent_values_match_if_adjacent_indices_match_and_next_access_is_a_read_operation
+        * wire(p, Wire::QArith)
+        * wire(p, Wire::QAux)
+        * domain_sep;
+    evals[16] = index_is_monotonically_increasing
+        * wire(p, Wire::QArith)
+        * wire(p, Wire::QAux)
+        * domain_sep;
+    evals[17] = (next_gate_access_type * next_gate_access_type - next_gate_access_type)
+        * wire(p, Wire::QArith)
+        * wire(p, Wire::QAux)
+        * domain_sep;
 
-    let rom_consistency = mr * wire(vals, Wire::Ql) * wire(vals, Wire::Qr);
-    let ram_timestamp = (Fr::one() - idx_delta)
-        * (wire(vals, Wire::WrShift) - wire(vals, Wire::Wr))
-        - wire(vals, Wire::Wo);
-    let ram_consistency = access_check * wire(vals, Wire::QArith);
+    let rom_consistency_check_identity =
+        memory_record_check * wire(p, Wire::Ql) * wire(p, Wire::Qr);
+    let ram_timestamp_check_identity = (Fr::one() - index_delta)
+        * (wire(p, Wire::WrShift) - wire(p, Wire::Wr))
+        - wire(p, Wire::Wo);
+    let ram_consistency_check_identity = access_check * wire(p, Wire::QArith);
 
-    let memory_identity = rom_consistency
-        + ram_timestamp * wire(vals, Wire::Q4) * wire(vals, Wire::Ql)
-        + mr * wire(vals, Wire::Qm) * wire(vals, Wire::Ql)
-        + ram_consistency;
+    let memory_identity = rom_consistency_check_identity
+        + ram_timestamp_check_identity * wire(p, Wire::Q4) * wire(p, Wire::Ql)
+        + memory_record_check * wire(p, Wire::Qm) * wire(p, Wire::Ql)
+        + ram_consistency_check_identity;
 
-    out[12] = (memory_identity + non_native_field_identity + limb_acc_identity)
-        * wire(vals, Wire::QAux)
-        * d;
+    let auxiliary_identity =
+        memory_identity + non_native_field_identity + limb_accumulator_identity;
+    // Contribution 12
+    evals[12] = auxiliary_identity * wire(p, Wire::QAux) * domain_sep;
 }
 
-/// Accumulate Poseidon external (18..21) and internal (22..25) subrelations.
-fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
-    let s1 = wire(vals, Wire::Wl) + wire(vals, Wire::Ql);
-    let s2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qr);
-    let s3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qo);
-    let s4 = wire(vals, Wire::W4) + wire(vals, Wire::Q4);
+/// Accumulate Poseidon external subrelations (indices 18..21).
+fn accumulate_poseidon_external_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
+    let s1 = wire(p, Wire::Wl) + wire(p, Wire::Ql);
+    let s2 = wire(p, Wire::Wr) + wire(p, Wire::Qr);
+    let s3 = wire(p, Wire::Wo) + wire(p, Wire::Qo);
+    let s4 = wire(p, Wire::W4) + wire(p, Wire::Q4);
 
     let u1_ext = s1.pow(5);
     let u2_ext = s2.pow(5);
     let u3_ext = s3.pow(5);
     let u4_ext = s4.pow(5);
-
-    let u1_int = u1_ext; // s1^5 reused as-is
-    let u2_int = wire(vals, Wire::Wr); // *No S-box*, *No Q_R*
-    let u3_int = wire(vals, Wire::Wo);
-    let u4_int = wire(vals, Wire::W4);
 
     let t0 = u1_ext + u2_ext;
     let t1 = u3_ext + u4_ext;
@@ -305,13 +355,20 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let v1 = t3 + v2;
     let v3 = t2 + v4;
 
-    let qpos = wire(vals, Wire::QPoseidon2External);
-    out[18] = (v1 - wire(vals, Wire::WlShift)) * qpos * d;
-    out[19] = (v2 - wire(vals, Wire::WrShift)) * qpos * d;
-    out[20] = (v3 - wire(vals, Wire::WoShift)) * qpos * d;
-    out[21] = (v4 - wire(vals, Wire::W4Shift)) * qpos * d;
+    let q_poseidon = wire(p, Wire::QPoseidon2External);
+    evals[18] = (v1 - wire(p, Wire::WlShift)) * q_poseidon * domain_sep;
+    evals[19] = (v2 - wire(p, Wire::WrShift)) * q_poseidon * domain_sep;
+    evals[20] = (v3 - wire(p, Wire::WoShift)) * q_poseidon * domain_sep;
+    evals[21] = (v4 - wire(p, Wire::W4Shift)) * q_poseidon * domain_sep;
+}
 
-    let ipos = wire(vals, Wire::QPoseidon2Internal);
+/// Accumulate Poseidon internal subrelations (indices 22..25).
+fn accumulate_poseidon_internal_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
+    let u1_int = (wire(p, Wire::Wl) + wire(p, Wire::Ql)).pow(5);
+    let u2_int = wire(p, Wire::Wr);
+    let u3_int = wire(p, Wire::Wo);
+    let u4_int = wire(p, Wire::W4);
+    let q_poseidon = wire(p, Wire::QPoseidon2Internal);
     let u_sum = u1_int + u2_int + u3_int + u4_int;
     let diag = internal_matrix_diagonal();
 
@@ -320,66 +377,62 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let w3 = u3_int * diag[2] + u_sum;
     let w4 = u4_int * diag[3] + u_sum;
 
-    out[22] = (w1 - wire(vals, Wire::WlShift)) * ipos * d;
-    out[23] = (w2 - wire(vals, Wire::WrShift)) * ipos * d;
-    out[24] = (w3 - wire(vals, Wire::WoShift)) * ipos * d;
-    out[25] = (w4 - wire(vals, Wire::W4Shift)) * ipos * d;
+    evals[22] = (w1 - wire(p, Wire::WlShift)) * q_poseidon * domain_sep;
+    evals[23] = (w2 - wire(p, Wire::WrShift)) * q_poseidon * domain_sep;
+    evals[24] = (w3 - wire(p, Wire::WoShift)) * q_poseidon * domain_sep;
+    evals[25] = (w4 - wire(p, Wire::W4Shift)) * q_poseidon * domain_sep;
 }
 
 /// Batch all NUM_SUBRELATIONS = 26 subrelations with the alpha challenges.
-fn batch_subrelations(evals: &[Fr], alphas: &[Fr]) -> Fr {
-    let mut acc = evals[0];
-    for (i, alpha) in alphas.iter().enumerate() {
-        acc = acc + evals[i + 1] * *alpha;
+fn scale_and_batch_subrelations(evaluations: &[Fr], subrelation_challenges: &[Fr]) -> Fr {
+    let mut accumulator = evaluations[0];
+    for i in 1..NUMBER_OF_SUBRELATIONS {
+        accumulator = accumulator + evaluations[i] * subrelation_challenges[i - 1];
     }
-    acc
+    accumulator
 }
 
 /// Main entrypoint: accumulate all subrelations and batch with alphas.
 pub fn accumulate_relation_evaluations(
-    vals: &[Fr],
+    purported_evaluations: &[Fr],
     rp: &RelationParameters,
     alphas: &[Fr],
-    pow_partial: Fr,
+    pow_partial_eval: Fr,
 ) -> Fr {
-    const NUM_SUBRELATIONS: usize = 26;
-    let mut out = vec![Fr::zero(); NUM_SUBRELATIONS];
-    let d = pow_partial;
+    let mut evaluations = vec![Fr::zero(); NUMBER_OF_SUBRELATIONS];
 
-    accumulate_arithmetic(vals, &mut out, d);
-    accumulate_permutation(vals, rp, &mut out, d);
-    accumulate_lookup(vals, rp, &mut out, d);
-    accumulate_range(vals, &mut out, d);
-    accumulate_elliptic(vals, &mut out, d);
-    accumulate_aux(vals, rp, &mut out, d);
-    accumulate_poseidon(vals, &mut out, d);
+    accumulate_arithmetic_relation(purported_evaluations, &mut evaluations, pow_partial_eval);
+    accumulate_permutation_relation(
+        purported_evaluations,
+        rp,
+        &mut evaluations,
+        pow_partial_eval,
+    );
+    accumulate_log_derivative_lookup_relation(
+        purported_evaluations,
+        rp,
+        &mut evaluations,
+        pow_partial_eval,
+    );
+    accumulate_delta_range_relation(purported_evaluations, &mut evaluations, pow_partial_eval);
+    accumulate_elliptic_relation(purported_evaluations, &mut evaluations, pow_partial_eval);
+    accumulate_auxillary_relation(
+        purported_evaluations,
+        rp,
+        &mut evaluations,
+        pow_partial_eval,
+    );
+    accumulate_poseidon_external_relation(
+        purported_evaluations,
+        &mut evaluations,
+        pow_partial_eval,
+    );
+    accumulate_poseidon_internal_relation(
+        purported_evaluations,
+        &mut evaluations,
+        pow_partial_eval,
+    );
 
-    batch_subrelations(&out, alphas)
-}
-
-pub fn dump_subrelations(
-    vals: &[Fr],
-    rp: &RelationParameters,
-    alphas: &[Fr],
-    pow_partial: Fr,
-) -> Fr {
-    const NUM: usize = 26;
-    let mut out = vec![Fr::zero(); NUM];
-    let d = pow_partial;
-
-    accumulate_arithmetic(vals, &mut out, d);
-    accumulate_permutation(vals, rp, &mut out, d);
-    accumulate_lookup(vals, rp, &mut out, d);
-    accumulate_range(vals, &mut out, d);
-    accumulate_elliptic(vals, &mut out, d);
-    accumulate_aux(vals, rp, &mut out, d);
-    accumulate_poseidon(vals, &mut out, d);
-
-    println!("===== SUBRELATIONS (Rust) =====");
-    for (i, v) in out.iter().enumerate() {
-        println!("rel[{i:02}] = 0x{}", hex::encode(v.to_bytes()));
-    }
-    println!("===============================");
-
-    batch_subrelations(&out, alphas)
+    let accumulator = scale_and_batch_subrelations(&evaluations, alphas);
+    accumulator
 }

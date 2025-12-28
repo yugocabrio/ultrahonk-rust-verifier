@@ -1,12 +1,14 @@
 use crate::field::Fr;
 use ark_bn254::{Fq, G1Affine};
 
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
-/// Number of subrelations in the Ultra Honk protocol.
-pub const NUMBER_OF_SUBRELATIONS: usize = 26;
 pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
+pub const NUMBER_OF_SUBRELATIONS: usize = 26;
+pub const BATCHED_RELATION_PARTIAL_LENGTH: usize = 8;
+pub const NUMBER_OF_ENTITIES: usize = 40;
+pub const NUMBER_UNSHIFTED: usize = 35;
+pub const NUMBER_TO_BE_SHIFTED: usize = 5;
+pub const PAIRING_POINTS_SIZE: usize = 16;
+pub const NUMBER_OF_ALPHAS: usize = NUMBER_OF_SUBRELATIONS - 1;
 
 /// Wire indices for the Ultra Honk protocol.
 #[derive(Copy, Clone, Debug)]
@@ -84,7 +86,6 @@ pub struct VerificationKey {
     pub circuit_size: u64,
     pub log_circuit_size: u64,
     pub public_inputs_size: u64,
-    pub pub_inputs_offset: u64,
     // Selectors and wire commitments:
     pub qm: G1Point,
     pub qc: G1Point,
@@ -96,7 +97,7 @@ pub struct VerificationKey {
     pub q_arith: G1Point,
     pub q_delta_range: G1Point,
     pub q_elliptic: G1Point,
-    pub q_memory: G1Point,
+    pub q_aux: G1Point,
     pub q_poseidon2_external: G1Point,
     pub q_poseidon2_internal: G1Point,
     // Copy constraints:
@@ -122,7 +123,7 @@ pub struct VerificationKey {
 #[derive(Clone, Debug)]
 pub struct Proof {
     // Pairing point object (16 Fr elements)
-    pub pairing_point_object: Vec<Fr>,
+    pub pairing_point_object: [Fr; PAIRING_POINTS_SIZE],
     // Wire commitments
     pub w1: G1Point,
     pub w2: G1Point,
@@ -134,11 +135,11 @@ pub struct Proof {
     pub lookup_inverses: G1Point,
     pub z_perm: G1Point,
     // Sumcheck polynomials
-    pub sumcheck_univariates: Vec<Vec<Fr>>, // 28 × 8
-    pub sumcheck_evaluations: Vec<Fr>,      // 40 (NUMBER_OF_ENTITIES)
+    pub sumcheck_univariates: [[Fr; BATCHED_RELATION_PARTIAL_LENGTH]; CONST_PROOF_SIZE_LOG_N],
+    pub sumcheck_evaluations: [Fr; NUMBER_OF_ENTITIES],
     // Gemini fold commitments
-    pub gemini_fold_comms: Vec<G1Point>, // 27
-    pub gemini_a_evaluations: Vec<Fr>,   // 28
+    pub gemini_fold_comms: [G1Point; CONST_PROOF_SIZE_LOG_N - 1],
+    pub gemini_a_evaluations: [Fr; CONST_PROOF_SIZE_LOG_N],
     // Shplonk
     pub shplonk_q: G1Point,
     pub kzg_quotient: G1Point,
@@ -159,9 +160,9 @@ pub struct RelationParameters {
 #[derive(Clone, Debug)]
 pub struct Transcript {
     pub rel_params: RelationParameters,
-    pub alphas: Vec<Fr>,                // 25
-    pub gate_challenges: Vec<Fr>,       // logN (28)
-    pub sumcheck_u_challenges: Vec<Fr>, // 28
+    pub alphas: [Fr; NUMBER_OF_ALPHAS],
+    pub gate_challenges: [Fr; CONST_PROOF_SIZE_LOG_N],
+    pub sumcheck_u_challenges: [Fr; CONST_PROOF_SIZE_LOG_N],
     pub rho: Fr,
     pub gemini_r: Fr,
     pub shplonk_nu: Fr,

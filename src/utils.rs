@@ -1,13 +1,15 @@
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
-use crate::types::{G1Point, Proof, VerificationKey};
+use crate::types::{
+    G1Point, Proof, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH, CONST_PROOF_SIZE_LOG_N,
+    NUMBER_OF_ENTITIES, PAIRING_POINTS_SIZE,
+};
+use crate::PROOF_BYTES;
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::{BigInteger256, PrimeField, Zero};
+use core::array;
 use num_bigint::BigUint;
-
-#[cfg(not(feature = "std"))]
-use alloc::{string::String, vec::Vec};
 
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {
@@ -15,12 +17,10 @@ fn biguint_to_fq_mod(x: &BigUint) -> Fq {
     Fq::from_le_bytes_mod_order(&le)
 }
 
-/// Convert 32 bytes into an Fr.
-fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
+/// Convert a 32-byte big-endian array into an Fr.
+fn bytes32_to_fr(bytes: &[u8; 32]) -> Fr {
     Fr::from_bytes(bytes)
 }
-
-/// Big-Endian 32 byte to Fq (accept mod p)
 
 /// Fq to 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
@@ -55,10 +55,10 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
 /// Note (bb v0.87.0): G1 coordinates are encoded as two limbs per coordinate
 /// using the (lo136, hi<=118) split and stored in the order (x_lo, x_hi, y_lo, y_hi).
 pub fn load_proof(proof_bytes: &[u8]) -> Proof {
-    let mut cursor = 0usize;
+    assert_eq!(proof_bytes.len(), PROOF_BYTES, "proof bytes len");
+    let mut boundary = 0usize;
 
-    // Helper: read next 128 bytes as G1Point using 136-bit limb split (x = x0 | (x1<<136))
-    fn read_g1(bytes: &[u8], cur: &mut usize) -> G1Point {
+    fn bytes_to_g1_proof_point(bytes: &[u8], cur: &mut usize) -> G1Point {
         use num_bigint::BigUint;
         let x0 = BigUint::from_bytes_be(&bytes[*cur..*cur + 32]);
         let x1 = BigUint::from_bytes_be(&bytes[*cur + 32..*cur + 64]);
@@ -73,67 +73,58 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         G1Point { x: fx, y: fy }
     }
 
-    // Helper: read next 32 bytes as Fr
-    fn read_fr(bytes: &[u8], cur: &mut usize) -> Fr {
+    // Helper: bytesToFr (read next 32 bytes as Fr)
+    fn bytes_to_fr(bytes: &[u8], cur: &mut usize) -> Fr {
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&bytes[*cur..*cur + 32]);
         *cur += 32;
-        bytes_to_fr(&arr)
+        bytes32_to_fr(&arr)
     }
 
-    // 0) pairing point object: 16 Fr elements
-    let mut pairing_point_object = Vec::with_capacity(16);
-    for _ in 0..16 {
-        pairing_point_object.push(read_fr(proof_bytes, &mut cursor));
-    }
+    // 0) pairing point object
+    let pairing_point_object: [Fr; PAIRING_POINTS_SIZE] =
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
     // 1) w1, w2, w3
-    let w1 = read_g1(proof_bytes, &mut cursor);
-    let w2 = read_g1(proof_bytes, &mut cursor);
-    let w3 = read_g1(proof_bytes, &mut cursor);
+    let w1 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let w2 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let w3 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 2) lookup_read_counts, lookup_read_tags
-    let lookup_read_counts = read_g1(proof_bytes, &mut cursor);
-    let lookup_read_tags = read_g1(proof_bytes, &mut cursor);
+    let lookup_read_counts = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let lookup_read_tags = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 3) w4
-    let w4 = read_g1(proof_bytes, &mut cursor);
+    let w4 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 4) lookup_inverses, z_perm
-    let lookup_inverses = read_g1(proof_bytes, &mut cursor);
-    let z_perm = read_g1(proof_bytes, &mut cursor);
+    let lookup_inverses = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let z_perm = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
-    // 5) sumcheck_univariates: 28 rounds × 8 Fr each
-    let mut sumcheck_univariates = Vec::new();
-    for _ in 0..28 {
-        let mut row = Vec::with_capacity(8);
-        for _ in 0..8 {
-            row.push(read_fr(proof_bytes, &mut cursor));
+    // 5) sumcheck_univariates
+    let mut sumcheck_univariates =
+        [[Fr::zero(); BATCHED_RELATION_PARTIAL_LENGTH]; CONST_PROOF_SIZE_LOG_N];
+    for r in 0..CONST_PROOF_SIZE_LOG_N {
+        for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
+            sumcheck_univariates[r][i] = bytes_to_fr(proof_bytes, &mut boundary);
         }
-        sumcheck_univariates.push(row);
     }
 
     // 6) sumcheck_evaluations
-    let mut sumcheck_evaluations = Vec::with_capacity(40);
-    for _ in 0..40 {
-        sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
-    }
+    let sumcheck_evaluations: [Fr; NUMBER_OF_ENTITIES] =
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
-    // 7) gemini_fold_comms: 27 G1Points
-    let mut gemini_fold_comms = Vec::new();
-    for _ in 0..27 {
-        gemini_fold_comms.push(read_g1(proof_bytes, &mut cursor));
-    }
+    // 7) gemini_fold_comms
+    let gemini_fold_comms: [G1Point; CONST_PROOF_SIZE_LOG_N - 1] =
+        array::from_fn(|_| bytes_to_g1_proof_point(proof_bytes, &mut boundary));
 
-    // 8) gemini_a_evaluations: 28 Fr
-    let mut gemini_a_evaluations = Vec::new();
-    for _ in 0..28 {
-        gemini_a_evaluations.push(read_fr(proof_bytes, &mut cursor));
-    }
+    // 8) gemini_a_evaluations
+    let gemini_a_evaluations: [Fr; CONST_PROOF_SIZE_LOG_N] =
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
     // 9) shplonk_q, kzg_quotient
-    let shplonk_q = read_g1(proof_bytes, &mut cursor);
-    let kzg_quotient = read_g1(proof_bytes, &mut cursor);
+    let shplonk_q = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let kzg_quotient = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     Proof {
         pairing_point_object,
@@ -199,7 +190,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let circuit_size = read_u64(bytes, &mut idx);
     let log_circuit_size = read_u64(bytes, &mut idx);
     let public_inputs_size = read_u64(bytes, &mut idx);
-    let pub_inputs_offset = read_u64(bytes, &mut idx);
+    let _pub_inputs_offset = read_u64(bytes, &mut idx);
 
     let qm = read_point(bytes, &mut idx);
     let qc = read_point(bytes, &mut idx);
@@ -211,7 +202,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
     let q_arith = read_point(bytes, &mut idx);
     let q_delta_range = read_point(bytes, &mut idx);
     let q_elliptic = read_point(bytes, &mut idx);
-    let q_memory = read_point(bytes, &mut idx);
+    let q_aux = read_point(bytes, &mut idx);
     let q_poseidon2_external = read_point(bytes, &mut idx);
     let q_poseidon2_internal = read_point(bytes, &mut idx);
     let s1 = read_point(bytes, &mut idx);
@@ -233,7 +224,6 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         circuit_size,
         log_circuit_size,
         public_inputs_size,
-        pub_inputs_offset,
         qm,
         qc,
         ql,
@@ -244,7 +234,7 @@ pub fn load_vk_from_bytes(bytes: &[u8]) -> VerificationKey {
         q_arith,
         q_delta_range,
         q_elliptic,
-        q_memory,
+        q_aux,
         q_poseidon2_external,
         q_poseidon2_internal,
         s1,

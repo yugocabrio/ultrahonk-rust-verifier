@@ -5,6 +5,7 @@ use crate::{
     shplemini::verify_shplemini,
     sumcheck::verify_sumcheck,
     transcript::generate_transcript,
+    types::PAIRING_POINTS_SIZE,
     utils::{load_proof, load_vk_from_bytes},
 };
 
@@ -66,49 +67,47 @@ impl UltraHonkVerifier {
             ));
         }
         let provided = (public_inputs_bytes.len() / 32) as u64;
-        if self.vk.public_inputs_size != 0 {
-            let expected = self.vk.public_inputs_size.saturating_sub(16);
-            if expected != provided {
-                return Err(VerifyError::InvalidInput(format!(
-                    "public inputs count mismatch (vk: {}, provided: {})",
-                    expected, provided
-                )));
-            }
+        let expected = self
+            .vk
+            .public_inputs_size
+            .checked_sub(PAIRING_POINTS_SIZE as u64)
+            .ok_or_else(|| VerifyError::InvalidInput("vk inputs < 16".into()))?;
+        if expected != provided {
+            return Err(VerifyError::InvalidInput("public inputs mismatch".into()));
         }
 
         // 3) Fiat–Shamir transcript
-        // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
-        let pis_total = provided + 16;
-        let pub_offset = 1;
-        let mut tx = generate_transcript(
+        let pis_total = provided + PAIRING_POINTS_SIZE as u64;
+        let pub_inputs_offset = 1;
+        let mut t = generate_transcript(
             &proof,
             public_inputs_bytes,
             self.vk.circuit_size,
             pis_total,
-            pub_offset, // pubInputsOffset
+            pub_inputs_offset,
         );
 
-        // 4) compute Δₚᵢ and inject
-        tx.rel_params.public_inputs_delta = Self::public_inputs_delta(
+        // 4) Public delta
+        t.rel_params.public_inputs_delta = Self::compute_public_input_delta(
             public_inputs_bytes,
             &proof.pairing_point_object,
-            tx.rel_params.beta,
-            tx.rel_params.gamma,
-            pub_offset,
+            t.rel_params.beta,
+            t.rel_params.gamma,
+            pub_inputs_offset,
             self.vk.circuit_size,
         )
         .map_err(VerifyError::InvalidInput)?;
 
-        // 5) Sum-check: returns SumcheckFailed when this step fails.
-        verify_sumcheck(&proof, &tx, &self.vk).map_err(VerifyError::SumcheckFailed)?;
+        // 5) Sum-check
+        verify_sumcheck(&proof, &t, &self.vk).map_err(VerifyError::SumcheckFailed)?;
 
-        // 6) Shplonk (batch opening): returns ShplonkFailed when this stage fails.
-        verify_shplemini(&proof, &self.vk, &tx).map_err(VerifyError::ShplonkFailed)?;
+        // 6) Shplonk
+        verify_shplemini(&proof, &self.vk, &t).map_err(VerifyError::ShplonkFailed)?;
 
         Ok(())
     }
 
-    fn public_inputs_delta(
+    fn compute_public_input_delta(
         public_inputs: &[u8],
         pairing_point_object: &[Fr],
         beta: Fr,
@@ -116,30 +115,30 @@ impl UltraHonkVerifier {
         offset: u64,
         n: u64,
     ) -> Result<Fr, String> {
-        let mut num = Fr::one();
-        let mut den = Fr::one();
+        let mut numerator = Fr::one();
+        let mut denominator = Fr::one();
 
-        let mut num_acc = gamma + beta * Fr::from_u64(n + offset);
-        let mut den_acc = gamma - beta * Fr::from_u64(offset + 1);
+        let mut numerator_acc = gamma + beta * Fr::from_u64(n + offset);
+        let mut denominator_acc = gamma - beta * Fr::from_u64(offset + 1);
 
         let mut chunks = public_inputs.chunks_exact(32);
         for bytes in &mut chunks {
-            let pi = Fr::from_bytes(bytes.try_into().unwrap());
-            num = num * (num_acc + pi);
-            den = den * (den_acc + pi);
-            num_acc = num_acc + beta;
-            den_acc = den_acc - beta;
+            let public_input = Fr::from_bytes(bytes.try_into().unwrap());
+            numerator = numerator * (numerator_acc + public_input);
+            denominator = denominator * (denominator_acc + public_input);
+            numerator_acc = numerator_acc + beta;
+            denominator_acc = denominator_acc - beta;
         }
         debug_assert!(chunks.remainder().is_empty());
-        for pi in pairing_point_object {
-            num = num * (num_acc + *pi);
-            den = den * (den_acc + *pi);
-            num_acc = num_acc + beta;
-            den_acc = den_acc - beta;
+        for public_input in pairing_point_object {
+            numerator = numerator * (numerator_acc + *public_input);
+            denominator = denominator * (denominator_acc + *public_input);
+            numerator_acc = numerator_acc + beta;
+            denominator_acc = denominator_acc - beta;
         }
-        let den_inv = den
+        let denominator_inv = denominator
             .inverse()
-            .ok_or_else(|| String::from("public inputs delta denominator is zero"))?;
-        Ok(num * den_inv)
+            .ok_or_else(|| String::from("public input delta denom is zero"))?;
+        Ok(numerator * denominator_inv)
     }
 }
