@@ -384,7 +384,14 @@ pub fn dump_subrelations(
 
     println!("===== SUBRELATIONS (Rust) =====");
     for (i, v) in out.iter().enumerate() {
-        println!("rel[{i:02}] = 0x{}", hex::encode(v.to_bytes()));
+        #[cfg(feature = "std")]
+        {
+            println!("rel[{i:02}] = 0x{}", hex::encode(v.to_bytes()));
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let _ = (i, v);
+        }
     }
     println!("===============================");
 

@@ -10,7 +10,7 @@ use ark_ff::{BigInteger256, PrimeField, Zero};
 use num_bigint::BigUint;
 
 #[cfg(not(feature = "std"))]
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {

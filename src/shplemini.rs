@@ -7,11 +7,11 @@ use crate::types::{
     G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ENTITIES,
     NUMBER_UNSHIFTED,
 };
-use ark_bn254::{Fq, G1Affine, G1Projective};
+use ark_bn254::{Fq, G1Projective};
 use ark_ec::{CurveGroup, PrimeGroup};
 #[cfg(feature = "trace")]
 use ark_ff::BigInteger;
-use ark_ff::{One, PrimeField, Zero};
+use ark_ff::Zero;
 
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec, vec::Vec};

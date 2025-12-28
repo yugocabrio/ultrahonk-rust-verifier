@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed, format, string::String};
+use alloc::{format, string::String};
 
 #[cfg(feature = "std")]
 use lazy_static::lazy_static;
