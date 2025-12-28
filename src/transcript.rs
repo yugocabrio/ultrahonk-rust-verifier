@@ -4,7 +4,7 @@ use crate::trace;
 use crate::{
     field::Fr,
     hash::hash32,
-    types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N},
+    types::{Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ALPHAS},
 };
 use ark_bn254::G1Affine;
 
@@ -105,16 +105,16 @@ fn generate_alpha_challenges(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
     }
     let mut cur = hash_to_fr(&data);
 
-    let mut alphas = Vec::with_capacity(25);
+    let mut alphas = Vec::with_capacity(NUMBER_OF_ALPHAS);
     let (a0, a1) = split_challenge(cur);
     alphas.push(a0);
     alphas.push(a1);
 
-    while alphas.len() < 25 {
+    while alphas.len() < NUMBER_OF_ALPHAS {
         cur = hash_to_fr(&cur.to_bytes());
         let (lo, hi) = split_challenge(cur);
         alphas.push(lo);
-        if alphas.len() < 25 {
+        if alphas.len() < NUMBER_OF_ALPHAS {
             alphas.push(hi);
         }
     }

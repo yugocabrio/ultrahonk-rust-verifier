@@ -5,7 +5,7 @@ use crate::field::Fr;
 use crate::trace;
 use crate::types::{
     G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ENTITIES,
-    NUMBER_UNSHIFTED,
+    NUMBER_TO_BE_SHIFTED, NUMBER_UNSHIFTED,
 };
 use ark_bn254::{Fq, G1Projective};
 use ark_ec::{CurveGroup, PrimeGroup};
@@ -68,6 +68,8 @@ pub fn verify_shplemini(
     // 5) weight sumcheck evals
     let mut rho_pow = Fr::one();
     let mut eval_acc = Fr::zero();
+    let shifted_end = NUMBER_UNSHIFTED + NUMBER_TO_BE_SHIFTED;
+    debug_assert_eq!(NUMBER_OF_ENTITIES, shifted_end);
     for (idx, eval) in proof
         .sumcheck_evaluations
         .iter()
