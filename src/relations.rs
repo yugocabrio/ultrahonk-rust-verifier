@@ -59,8 +59,11 @@ fn accumulate_arithmetic_relation(p: &[Fr], evals: &mut [Fr], domain_sep: Fr) {
         let q_arith = wire(p, Wire::QArith);
         let mut accum =
             wire(p, Wire::Wl) + wire(p, Wire::W4) - wire(p, Wire::WlShift) + wire(p, Wire::Qm);
-        accum =
-            accum * (q_arith - Fr::from_u64(2)) * (q_arith - Fr::from_u64(1)) * q_arith * domain_sep;
+        accum = accum
+            * (q_arith - Fr::from_u64(2))
+            * (q_arith - Fr::from_u64(1))
+            * q_arith
+            * domain_sep;
         evals[1] = accum;
     }
 }
@@ -247,22 +250,19 @@ fn accumulate_auxillary_relation(
         (non_native_field_gate_1 + non_native_field_gate_2 + non_native_field_gate_3)
             * wire(p, Wire::Qr);
 
-    let mut limb_accumulator_1 =
-        wire(p, Wire::WrShift) * sublimb_shift() + wire(p, Wire::WlShift);
+    let mut limb_accumulator_1 = wire(p, Wire::WrShift) * sublimb_shift() + wire(p, Wire::WlShift);
     limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wo);
     limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wr);
     limb_accumulator_1 = limb_accumulator_1 * sublimb_shift() + wire(p, Wire::Wl);
     limb_accumulator_1 = (limb_accumulator_1 - wire(p, Wire::W4)) * wire(p, Wire::Q4);
 
-    let mut limb_accumulator_2 =
-        wire(p, Wire::WoShift) * sublimb_shift() + wire(p, Wire::WrShift);
+    let mut limb_accumulator_2 = wire(p, Wire::WoShift) * sublimb_shift() + wire(p, Wire::WrShift);
     limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::WlShift);
     limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::W4);
     limb_accumulator_2 = limb_accumulator_2 * sublimb_shift() + wire(p, Wire::Wo);
     limb_accumulator_2 = (limb_accumulator_2 - wire(p, Wire::W4Shift)) * wire(p, Wire::Qm);
 
-    let limb_accumulator_identity =
-        (limb_accumulator_1 + limb_accumulator_2) * wire(p, Wire::Qo);
+    let limb_accumulator_identity = (limb_accumulator_1 + limb_accumulator_2) * wire(p, Wire::Qo);
 
     let mut memory_record_check = wire(p, Wire::Wo) * rp.eta_three
         + wire(p, Wire::Wr) * rp.eta_two
@@ -315,7 +315,8 @@ fn accumulate_auxillary_relation(
         * wire(p, Wire::QAux)
         * domain_sep;
 
-    let rom_consistency_check_identity = memory_record_check * wire(p, Wire::Ql) * wire(p, Wire::Qr);
+    let rom_consistency_check_identity =
+        memory_record_check * wire(p, Wire::Ql) * wire(p, Wire::Qr);
     let ram_timestamp_check_identity = (Fr::one() - index_delta)
         * (wire(p, Wire::WrShift) - wire(p, Wire::Wr))
         - wire(p, Wire::Wo);
@@ -326,7 +327,8 @@ fn accumulate_auxillary_relation(
         + memory_record_check * wire(p, Wire::Qm) * wire(p, Wire::Ql)
         + ram_consistency_check_identity;
 
-    let auxiliary_identity = memory_identity + non_native_field_identity + limb_accumulator_identity;
+    let auxiliary_identity =
+        memory_identity + non_native_field_identity + limb_accumulator_identity;
     // Contribution 12
     evals[12] = auxiliary_identity * wire(p, Wire::QAux) * domain_sep;
 }
