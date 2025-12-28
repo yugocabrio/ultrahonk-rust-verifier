@@ -115,30 +115,30 @@ impl UltraHonkVerifier {
         offset: u64,
         n: u64,
     ) -> Result<Fr, String> {
-        let mut num = Fr::one();
-        let mut den = Fr::one();
+        let mut numerator = Fr::one();
+        let mut denominator = Fr::one();
 
-        let mut num_acc = gamma + beta * Fr::from_u64(n + offset);
-        let mut den_acc = gamma - beta * Fr::from_u64(offset + 1);
+        let mut numerator_acc = gamma + beta * Fr::from_u64(n + offset);
+        let mut denominator_acc = gamma - beta * Fr::from_u64(offset + 1);
 
         let mut chunks = public_inputs.chunks_exact(32);
         for bytes in &mut chunks {
-            let pi = Fr::from_bytes(bytes.try_into().unwrap());
-            num = num * (num_acc + pi);
-            den = den * (den_acc + pi);
-            num_acc = num_acc + beta;
-            den_acc = den_acc - beta;
+            let public_input = Fr::from_bytes(bytes.try_into().unwrap());
+            numerator = numerator * (numerator_acc + public_input);
+            denominator = denominator * (denominator_acc + public_input);
+            numerator_acc = numerator_acc + beta;
+            denominator_acc = denominator_acc - beta;
         }
         debug_assert!(chunks.remainder().is_empty());
-        for pi in pairing_point_object {
-            num = num * (num_acc + *pi);
-            den = den * (den_acc + *pi);
-            num_acc = num_acc + beta;
-            den_acc = den_acc - beta;
+        for public_input in pairing_point_object {
+            numerator = numerator * (numerator_acc + *public_input);
+            denominator = denominator * (denominator_acc + *public_input);
+            numerator_acc = numerator_acc + beta;
+            denominator_acc = denominator_acc - beta;
         }
-        let den_inv = den
+        let denominator_inv = denominator
             .inverse()
-            .ok_or_else(|| String::from("public inputs delta denominator is zero"))?;
-        Ok(num * den_inv)
+            .ok_or_else(|| String::from("public input delta denom is zero"))?;
+        Ok(numerator * denominator_inv)
     }
 }

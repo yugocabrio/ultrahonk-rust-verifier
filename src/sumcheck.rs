@@ -50,17 +50,18 @@ fn get_bary() -> &'static [Fr; BATCHED_RELATION_PARTIAL_LENGTH] {
 
 /// Check if the sum of two univariates equals the target value
 #[inline(always)]
-fn check_sum(u: &[Fr], target: Fr) -> bool {
-    u[0] + u[1] == target
+fn check_sum(round_univariate: &[Fr], round_target: Fr) -> bool {
+    let total_sum = round_univariate[0] + round_univariate[1];
+    total_sum == round_target
 }
 
 /// Calculate next target value for the sum-check
 #[inline(always)]
-fn compute_next_target_sum(u: &[Fr], chi: Fr) -> Result<Fr, String> {
+fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Result<Fr, String> {
     // B(χ) = ∏ (χ - i)
-    let mut b = Fr::one();
+    let mut b_poly = Fr::one();
     for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
-        b = b * (chi - Fr::from_u64(i as u64));
+        b_poly = b_poly * (round_challenge - Fr::from_u64(i as u64));
     }
 
     // Σ u_i / (BARY[i] * (χ - i))
@@ -71,62 +72,73 @@ fn compute_next_target_sum(u: &[Fr], chi: Fr) -> Result<Fr, String> {
         #[cfg(not(feature = "std"))]
         let bary_val = get_bary()[i];
 
-        let denom = bary_val * (chi - Fr::from_u64(i as u64));
+        let denom = bary_val * (round_challenge - Fr::from_u64(i as u64));
         let inv = denom
             .inverse()
-            .ok_or_else(|| format!("sum-check denominator is zero at i={}", i))?;
-        acc = acc + (u[i] * inv);
+            .ok_or_else(|| String::from("sumcheck denom zero"))?;
+        acc = acc + (round_univariate[i] * inv);
     }
 
-    Ok(b * acc)
+    Ok(b_poly * acc)
 }
 
 #[inline(always)]
-fn partially_evaluate_pow(pow: Fr, gate_ch: Fr, chi: Fr) -> Fr {
-    pow * (Fr::one() + chi * (gate_ch - Fr::one()))
+fn partially_evaluate_pow(
+    gate_challenge: Fr,
+    pow_partial_evaluation: Fr,
+    round_challenge: Fr,
+) -> Fr {
+    pow_partial_evaluation * (Fr::one() + round_challenge * (gate_challenge - Fr::one()))
 }
 
 pub fn verify_sumcheck(
     proof: &crate::types::Proof,
-    tx: &Transcript,
+    tp: &Transcript,
     vk: &VerificationKey,
 ) -> Result<(), String> {
     let log_n = vk.log_circuit_size as usize;
-    let mut target = Fr::zero();
-    let mut pow_par = Fr::one();
+    let mut round_target = Fr::zero();
+    let mut pow_partial_evaluation = Fr::one();
 
     // 1) Each round sum check and next target/pow calculation
-    for r in 0..log_n {
-        let uni = &proof.sumcheck_univariates[r];
+    for round in 0..log_n {
+        let round_univariate = &proof.sumcheck_univariates[round];
 
-        if !check_sum(uni, target) {
-            return Err(format!("sum-check round {r}: linear check failed"));
+        if !check_sum(round_univariate, round_target) {
+            return Err(format!("sumcheck round {round} failed"));
         }
 
-        let chi = tx.sumcheck_u_challenges[r];
-        target = compute_next_target_sum(uni, chi)?;
-        pow_par = partially_evaluate_pow(pow_par, tx.gate_challenges[r], chi);
+        let round_challenge = tp.sumcheck_u_challenges[round];
+        round_target = compute_next_target_sum(round_univariate, round_challenge)?;
+        pow_partial_evaluation = partially_evaluate_pow(
+            tp.gate_challenges[round],
+            pow_partial_evaluation,
+            round_challenge,
+        );
     }
 
     // 2) Final relation summation
-    let grand = accumulate_relation_evaluations(
+    let grand_honk_relation_sum = accumulate_relation_evaluations(
         &proof.sumcheck_evaluations,
-        &tx.rel_params,
-        &tx.alphas,
-        pow_par,
+        &tp.rel_params,
+        &tp.alphas,
+        pow_partial_evaluation,
     );
 
-    if grand == target {
+    if grand_honk_relation_sum == round_target {
         Ok(())
     } else {
         crate::trace!("===== SUMCHECK FINAL CHECK FAILED =====");
-        crate::trace!("grand_relation = 0x{}", hex::encode(grand.to_bytes()));
-        crate::trace!("target = 0x{}", hex::encode(target.to_bytes()));
+        crate::trace!(
+            "grand_relation = 0x{}",
+            hex::encode(grand_honk_relation_sum.to_bytes())
+        );
+        crate::trace!("target = 0x{}", hex::encode(round_target.to_bytes()));
         crate::trace!(
             "difference = 0x{}",
-            hex::encode((grand - target).to_bytes())
+            hex::encode((grand_honk_relation_sum - round_target).to_bytes())
         );
         crate::trace!("======================================");
-        Err("Final relation ≠ target".into())
+        Err("sumcheck final mismatch".into())
     }
 }
