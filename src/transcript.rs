@@ -44,16 +44,16 @@ fn u64_to_be32(x: u64) -> [u8; 32] {
 
 fn generate_eta_challenge(
     proof: &Proof,
-    pub_inputs: &[u8],
-    cs: u64,
-    pis_total: u64,
-    offset: u64,
+    public_inputs: &[u8],
+    circuit_size: u64,
+    public_inputs_size: u64,
+    pub_inputs_offset: u64,
 ) -> (RelationParameters, Fr) {
     let mut data = Vec::new();
-    data.extend_from_slice(&u64_to_be32(cs));
-    data.extend_from_slice(&u64_to_be32(pis_total));
-    data.extend_from_slice(&u64_to_be32(offset));
-    let mut chunks = pub_inputs.chunks_exact(32);
+    data.extend_from_slice(&u64_to_be32(circuit_size));
+    data.extend_from_slice(&u64_to_be32(public_inputs_size));
+    data.extend_from_slice(&u64_to_be32(pub_inputs_offset));
+    let mut chunks = public_inputs.chunks_exact(32);
     for pi in &mut chunks {
         data.extend_from_slice(pi);
     }
@@ -126,16 +126,23 @@ fn generate_alpha_challenges(prev: Fr, proof: &Proof) -> ([Fr; NUMBER_OF_ALPHAS]
 
 fn generate_relation_parameters_challenges(
     proof: &Proof,
-    pub_inputs: &[u8],
-    cs: u64,
-    pis_total: u64,
-    offset: u64,
+    public_inputs: &[u8],
+    circuit_size: u64,
+    public_inputs_size: u64,
+    pub_inputs_offset: u64,
 ) -> (RelationParameters, Fr) {
-    let (mut rp, prev) = generate_eta_challenge(proof, pub_inputs, cs, pis_total, offset);
-    let (beta, gamma, next) = generate_beta_and_gamma_challenges(prev, proof);
+    let (mut rp, previous_challenge) = generate_eta_challenge(
+        proof,
+        public_inputs,
+        circuit_size,
+        public_inputs_size,
+        pub_inputs_offset,
+    );
+    let (beta, gamma, next_previous_challenge) =
+        generate_beta_and_gamma_challenges(previous_challenge, proof);
     rp.beta = beta;
     rp.gamma = gamma;
-    (rp, next)
+    (rp, next_previous_challenge)
 }
 
 fn generate_gate_challenges(prev: Fr) -> ([Fr; CONST_PROOF_SIZE_LOG_N], Fr) {
@@ -202,35 +209,40 @@ fn generate_shplonk_z_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
 
 pub fn generate_transcript(
     proof: &Proof,
-    pub_inputs: &[u8],
-    cs: u64,
-    pis_total: u64,
-    offset: u64,
+    public_inputs: &[u8],
+    circuit_size: u64,
+    public_inputs_size: u64,
+    pub_inputs_offset: u64,
 ) -> Transcript {
     // 1) eta/beta/gamma
-    let (rp, cur) =
-        generate_relation_parameters_challenges(proof, pub_inputs, cs, pis_total, offset);
+    let (rp, previous_challenge) = generate_relation_parameters_challenges(
+        proof,
+        public_inputs,
+        circuit_size,
+        public_inputs_size,
+        pub_inputs_offset,
+    );
 
     // 2) alphas
-    let (alphas, cur) = generate_alpha_challenges(cur, proof);
+    let (alphas, previous_challenge) = generate_alpha_challenges(previous_challenge, proof);
 
     // 3) gate challenges
-    let (gate_chals, cur) = generate_gate_challenges(cur);
+    let (gate_chals, previous_challenge) = generate_gate_challenges(previous_challenge);
 
     // 4) sumcheck challenges
-    let (u_chals, cur) = generate_sumcheck_challenges(proof, cur);
+    let (u_chals, previous_challenge) = generate_sumcheck_challenges(proof, previous_challenge);
 
     // 5) rho
-    let (rho, cur) = generate_rho_challenge(proof, cur);
+    let (rho, previous_challenge) = generate_rho_challenge(proof, previous_challenge);
 
     // 6) gemini_r
-    let (gemini_r, cur) = generate_gemini_r_challenge(proof, cur);
+    let (gemini_r, previous_challenge) = generate_gemini_r_challenge(proof, previous_challenge);
 
     // 7) shplonk_nu
-    let (shplonk_nu, cur) = generate_shplonk_nu_challenge(proof, cur);
+    let (shplonk_nu, previous_challenge) = generate_shplonk_nu_challenge(proof, previous_challenge);
 
     // 8) shplonk_z
-    let (shplonk_z, _cur) = generate_shplonk_z_challenge(proof, cur);
+    let (shplonk_z, _previous_challenge) = generate_shplonk_z_challenge(proof, previous_challenge);
 
     trace!("===== TRANSCRIPT PARAMETERS =====");
     trace!("eta = 0x{}", hex::encode(rp.eta.to_bytes()));
@@ -242,9 +254,9 @@ pub fn generate_transcript(
     trace!("gemini_r = 0x{}", hex::encode(gemini_r.to_bytes()));
     trace!("shplonk_nu = 0x{}", hex::encode(shplonk_nu.to_bytes()));
     trace!("shplonk_z = 0x{}", hex::encode(shplonk_z.to_bytes()));
-    trace!("circuit_size = {}", cs);
-    trace!("public_inputs_total = {}", pis_total);
-    trace!("public_inputs_offset = {}", offset);
+    trace!("circuit_size = {}", circuit_size);
+    trace!("public_inputs_total = {}", public_inputs_size);
+    trace!("public_inputs_offset = {}", pub_inputs_offset);
     trace!("=================================");
 
     Transcript {

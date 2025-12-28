@@ -58,7 +58,6 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     assert_eq!(proof_bytes.len(), PROOF_BYTES, "proof bytes len");
     let mut boundary = 0usize;
 
-    // Helper: read next 128 bytes as G1Point using 136-bit limb split (x = x0 | (x1<<136))
     fn read_g1(bytes: &[u8], cur: &mut usize) -> G1Point {
         use num_bigint::BigUint;
         let x0 = BigUint::from_bytes_be(&bytes[*cur..*cur + 32]);
