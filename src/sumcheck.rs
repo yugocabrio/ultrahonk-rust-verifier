@@ -50,13 +50,13 @@ fn get_bary() -> &'static [Fr; 8] {
 
 /// Check if the sum of two univariates equals the target value
 #[inline(always)]
-fn check_round_sum(u: &[Fr], target: Fr) -> bool {
+fn check_sum(u: &[Fr], target: Fr) -> bool {
     u[0] + u[1] == target
 }
 
 /// Calculate next target value for the sum-check
 #[inline(always)]
-fn next_target(u: &[Fr], chi: Fr) -> Result<Fr, String> {
+fn compute_next_target_sum(u: &[Fr], chi: Fr) -> Result<Fr, String> {
     // B(χ) = ∏ (χ - i)
     let mut b = Fr::one();
     for i in 0..8 {
@@ -82,7 +82,7 @@ fn next_target(u: &[Fr], chi: Fr) -> Result<Fr, String> {
 }
 
 #[inline(always)]
-fn update_pow(pow: Fr, gate_ch: Fr, chi: Fr) -> Fr {
+fn partially_evaluate_pow(pow: Fr, gate_ch: Fr, chi: Fr) -> Fr {
     pow * (Fr::one() + chi * (gate_ch - Fr::one()))
 }
 
@@ -99,13 +99,13 @@ pub fn verify_sumcheck(
     for r in 0..log_n {
         let uni = &proof.sumcheck_univariates[r];
 
-        if !check_round_sum(uni, target) {
+        if !check_sum(uni, target) {
             return Err(format!("sum-check round {r}: linear check failed"));
         }
 
         let chi = tx.sumcheck_u_challenges[r];
-        target = next_target(uni, chi)?;
-        pow_par = update_pow(pow_par, tx.gate_challenges[r], chi);
+        target = compute_next_target_sum(uni, chi)?;
+        pow_par = partially_evaluate_pow(pow_par, tx.gate_challenges[r], chi);
     }
 
     // 2) Final relation summation

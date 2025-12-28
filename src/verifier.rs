@@ -88,7 +88,7 @@ impl UltraHonkVerifier {
         );
 
         // 4) compute Δₚᵢ and inject
-        tx.rel_params.public_inputs_delta = Self::public_inputs_delta(
+        tx.rel_params.public_inputs_delta = Self::compute_public_input_delta(
             public_inputs_bytes,
             &proof.pairing_point_object,
             tx.rel_params.beta,
@@ -107,7 +107,7 @@ impl UltraHonkVerifier {
         Ok(())
     }
 
-    fn public_inputs_delta(
+    fn compute_public_input_delta(
         public_inputs: &[u8],
         pairing_point_object: &[Fr],
         beta: Fr,

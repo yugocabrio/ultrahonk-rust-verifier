@@ -41,7 +41,7 @@ fn wire(vals: &[Fr], w: Wire) -> Fr {
 }
 
 /// Accumulate the two arithmetic subrelations (indices 0 and 1).
-fn accumulate_arithmetic(vals: &[Fr], out: &mut [Fr], d: Fr) {
+fn accumulate_arithmetic_relation(vals: &[Fr], out: &mut [Fr], d: Fr) {
     // Subrelation 0: quadratic gate combination
     {
         let q = wire(vals, Wire::QArith);
@@ -70,7 +70,7 @@ fn accumulate_arithmetic(vals: &[Fr], out: &mut [Fr], d: Fr) {
 }
 
 /// Accumulate the two permutation subrelations (indices 2 and 3).
-fn accumulate_permutation(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
+fn accumulate_permutation_relation(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     let mut num = wire(vals, Wire::Wl) + wire(vals, Wire::Id1) * rp.beta + rp.gamma;
     num = num
         * (wire(vals, Wire::Wr) + wire(vals, Wire::Id2) * rp.beta + rp.gamma)
@@ -90,8 +90,13 @@ fn accumulate_permutation(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], 
     out[3] = wire(vals, Wire::LagrangeLast) * wire(vals, Wire::ZPermShift) * d;
 }
 
-/// Accumulate the two lookup log‐derivative subrelations (indices 4 and 5).
-fn accumulate_lookup(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
+/// Accumulate the two lookup log-derivative subrelations (indices 4 and 5).
+fn accumulate_log_derivative_lookup_relation(
+    vals: &[Fr],
+    rp: &RelationParameters,
+    out: &mut [Fr],
+    d: Fr,
+) {
     let write_term = wire(vals, Wire::Table1)
         + rp.gamma
         + wire(vals, Wire::Table2) * rp.eta
@@ -117,8 +122,8 @@ fn accumulate_lookup(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr
         - wire(vals, Wire::LookupReadCounts) * (read_term * inv);
 }
 
-/// Accumulate the four range‐check subrelations (indices 6..9).
-fn accumulate_range(vals: &[Fr], out: &mut [Fr], d: Fr) {
+/// Accumulate the four range-check subrelations (indices 6..9).
+fn accumulate_delta_range_relation(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let deltas = [
         wire(vals, Wire::Wr) - wire(vals, Wire::Wl),
         wire(vals, Wire::Wo) - wire(vals, Wire::Wr),
@@ -139,8 +144,8 @@ fn accumulate_range(vals: &[Fr], out: &mut [Fr], d: Fr) {
     }
 }
 
-/// Accumulate elliptic‐curve subrelations (indices 10..11).
-fn accumulate_elliptic(vals: &[Fr], out: &mut [Fr], d: Fr) {
+/// Accumulate elliptic-curve subrelations (indices 10..11).
+fn accumulate_elliptic_relation(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let x1 = wire(vals, Wire::Wr);
     let y1 = wire(vals, Wire::Wo);
     let x2 = wire(vals, Wire::WlShift);
@@ -187,7 +192,7 @@ fn accumulate_elliptic(vals: &[Fr], out: &mut [Fr], d: Fr) {
 }
 
 /// Accumulate auxiliary subrelations (indices 12..17).
-fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
+fn accumulate_auxillary_relation(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
     fn limb_size() -> Fr {
         Fr::from_str("0x100000000000000000")
     }
@@ -278,8 +283,8 @@ fn accumulate_aux(vals: &[Fr], rp: &RelationParameters, out: &mut [Fr], d: Fr) {
         * d;
 }
 
-/// Accumulate Poseidon external (18..21) and internal (22..25) subrelations.
-fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
+/// Accumulate Poseidon external subrelations (indices 18..21).
+fn accumulate_poseidon_external_relation(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let s1 = wire(vals, Wire::Wl) + wire(vals, Wire::Ql);
     let s2 = wire(vals, Wire::Wr) + wire(vals, Wire::Qr);
     let s3 = wire(vals, Wire::Wo) + wire(vals, Wire::Qo);
@@ -289,11 +294,6 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     let u2_ext = s2.pow(5);
     let u3_ext = s3.pow(5);
     let u4_ext = s4.pow(5);
-
-    let u1_int = u1_ext; // s1^5 reused as-is
-    let u2_int = wire(vals, Wire::Wr); // *No S-box*, *No Q_R*
-    let u3_int = wire(vals, Wire::Wo);
-    let u4_int = wire(vals, Wire::W4);
 
     let t0 = u1_ext + u2_ext;
     let t1 = u3_ext + u4_ext;
@@ -310,7 +310,14 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
     out[19] = (v2 - wire(vals, Wire::WrShift)) * qpos * d;
     out[20] = (v3 - wire(vals, Wire::WoShift)) * qpos * d;
     out[21] = (v4 - wire(vals, Wire::W4Shift)) * qpos * d;
+}
 
+/// Accumulate Poseidon internal subrelations (indices 22..25).
+fn accumulate_poseidon_internal_relation(vals: &[Fr], out: &mut [Fr], d: Fr) {
+    let u1_int = (wire(vals, Wire::Wl) + wire(vals, Wire::Ql)).pow(5);
+    let u2_int = wire(vals, Wire::Wr);
+    let u3_int = wire(vals, Wire::Wo);
+    let u4_int = wire(vals, Wire::W4);
     let ipos = wire(vals, Wire::QPoseidon2Internal);
     let u_sum = u1_int + u2_int + u3_int + u4_int;
     let diag = internal_matrix_diagonal();
@@ -327,7 +334,7 @@ fn accumulate_poseidon(vals: &[Fr], out: &mut [Fr], d: Fr) {
 }
 
 /// Batch all NUM_SUBRELATIONS = 26 subrelations with the alpha challenges.
-fn batch_subrelations(evals: &[Fr], alphas: &[Fr]) -> Fr {
+fn scale_and_batch_subrelations(evals: &[Fr], alphas: &[Fr]) -> Fr {
     let mut acc = evals[0];
     for (i, alpha) in alphas.iter().enumerate() {
         acc = acc + evals[i + 1] * *alpha;
@@ -346,15 +353,16 @@ pub fn accumulate_relation_evaluations(
     let mut out = vec![Fr::zero(); NUM_SUBRELATIONS];
     let d = pow_partial;
 
-    accumulate_arithmetic(vals, &mut out, d);
-    accumulate_permutation(vals, rp, &mut out, d);
-    accumulate_lookup(vals, rp, &mut out, d);
-    accumulate_range(vals, &mut out, d);
-    accumulate_elliptic(vals, &mut out, d);
-    accumulate_aux(vals, rp, &mut out, d);
-    accumulate_poseidon(vals, &mut out, d);
+    accumulate_arithmetic_relation(vals, &mut out, d);
+    accumulate_permutation_relation(vals, rp, &mut out, d);
+    accumulate_log_derivative_lookup_relation(vals, rp, &mut out, d);
+    accumulate_delta_range_relation(vals, &mut out, d);
+    accumulate_elliptic_relation(vals, &mut out, d);
+    accumulate_auxillary_relation(vals, rp, &mut out, d);
+    accumulate_poseidon_external_relation(vals, &mut out, d);
+    accumulate_poseidon_internal_relation(vals, &mut out, d);
 
-    batch_subrelations(&out, alphas)
+    scale_and_batch_subrelations(&out, alphas)
 }
 
 pub fn dump_subrelations(
@@ -367,13 +375,14 @@ pub fn dump_subrelations(
     let mut out = vec![Fr::zero(); NUM];
     let d = pow_partial;
 
-    accumulate_arithmetic(vals, &mut out, d);
-    accumulate_permutation(vals, rp, &mut out, d);
-    accumulate_lookup(vals, rp, &mut out, d);
-    accumulate_range(vals, &mut out, d);
-    accumulate_elliptic(vals, &mut out, d);
-    accumulate_aux(vals, rp, &mut out, d);
-    accumulate_poseidon(vals, &mut out, d);
+    accumulate_arithmetic_relation(vals, &mut out, d);
+    accumulate_permutation_relation(vals, rp, &mut out, d);
+    accumulate_log_derivative_lookup_relation(vals, rp, &mut out, d);
+    accumulate_delta_range_relation(vals, &mut out, d);
+    accumulate_elliptic_relation(vals, &mut out, d);
+    accumulate_auxillary_relation(vals, rp, &mut out, d);
+    accumulate_poseidon_external_relation(vals, &mut out, d);
+    accumulate_poseidon_internal_relation(vals, &mut out, d);
 
     println!("===== SUBRELATIONS (Rust) =====");
     for (i, v) in out.iter().enumerate() {
@@ -381,5 +390,5 @@ pub fn dump_subrelations(
     }
     println!("===============================");
 
-    batch_subrelations(&out, alphas)
+    scale_and_batch_subrelations(&out, alphas)
 }
