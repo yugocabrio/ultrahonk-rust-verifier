@@ -137,6 +137,6 @@ pub fn verify_sumcheck(
             hex::encode((grand_honk_relation_sum - round_target).to_bytes())
         );
         crate::trace!("======================================");
-        Err("final mismatch".into())
+        Err("sumcheck final mismatch".into())
     }
 }
