@@ -5,6 +5,7 @@ use crate::types::{
     G1Point, Proof, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH, CONST_PROOF_SIZE_LOG_N,
     NUMBER_OF_ENTITIES, PAIRING_POINTS_SIZE,
 };
+use crate::PROOF_BYTES;
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::{BigInteger256, PrimeField, Zero};
 use num_bigint::BigUint;
@@ -56,6 +57,7 @@ pub fn fq_to_halves_be(f: &Fq) -> ([u8; 32], [u8; 32]) {
 /// Note (bb v0.87.0): G1 coordinates are encoded as two limbs per coordinate
 /// using the (lo136, hi<=118) split and stored in the order (x_lo, x_hi, y_lo, y_hi).
 pub fn load_proof(proof_bytes: &[u8]) -> Proof {
+    assert_eq!(proof_bytes.len(), PROOF_BYTES, "proof bytes len");
     let mut cursor = 0usize;
 
     // Helper: read next 128 bytes as G1Point using 136-bit limb split (x = x0 | (x1<<136))
