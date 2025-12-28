@@ -30,7 +30,7 @@ fn affine_checked(pt: &G1Point) -> Result<G1Affine, String> {
     if aff.is_on_curve() && aff.is_in_correct_subgroup_assuming_on_curve() {
         Ok(aff)
     } else {
-        Err("invalid G1 point (not on curve)".into())
+        Err("g1 point not on curve".into())
     }
 }
 
@@ -42,14 +42,14 @@ fn negate(pt: &G1Point) -> G1Point {
 #[inline(always)]
 fn ark_g1_msm(coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
     if coms.len() != scalars.len() {
-        return Err("commitments / scalars length mismatch".into());
+        return Err("msm len mismatch".into());
     }
     let mut acc = G1Projective::zero();
     trace!("Initial acc: {:?}", acc);
     for (c, s) in coms.iter().zip(scalars.iter()) {
         let aff = G1Affine::new_unchecked(c.x, c.y);
         if !aff.is_on_curve() || !aff.is_in_correct_subgroup_assuming_on_curve() {
-            return Err("invalid G1 point".into());
+            return Err("g1 point invalid".into());
         }
         #[cfg(feature = "trace")]
         {

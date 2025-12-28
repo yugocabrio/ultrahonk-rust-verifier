@@ -9,7 +9,7 @@ fn run(dir: &str) -> Result<(), String> {
 
     // Use binary VK
     let vk_bytes = fs::read(path.join("vk")).map_err(|e| e.to_string())?;
-    let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes);
+    let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes).ok_or("vk parse")?;
 
     // Public inputs bytes
     let public_inputs = fs::read(path.join("public_inputs")).map_err(|e| e.to_string())?;

@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String};
+use alloc::string::String;
 
 #[cfg(feature = "std")]
 use lazy_static::lazy_static;
@@ -73,9 +73,7 @@ fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Resu
         let bary_val = get_bary()[i];
 
         let denom = bary_val * (round_challenge - Fr::from_u64(i as u64));
-        let inv = denom
-            .inverse()
-            .ok_or_else(|| String::from("sumcheck denom zero"))?;
+        let inv = denom.inverse().ok_or_else(|| String::from("denom zero"))?;
         acc = acc + (round_univariate[i] * inv);
     }
 
@@ -105,7 +103,7 @@ pub fn verify_sumcheck(
         let round_univariate = &proof.sumcheck_univariates[round];
 
         if !check_sum(round_univariate, round_target) {
-            return Err(format!("sumcheck round {round} failed"));
+            return Err("round failed".into());
         }
 
         let round_challenge = tp.sumcheck_u_challenges[round];
@@ -139,6 +137,6 @@ pub fn verify_sumcheck(
             hex::encode((grand_honk_relation_sum - round_target).to_bytes())
         );
         crate::trace!("======================================");
-        Err("sumcheck final mismatch".into())
+        Err("final mismatch".into())
     }
 }

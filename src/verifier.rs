@@ -24,9 +24,9 @@ pub enum VerifyError {
 impl From<VerifyError> for String {
     fn from(err: VerifyError) -> String {
         match err {
-            VerifyError::InvalidInput(s) => format!("Invalid input: {}", s),
-            VerifyError::SumcheckFailed(s) => format!("Sum-check failed: {}", s),
-            VerifyError::ShplonkFailed(s) => format!("Shplonk failed: {}", s),
+            VerifyError::InvalidInput(s) => format!("invalid input: {}", s),
+            VerifyError::SumcheckFailed(s) => format!("sumcheck failed: {}", s),
+            VerifyError::ShplonkFailed(s) => format!("shplonk failed: {}", s),
         }
     }
 }
@@ -40,10 +40,8 @@ impl UltraHonkVerifier {
         Self { vk }
     }
 
-    pub fn new_from_bytes(vk_bytes: &[u8]) -> Self {
-        Self {
-            vk: load_vk_from_bytes(vk_bytes),
-        }
+    pub fn new_from_bytes(vk_bytes: &[u8]) -> Option<Self> {
+        load_vk_from_bytes(vk_bytes).map(|vk| Self { vk })
     }
 
     /// Expose a reference to the parsed VK for debugging/inspection.
