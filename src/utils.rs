@@ -8,10 +8,8 @@ use crate::types::{
 use crate::PROOF_BYTES;
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::{BigInteger256, PrimeField, Zero};
+use core::array;
 use num_bigint::BigUint;
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
 
 /// BigUint -> Fq by LE bytes (auto-reduced mod p)
 fn biguint_to_fq_mod(x: &BigUint) -> Fq {
@@ -85,10 +83,8 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     }
 
     // 0) pairing point object
-    let mut pairing_point_object = Vec::with_capacity(PAIRING_POINTS_SIZE);
-    for _ in 0..PAIRING_POINTS_SIZE {
-        pairing_point_object.push(read_fr(proof_bytes, &mut cursor));
-    }
+    let pairing_point_object: [Fr; PAIRING_POINTS_SIZE] =
+        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
 
     // 1) w1, w2, w3
     let w1 = read_g1(proof_bytes, &mut cursor);
@@ -107,32 +103,25 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     let z_perm = read_g1(proof_bytes, &mut cursor);
 
     // 5) sumcheck_univariates
-    let mut sumcheck_univariates = Vec::new();
-    for _ in 0..CONST_PROOF_SIZE_LOG_N {
-        let mut row = Vec::with_capacity(BATCHED_RELATION_PARTIAL_LENGTH);
-        for _ in 0..BATCHED_RELATION_PARTIAL_LENGTH {
-            row.push(read_fr(proof_bytes, &mut cursor));
+    let mut sumcheck_univariates =
+        [[Fr::zero(); BATCHED_RELATION_PARTIAL_LENGTH]; CONST_PROOF_SIZE_LOG_N];
+    for r in 0..CONST_PROOF_SIZE_LOG_N {
+        for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
+            sumcheck_univariates[r][i] = read_fr(proof_bytes, &mut cursor);
         }
-        sumcheck_univariates.push(row);
     }
 
     // 6) sumcheck_evaluations
-    let mut sumcheck_evaluations = Vec::with_capacity(NUMBER_OF_ENTITIES);
-    for _ in 0..NUMBER_OF_ENTITIES {
-        sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
-    }
+    let sumcheck_evaluations: [Fr; NUMBER_OF_ENTITIES] =
+        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
 
     // 7) gemini_fold_comms
-    let mut gemini_fold_comms = Vec::new();
-    for _ in 0..(CONST_PROOF_SIZE_LOG_N - 1) {
-        gemini_fold_comms.push(read_g1(proof_bytes, &mut cursor));
-    }
+    let gemini_fold_comms: [G1Point; CONST_PROOF_SIZE_LOG_N - 1] =
+        array::from_fn(|_| read_g1(proof_bytes, &mut cursor));
 
     // 8) gemini_a_evaluations
-    let mut gemini_a_evaluations = Vec::new();
-    for _ in 0..CONST_PROOF_SIZE_LOG_N {
-        gemini_a_evaluations.push(read_fr(proof_bytes, &mut cursor));
-    }
+    let gemini_a_evaluations: [Fr; CONST_PROOF_SIZE_LOG_N] =
+        array::from_fn(|_| read_fr(proof_bytes, &mut cursor));
 
     // 9) shplonk_q, kzg_quotient
     let shplonk_q = read_g1(proof_bytes, &mut cursor);

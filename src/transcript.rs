@@ -98,36 +98,30 @@ fn generate_beta_and_gamma_challenges(prev: Fr, proof: &Proof) -> (Fr, Fr, Fr) {
     (beta, gamma, h)
 }
 
-fn generate_alpha_challenges(prev: Fr, proof: &Proof) -> (Vec<Fr>, Fr) {
+fn generate_alpha_challenges(prev: Fr, proof: &Proof) -> ([Fr; NUMBER_OF_ALPHAS], Fr) {
     let mut data = prev.to_bytes().to_vec();
     for w in &[&proof.lookup_inverses, &proof.z_perm] {
         push_point(&mut data, &w.to_affine());
     }
     let mut cur = hash_to_fr(&data);
 
-    let mut alphas = Vec::with_capacity(NUMBER_OF_ALPHAS);
+    let mut alphas = [Fr::zero(); NUMBER_OF_ALPHAS];
     let (a0, a1) = split_challenge(cur);
-    alphas.push(a0);
-    alphas.push(a1);
+    alphas[0] = a0;
+    alphas[1] = a1;
+    let mut filled = 2;
 
-    while alphas.len() < NUMBER_OF_ALPHAS {
+    while filled < NUMBER_OF_ALPHAS {
         cur = hash_to_fr(&cur.to_bytes());
         let (lo, hi) = split_challenge(cur);
-        alphas.push(lo);
-        if alphas.len() < NUMBER_OF_ALPHAS {
-            alphas.push(hi);
+        alphas[filled] = lo;
+        filled += 1;
+        if filled < NUMBER_OF_ALPHAS {
+            alphas[filled] = hi;
+            filled += 1;
         }
     }
     (alphas, cur)
-}
-
-fn generate_challenges(mut cur: Fr, rounds: usize) -> (Vec<Fr>, Fr) {
-    let mut out = Vec::with_capacity(rounds);
-    for _ in 0..rounds {
-        cur = hash_to_fr(&cur.to_bytes());
-        out.push(split_challenge(cur).0);
-    }
-    (out, cur)
 }
 
 fn generate_relation_parameters_challenges(
@@ -144,27 +138,33 @@ fn generate_relation_parameters_challenges(
     (rp, next)
 }
 
-fn generate_gate_challenges(prev: Fr) -> (Vec<Fr>, Fr) {
-    generate_challenges(prev, CONST_PROOF_SIZE_LOG_N)
+fn generate_gate_challenges(prev: Fr) -> ([Fr; CONST_PROOF_SIZE_LOG_N], Fr) {
+    let mut cur = prev;
+    let mut out = [Fr::zero(); CONST_PROOF_SIZE_LOG_N];
+    for i in 0..CONST_PROOF_SIZE_LOG_N {
+        cur = hash_to_fr(&cur.to_bytes());
+        out[i] = split_challenge(cur).0;
+    }
+    (out, cur)
 }
 
-fn generate_sumcheck_challenges(proof: &Proof, prev: Fr) -> (Vec<Fr>, Fr) {
+fn generate_sumcheck_challenges(proof: &Proof, prev: Fr) -> ([Fr; CONST_PROOF_SIZE_LOG_N], Fr) {
     let mut cur = prev;
-    let mut out = Vec::with_capacity(CONST_PROOF_SIZE_LOG_N);
+    let mut out = [Fr::zero(); CONST_PROOF_SIZE_LOG_N];
     for r in 0..CONST_PROOF_SIZE_LOG_N {
         let mut data = cur.to_bytes().to_vec();
-        for &c in &proof.sumcheck_univariates[r] {
+        for &c in proof.sumcheck_univariates[r].iter() {
             data.extend_from_slice(&c.to_bytes());
         }
         cur = hash_to_fr(&data);
-        out.push(split_challenge(cur).0);
+        out[r] = split_challenge(cur).0;
     }
     (out, cur)
 }
 
 fn generate_rho_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
-    for &e in &proof.sumcheck_evaluations {
+    for &e in proof.sumcheck_evaluations.iter() {
         data.extend_from_slice(&e.to_bytes());
     }
     let rho = split_challenge(hash_to_fr(&data)).0;
@@ -174,7 +174,7 @@ fn generate_rho_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
 
 fn generate_gemini_r_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
-    for pt in &proof.gemini_fold_comms {
+    for pt in proof.gemini_fold_comms.iter() {
         push_point(&mut data, &pt.to_affine());
     }
     let gemini_r = split_challenge(hash_to_fr(&data)).0;
@@ -184,7 +184,7 @@ fn generate_gemini_r_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
 
 fn generate_shplonk_nu_challenge(proof: &Proof, prev: Fr) -> (Fr, Fr) {
     let mut data = prev.to_bytes().to_vec();
-    for &a in &proof.gemini_a_evaluations {
+    for &a in proof.gemini_a_evaluations.iter() {
         data.extend_from_slice(&a.to_bytes());
     }
     let shplonk_nu = split_challenge(hash_to_fr(&data)).0;
