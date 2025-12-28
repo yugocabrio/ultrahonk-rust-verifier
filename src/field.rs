@@ -1,12 +1,11 @@
 use ark_bn254::Fr as ArkFr;
 use ark_ff::BigInteger256;
 use ark_ff::{Field, PrimeField, Zero};
-use ark_serialize::CanonicalSerialize;
 use core::ops::{Add, Mul, Neg, Sub};
 use hex;
 
 #[cfg(not(feature = "std"))]
-use alloc::{borrow::ToOwned, format, string::String};
+use alloc::{borrow::ToOwned, string::String};
 
 #[inline(always)]
 fn normalize_hex(s: &str) -> String {
@@ -59,10 +58,6 @@ impl Fr {
         out
     }
 
-    pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_bytes()))
-    }
-
     pub fn inverse(&self) -> Option<Self> {
         self.0.inverse().map(Fr)
     }
@@ -83,10 +78,6 @@ impl Fr {
 
     pub fn is_zero(&self) -> bool {
         self.0.is_zero()
-    }
-
-    pub fn div(&self, rhs: &Fr) -> Option<Self> {
-        rhs.inverse().map(|inv| *self * inv)
     }
 }
 

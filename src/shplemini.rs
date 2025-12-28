@@ -20,12 +20,12 @@ use alloc::{format, string::String, vec, vec::Vec};
 pub fn verify_shplemini(
     proof: &Proof,
     vk: &VerificationKey,
-    tx: &Transcript,
+    tp: &Transcript,
 ) -> Result<(), String> {
     // 1) r^{2^i}
     let log_n = vk.log_circuit_size as usize;
     let mut r_pows = Vec::with_capacity(log_n);
-    r_pows.push(tx.gemini_r);
+    r_pows.push(tp.gemini_r);
     for i in 1..log_n {
         r_pows.push(r_pows[i - 1] * r_pows[i - 1]);
     }
@@ -49,18 +49,18 @@ pub fn verify_shplemini(
     ];
 
     // 3) compute shplonk weights
-    let pos0 = (tx.shplonk_z - r_pows[0])
+    let pos0 = (tp.shplonk_z - r_pows[0])
         .inverse()
         .ok_or_else(|| String::from("shplonk denominator (z - r^0) is zero"))?;
-    let neg0 = (tx.shplonk_z + r_pows[0])
+    let neg0 = (tp.shplonk_z + r_pows[0])
         .inverse()
         .ok_or_else(|| String::from("shplonk denominator (z + r^0) is zero"))?;
-    let unshifted = pos0 + tx.shplonk_nu * neg0;
-    let gemini_r_inv = tx
+    let unshifted = pos0 + tp.shplonk_nu * neg0;
+    let gemini_r_inv = tp
         .gemini_r
         .inverse()
         .ok_or_else(|| String::from("gemini_r challenge is zero"))?;
-    let shifted = gemini_r_inv * (pos0 - tx.shplonk_nu * neg0);
+    let shifted = gemini_r_inv * (pos0 - tp.shplonk_nu * neg0);
     // 4) shplonk_Q
     scalars[0] = Fr::one();
     coms[0] = proof.shplonk_q.clone();
@@ -83,7 +83,7 @@ pub fn verify_shplemini(
         } * rho_pow;
         scalars[1 + idx] = scalar;
         eval_acc = eval_acc + (*eval * rho_pow);
-        rho_pow = rho_pow * tx.rho;
+        rho_pow = rho_pow * tp.rho;
     }
     // 6) load VK & proof
     {
@@ -159,7 +159,7 @@ pub fn verify_shplemini(
     let mut cur = eval_acc;
     for j in (1..=log_n).rev() {
         let r2 = r_pows[j - 1];
-        let u = tx.sumcheck_u_challenges[j - 1];
+        let u = tp.sumcheck_u_challenges[j - 1];
         let num = r2 * cur * Fr::from_u64(2)
             - proof.gemini_a_evaluations[j - 1] * (r2 * (Fr::one() - u) - u);
         let den = r2 * (Fr::one() - u) + u;
@@ -170,25 +170,25 @@ pub fn verify_shplemini(
         fold_pos[j - 1] = cur;
     }
     // 8) accumulate constant term
-    let mut const_acc = fold_pos[0] * pos0 + proof.gemini_a_evaluations[0] * tx.shplonk_nu * neg0;
-    let mut v_pow = tx.shplonk_nu * tx.shplonk_nu;
+    let mut const_acc = fold_pos[0] * pos0 + proof.gemini_a_evaluations[0] * tp.shplonk_nu * neg0;
+    let mut v_pow = tp.shplonk_nu * tp.shplonk_nu;
     // 9) further folding + commit
     // Base index where fold commitments start
     let base = 1 + NUMBER_OF_ENTITIES;
     for j in 1..log_n {
-        let pos_inv = (tx.shplonk_z - r_pows[j])
+        let pos_inv = (tp.shplonk_z - r_pows[j])
             .inverse()
             .ok_or_else(|| format!("shplonk denominator (z - r^{}) is zero", j))?;
-        let neg_inv = (tx.shplonk_z + r_pows[j])
+        let neg_inv = (tp.shplonk_z + r_pows[j])
             .inverse()
             .ok_or_else(|| format!("shplonk denominator (z + r^{}) is zero", j))?;
         let sp = v_pow * pos_inv;
-        let sn = v_pow * tx.shplonk_nu * neg_inv;
+        let sn = v_pow * tp.shplonk_nu * neg_inv;
 
         scalars[base + j - 1] = -(sp + sn);
         const_acc = const_acc + proof.gemini_a_evaluations[j] * sn + fold_pos[j] * sp;
 
-        v_pow = v_pow * tx.shplonk_nu * tx.shplonk_nu;
+        v_pow = v_pow * tp.shplonk_nu * tp.shplonk_nu;
 
         coms[base + j - 1] = proof.gemini_fold_comms[j - 1].clone();
     }
@@ -210,7 +210,7 @@ pub fn verify_shplemini(
     let q_idx = one_idx + 1;
     trace!("q_idx = {}", q_idx);
     coms[q_idx] = proof.kzg_quotient.clone();
-    scalars[q_idx] = tx.shplonk_z;
+    scalars[q_idx] = tp.shplonk_z;
 
     // 12) MSM + pairing
     let p0 = g1_msm(&coms, &scalars)?;
