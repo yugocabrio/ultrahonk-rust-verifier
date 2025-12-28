@@ -24,9 +24,9 @@ pub enum VerifyError {
 impl From<VerifyError> for String {
     fn from(err: VerifyError) -> String {
         match err {
-            VerifyError::InvalidInput(s) => format!("Invalid input: {}", s),
-            VerifyError::SumcheckFailed(s) => format!("Sum-check failed: {}", s),
-            VerifyError::ShplonkFailed(s) => format!("Shplonk failed: {}", s),
+            VerifyError::InvalidInput(s) => format!("invalid input: {}", s),
+            VerifyError::SumcheckFailed(s) => format!("sumcheck failed: {}", s),
+            VerifyError::ShplonkFailed(s) => format!("shplonk failed: {}", s),
         }
     }
 }
