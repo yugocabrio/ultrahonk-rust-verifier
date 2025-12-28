@@ -78,13 +78,13 @@ impl UltraHonkVerifier {
 
         // 3) Fiat–Shamir transcript
         let pis_total = provided + PAIRING_POINTS_SIZE as u64;
-        let pub_offset = 1;
+        let pub_inputs_offset = 1;
         let mut t = generate_transcript(
             &proof,
             public_inputs_bytes,
             self.vk.circuit_size,
             pis_total,
-            pub_offset, // pubInputsOffset
+            pub_inputs_offset,
         );
 
         // 4) Public delta
@@ -93,7 +93,7 @@ impl UltraHonkVerifier {
             &proof.pairing_point_object,
             t.rel_params.beta,
             t.rel_params.gamma,
-            pub_offset,
+            pub_inputs_offset,
             self.vk.circuit_size,
         )
         .map_err(VerifyError::InvalidInput)?;
