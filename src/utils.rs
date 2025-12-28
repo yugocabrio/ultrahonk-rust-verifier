@@ -17,8 +17,8 @@ fn biguint_to_fq_mod(x: &BigUint) -> Fq {
     Fq::from_le_bytes_mod_order(&le)
 }
 
-/// Convert 32 bytes into an Fr.
-fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
+/// Convert a 32-byte big-endian array into an Fr.
+fn bytes32_to_fr(bytes: &[u8; 32]) -> Fr {
     Fr::from_bytes(bytes)
 }
 
@@ -58,7 +58,7 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     assert_eq!(proof_bytes.len(), PROOF_BYTES, "proof bytes len");
     let mut boundary = 0usize;
 
-    fn read_g1(bytes: &[u8], cur: &mut usize) -> G1Point {
+    fn bytes_to_g1_proof_point(bytes: &[u8], cur: &mut usize) -> G1Point {
         use num_bigint::BigUint;
         let x0 = BigUint::from_bytes_be(&bytes[*cur..*cur + 32]);
         let x1 = BigUint::from_bytes_be(&bytes[*cur + 32..*cur + 64]);
@@ -73,58 +73,58 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         G1Point { x: fx, y: fy }
     }
 
-    // Helper: read next 32 bytes as Fr
-    fn read_fr(bytes: &[u8], cur: &mut usize) -> Fr {
+    // Helper: bytesToFr (read next 32 bytes as Fr)
+    fn bytes_to_fr(bytes: &[u8], cur: &mut usize) -> Fr {
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&bytes[*cur..*cur + 32]);
         *cur += 32;
-        bytes_to_fr(&arr)
+        bytes32_to_fr(&arr)
     }
 
     // 0) pairing point object
     let pairing_point_object: [Fr; PAIRING_POINTS_SIZE] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
     // 1) w1, w2, w3
-    let w1 = read_g1(proof_bytes, &mut boundary);
-    let w2 = read_g1(proof_bytes, &mut boundary);
-    let w3 = read_g1(proof_bytes, &mut boundary);
+    let w1 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let w2 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let w3 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 2) lookup_read_counts, lookup_read_tags
-    let lookup_read_counts = read_g1(proof_bytes, &mut boundary);
-    let lookup_read_tags = read_g1(proof_bytes, &mut boundary);
+    let lookup_read_counts = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let lookup_read_tags = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 3) w4
-    let w4 = read_g1(proof_bytes, &mut boundary);
+    let w4 = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 4) lookup_inverses, z_perm
-    let lookup_inverses = read_g1(proof_bytes, &mut boundary);
-    let z_perm = read_g1(proof_bytes, &mut boundary);
+    let lookup_inverses = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let z_perm = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     // 5) sumcheck_univariates
     let mut sumcheck_univariates =
         [[Fr::zero(); BATCHED_RELATION_PARTIAL_LENGTH]; CONST_PROOF_SIZE_LOG_N];
     for r in 0..CONST_PROOF_SIZE_LOG_N {
         for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
-            sumcheck_univariates[r][i] = read_fr(proof_bytes, &mut boundary);
+            sumcheck_univariates[r][i] = bytes_to_fr(proof_bytes, &mut boundary);
         }
     }
 
     // 6) sumcheck_evaluations
     let sumcheck_evaluations: [Fr; NUMBER_OF_ENTITIES] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
     // 7) gemini_fold_comms
     let gemini_fold_comms: [G1Point; CONST_PROOF_SIZE_LOG_N - 1] =
-        array::from_fn(|_| read_g1(proof_bytes, &mut boundary));
+        array::from_fn(|_| bytes_to_g1_proof_point(proof_bytes, &mut boundary));
 
     // 8) gemini_a_evaluations
     let gemini_a_evaluations: [Fr; CONST_PROOF_SIZE_LOG_N] =
-        array::from_fn(|_| read_fr(proof_bytes, &mut boundary));
+        array::from_fn(|_| bytes_to_fr(proof_bytes, &mut boundary));
 
     // 9) shplonk_q, kzg_quotient
-    let shplonk_q = read_g1(proof_bytes, &mut boundary);
-    let kzg_quotient = read_g1(proof_bytes, &mut boundary);
+    let shplonk_q = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
+    let kzg_quotient = bytes_to_g1_proof_point(proof_bytes, &mut boundary);
 
     Proof {
         pairing_point_object,
