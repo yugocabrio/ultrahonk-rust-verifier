@@ -7,6 +7,10 @@ use alloc::vec::Vec;
 /// Number of subrelations in the Ultra Honk protocol.
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
 pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
+pub const PAIRING_POINTS_SIZE: usize = 16;
+pub const BATCHED_RELATION_PARTIAL_LENGTH: usize = 8;
+pub const NUMBER_UNSHIFTED: usize = 35;
+pub const NUMBER_OF_ENTITIES: usize = NUMBER_UNSHIFTED + 5;
 
 /// Wire indices for the Ultra Honk protocol.
 #[derive(Copy, Clone, Debug)]

@@ -2,7 +2,7 @@
 use crate::{
     field::Fr,
     relations::accumulate_relation_evaluations,
-    types::{Transcript, VerificationKey},
+    types::{Transcript, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH},
 };
 
 #[cfg(not(feature = "std"))]
@@ -16,8 +16,8 @@ use once_cell::race::OnceBox;
 
 #[cfg(feature = "std")]
 lazy_static! {
-    /// 8-point barycentric coefficients
-    static ref BARY: [Fr; 8] = [
+    /// Barycentric coefficients
+    static ref BARY: [Fr; BATCHED_RELATION_PARTIAL_LENGTH] = [
         "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51",
         "0x00000000000000000000000000000000000000000000000000000000000002d0",
         "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11",
@@ -30,10 +30,10 @@ lazy_static! {
 }
 
 #[cfg(not(feature = "std"))]
-static BARY_BOX: OnceBox<[Fr; 8]> = OnceBox::new();
+static BARY_BOX: OnceBox<[Fr; BATCHED_RELATION_PARTIAL_LENGTH]> = OnceBox::new();
 
 #[cfg(not(feature = "std"))]
-fn get_bary() -> &'static [Fr; 8] {
+fn get_bary() -> &'static [Fr; BATCHED_RELATION_PARTIAL_LENGTH] {
     BARY_BOX.get_or_init(|| {
         alloc::boxed::Box::new([
             Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51"),
@@ -59,13 +59,13 @@ fn check_sum(u: &[Fr], target: Fr) -> bool {
 fn compute_next_target_sum(u: &[Fr], chi: Fr) -> Result<Fr, String> {
     // B(χ) = ∏ (χ - i)
     let mut b = Fr::one();
-    for i in 0..8 {
+    for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
         b = b * (chi - Fr::from_u64(i as u64));
     }
 
     // Σ u_i / (BARY[i] * (χ - i))
     let mut acc = Fr::zero();
-    for i in 0..8 {
+    for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
         #[cfg(feature = "std")]
         let bary_val = BARY[i];
         #[cfg(not(feature = "std"))]

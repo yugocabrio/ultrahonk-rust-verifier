@@ -4,7 +4,7 @@
 //! scalar which is then batched with the alpha challenges.
 
 use crate::field::Fr;
-use crate::types::{RelationParameters, Wire};
+use crate::types::{RelationParameters, Wire, NUMBER_OF_SUBRELATIONS};
 use core::ops::Neg;
 
 #[cfg(not(feature = "std"))]
@@ -349,8 +349,7 @@ pub fn accumulate_relation_evaluations(
     alphas: &[Fr],
     pow_partial: Fr,
 ) -> Fr {
-    const NUM_SUBRELATIONS: usize = 26;
-    let mut out = vec![Fr::zero(); NUM_SUBRELATIONS];
+    let mut out = vec![Fr::zero(); NUMBER_OF_SUBRELATIONS];
     let d = pow_partial;
 
     accumulate_arithmetic_relation(vals, &mut out, d);
@@ -371,8 +370,7 @@ pub fn dump_subrelations(
     alphas: &[Fr],
     pow_partial: Fr,
 ) -> Fr {
-    const NUM: usize = 26;
-    let mut out = vec![Fr::zero(); NUM];
+    let mut out = vec![Fr::zero(); NUMBER_OF_SUBRELATIONS];
     let d = pow_partial;
 
     accumulate_arithmetic_relation(vals, &mut out, d);

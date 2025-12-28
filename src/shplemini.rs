@@ -3,7 +3,10 @@ use crate::ec::helpers::{affine_checked, negate};
 use crate::ec::{g1_msm, pairing_check};
 use crate::field::Fr;
 use crate::trace;
-use crate::types::{G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N};
+use crate::types::{
+    G1Point, Proof, Transcript, VerificationKey, CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ENTITIES,
+    NUMBER_UNSHIFTED,
+};
 use ark_bn254::{Fq, G1Affine, G1Projective};
 use ark_ec::{CurveGroup, PrimeGroup};
 #[cfg(feature = "trace")]
@@ -12,10 +15,6 @@ use ark_ff::{One, PrimeField, Zero};
 
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec, vec::Vec};
-
-pub const NUMBER_UNSHIFTED: usize = 35; // = 40 – 5
-pub const NUMBER_SHIFTED: usize = 5; // Final 5 are shifted
-const NUMBER_OF_ENTITIES: usize = NUMBER_UNSHIFTED + NUMBER_SHIFTED; // 40
 
 /// Shplemini verification
 pub fn verify_shplemini(

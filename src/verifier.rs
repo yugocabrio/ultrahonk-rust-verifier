@@ -5,6 +5,7 @@ use crate::{
     shplemini::verify_shplemini,
     sumcheck::verify_sumcheck,
     transcript::generate_transcript,
+    types::PAIRING_POINTS_SIZE,
     utils::{load_proof, load_vk_from_bytes},
 };
 
@@ -69,7 +70,7 @@ impl UltraHonkVerifier {
         let expected = self
             .vk
             .public_inputs_size
-            .checked_sub(16)
+            .checked_sub(PAIRING_POINTS_SIZE as u64)
             .ok_or_else(|| VerifyError::InvalidInput("vk inputs < 16".into()))?;
         if expected != provided {
             return Err(VerifyError::InvalidInput("public inputs mismatch".into()));
@@ -77,7 +78,7 @@ impl UltraHonkVerifier {
 
         // 3) Fiat–Shamir transcript
         // In bb v0.87.0, publicInputsSize includes pairing point object (16 elements)
-        let pis_total = provided + 16;
+        let pis_total = provided + PAIRING_POINTS_SIZE as u64;
         let pub_offset = 1;
         let mut tx = generate_transcript(
             &proof,

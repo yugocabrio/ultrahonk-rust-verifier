@@ -1,7 +1,10 @@
 //! Utilities for loading Proof and VerificationKey, plus byte↔field/point conversion.
 
 use crate::field::Fr;
-use crate::types::{G1Point, Proof, VerificationKey};
+use crate::types::{
+    G1Point, Proof, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH, CONST_PROOF_SIZE_LOG_N,
+    NUMBER_OF_ENTITIES, PAIRING_POINTS_SIZE,
+};
 use ark_bn254::{Fq, G1Affine};
 use ark_ff::{BigInteger256, PrimeField, Zero};
 use num_bigint::BigUint;
@@ -19,8 +22,6 @@ fn biguint_to_fq_mod(x: &BigUint) -> Fq {
 fn bytes_to_fr(bytes: &[u8; 32]) -> Fr {
     Fr::from_bytes(bytes)
 }
-
-/// Big-Endian 32 byte to Fq (accept mod p)
 
 /// Fq to 32-byte big-endian
 pub fn fq_to_be_bytes(f: &Fq) -> [u8; 32] {
@@ -81,9 +82,9 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
         bytes_to_fr(&arr)
     }
 
-    // 0) pairing point object: 16 Fr elements
-    let mut pairing_point_object = Vec::with_capacity(16);
-    for _ in 0..16 {
+    // 0) pairing point object
+    let mut pairing_point_object = Vec::with_capacity(PAIRING_POINTS_SIZE);
+    for _ in 0..PAIRING_POINTS_SIZE {
         pairing_point_object.push(read_fr(proof_bytes, &mut cursor));
     }
 
@@ -103,31 +104,31 @@ pub fn load_proof(proof_bytes: &[u8]) -> Proof {
     let lookup_inverses = read_g1(proof_bytes, &mut cursor);
     let z_perm = read_g1(proof_bytes, &mut cursor);
 
-    // 5) sumcheck_univariates: 28 rounds × 8 Fr each
+    // 5) sumcheck_univariates
     let mut sumcheck_univariates = Vec::new();
-    for _ in 0..28 {
-        let mut row = Vec::with_capacity(8);
-        for _ in 0..8 {
+    for _ in 0..CONST_PROOF_SIZE_LOG_N {
+        let mut row = Vec::with_capacity(BATCHED_RELATION_PARTIAL_LENGTH);
+        for _ in 0..BATCHED_RELATION_PARTIAL_LENGTH {
             row.push(read_fr(proof_bytes, &mut cursor));
         }
         sumcheck_univariates.push(row);
     }
 
     // 6) sumcheck_evaluations
-    let mut sumcheck_evaluations = Vec::with_capacity(40);
-    for _ in 0..40 {
+    let mut sumcheck_evaluations = Vec::with_capacity(NUMBER_OF_ENTITIES);
+    for _ in 0..NUMBER_OF_ENTITIES {
         sumcheck_evaluations.push(read_fr(proof_bytes, &mut cursor));
     }
 
-    // 7) gemini_fold_comms: 27 G1Points
+    // 7) gemini_fold_comms
     let mut gemini_fold_comms = Vec::new();
-    for _ in 0..27 {
+    for _ in 0..(CONST_PROOF_SIZE_LOG_N - 1) {
         gemini_fold_comms.push(read_g1(proof_bytes, &mut cursor));
     }
 
-    // 8) gemini_a_evaluations: 28 Fr
+    // 8) gemini_a_evaluations
     let mut gemini_a_evaluations = Vec::new();
-    for _ in 0..28 {
+    for _ in 0..CONST_PROOF_SIZE_LOG_N {
         gemini_a_evaluations.push(read_fr(proof_bytes, &mut cursor));
     }
 

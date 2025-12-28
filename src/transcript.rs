@@ -137,8 +137,7 @@ fn generate_relation_parameters_challenges(
     pis_total: u64,
     offset: u64,
 ) -> (RelationParameters, Fr) {
-    let (mut rp, prev) =
-        generate_eta_challenge(proof, pub_inputs, cs, pis_total, offset);
+    let (mut rp, prev) = generate_eta_challenge(proof, pub_inputs, cs, pis_total, offset);
     let (beta, gamma, next) = generate_beta_and_gamma_challenges(prev, proof);
     rp.beta = beta;
     rp.gamma = gamma;
