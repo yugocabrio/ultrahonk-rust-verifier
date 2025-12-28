@@ -1,9 +1,9 @@
 use crate::{field::Fr, types::G1Point};
 
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
 #[cfg(all(feature = "soroban-precompile", not(feature = "std")))]
 use alloc::boxed::Box;
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
