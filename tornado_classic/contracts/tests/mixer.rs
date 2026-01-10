@@ -90,15 +90,13 @@ fn register_wasm_verifier<'a>(
     env: &'a Env,
     vk_bytes: &Bytes,
 ) -> (wasm_artifacts::ultrahonk_contract::Client<'a>, Address) {
-    let wasm_bytes = Bytes::from_slice(env, wasm_artifacts::VERIFIER_WASM);
-    let contract_id = env.register(wasm_bytes, (vk_bytes.clone(),));
+    let contract_id = env.register(wasm_artifacts::VERIFIER_WASM, (vk_bytes.clone(),));
     (wasm_artifacts::ultrahonk_contract::Client::new(env, &contract_id), contract_id)
 }
 
 #[cfg(feature = "wasm-cost")]
 fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Client<'a>, Address) {
-    let wasm_bytes = Bytes::from_slice(env, wasm_artifacts::MIXER_WASM);
-    let contract_id = env.register_contract_wasm(None, wasm_bytes);
+    let contract_id = env.register(wasm_artifacts::MIXER_WASM, ());
     (wasm_artifacts::mixer_contract::Client::new(env, &contract_id), contract_id)
 }
 
@@ -335,66 +333,6 @@ fn withdraw_rejects_root_mismatch() {
     assert!(!spent, "nullifier should remain unused after root mismatch");
 }
 
-#[test]
-fn print_budget_for_deposit_and_withdraw() {
-    let _guard = verify_lock().lock().unwrap();
-    let env = Env::default();
-    env.cost_estimate().budget().reset_unlimited();
-    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-
-    let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
-    let vk_bytes: Bytes = vk_bytes(&env);
-    let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
-
-    // Register real WASM contracts so WasmInsnExec is included in the budget.
-    let verifier_id = register_verifier(&env, &vk_bytes);
-    let mixer_id = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
-
-    // Measure deposit budget usage
-    env.cost_estimate().budget().reset_unlimited();
-    let commitment = BytesN::from_array(&env, &[0x55; 32]);
-    env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment.clone()))
-        .expect("deposit ok");
-    println!("=== deposit budget usage ===");
-    env.cost_estimate().budget().print();
-
-    // Prepare proof inputs
-    assert!(pub_inputs_bin.len() >= 64);
-    let mut root_arr = [0u8; 32];
-    root_arr.copy_from_slice(&pub_inputs_bin[..32]);
-    env.as_contract(&mixer_id, || {
-        MixerContract::set_root(env.clone(), BytesN::from_array(&env, &root_arr))
-    })
-    .expect("set_root ok");
-
-    assert_eq!(proof_bin.len(), PROOF_BYTES);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
-    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
-    env.cost_estimate().budget().reset_unlimited();
-    env.as_contract(&mixer_id, || {
-        MixerContract::withdraw(
-            env.clone(),
-            verifier_id.clone(),
-            public_inputs.clone(),
-            proof_bytes.clone(),
-            nf.clone(),
-        )
-    })
-    .expect("withdraw ok");
-    println!("=== withdraw budget usage ===");
-    env.cost_estimate().budget().print();
-}
-
 /// Measure deposit/withdraw budget using WASM contracts (requires built artifacts).
 #[cfg(feature = "wasm-cost")]
 #[test]
@@ -404,11 +342,11 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
+    let vk_bytes: Bytes = vk_bytes(&env);
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
-    let vk_bytes: Bytes = vk_bytes(&env);
 
-    let (verifier, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
+    let (_, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
     let (mixer, _) = register_wasm_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
@@ -421,7 +359,23 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     println!("=== wasm deposit budget usage ===");
     env.cost_estimate().budget().print();
 
-    println!("Skipping withdraw in wasm-cost test (deposit only).");
+    assert!(pub_inputs_bin.len() >= 64);
+    let mut root_arr = [0u8; 32];
+    root_arr.copy_from_slice(&pub_inputs_bin[..32]);
+    mixer.set_root(&BytesN::from_array(&env, &root_arr));
+
+    assert_eq!(proof_bin.len(), PROOF_BYTES);
+    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
+    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
+
+    let mut nf_arr = [0u8; 32];
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    let nf = BytesN::from_array(&env, &nf_arr);
+
+    env.cost_estimate().budget().reset_unlimited();
+    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes, &nf);
+    println!("=== wasm withdraw budget usage ===");
+    env.cost_estimate().budget().print();
 }
 
 #[test]
