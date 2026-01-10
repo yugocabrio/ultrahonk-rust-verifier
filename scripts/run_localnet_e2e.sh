@@ -68,7 +68,9 @@ echo "Deploying contract..."
 DEPLOY_OUTPUT=$(stellar contract deploy \
   --wasm "$ROOT_DIR/target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm" \
   --source "$SOURCE_ACCOUNT" \
-  --network "$NETWORK_NAME")
+  --network "$NETWORK_NAME" \
+  -- \
+  --vk_bytes-file-path "$DATASET_DIR/vk")
 echo "$DEPLOY_OUTPUT"
 CONTRACT_ID=$(echo "$DEPLOY_OUTPUT" | tail -n 1 | tr -d '[:space:]')
 if [[ -z "$CONTRACT_ID" ]]; then

@@ -2,10 +2,9 @@
 /**
  * Helper utilities for invoking the UltraHonk verifier contract.
  *
- * The contract expects three byte arguments:
- *   1. vk_bytes        → verification key bytes
- *   2. public_inputs   → concatenated public inputs (32-byte each)
- *   3. proof_bytes     → raw proof bytes
+ * The contract expects two byte arguments:
+ *   1. public_inputs   → concatenated public inputs (32-byte each)
+ *   2. proof_bytes     → raw proof bytes
  *
  * This script can:
  *   * prepare/print artifacts for inspection
@@ -33,8 +32,6 @@ const DEFAULT_DATASET_DIR = path.resolve(REPO_ROOT, 'tests', 'simple_circuit', '
 // === Data loading / packing ==================================================
 
 interface PackedArtifacts {
-  vkPath: string;
-  vkBytes: Buffer;
   publicInputsBytes: Buffer;
   proofBytes: Buffer;
 }
@@ -55,7 +52,6 @@ function getPublicInputFields(artifacts: PackedArtifacts): number {
 
 function loadArtifacts(
   dataset: string | null,
-  vkPath: string | null,
   publicInputs: string | null,
   proof: string | null
 ): PackedArtifacts {
@@ -64,17 +60,12 @@ function loadArtifacts(
     datasetDir = path.resolve(process.cwd(), datasetDir);
   }
 
-  const vkBinPath = vkPath ?? path.join(datasetDir, 'vk');
   const publicInputsPath = publicInputs ?? path.join(datasetDir, 'public_inputs');
   const proofPath = proof ?? path.join(datasetDir, 'proof');
 
-  const resolvedVkBin = path.resolve(vkBinPath);
   const resolvedPublicInputs = path.resolve(publicInputsPath);
   const resolvedProof = path.resolve(proofPath);
 
-  if (!fs.existsSync(resolvedVkBin)) {
-    throw new Error(`vk not found: ${resolvedVkBin}`);
-  }
   if (!fs.existsSync(resolvedPublicInputs)) {
     throw new Error(`public inputs not found: ${resolvedPublicInputs}`);
   }
@@ -83,8 +74,6 @@ function loadArtifacts(
   }
 
   return {
-    vkPath: resolvedVkBin,
-    vkBytes: fs.readFileSync(resolvedVkBin),
     publicInputsBytes: fs.readFileSync(resolvedPublicInputs),
     proofBytes: fs.readFileSync(resolvedProof),
   };
@@ -182,7 +171,6 @@ async function invokeWithVariants(
 // === Commands ================================================================
 
 function printSummary(artifacts: PackedArtifacts): void {
-  console.log('vk:', artifacts.vkPath);
   console.log('public inputs bytes:', artifacts.publicInputsBytes.length);
   console.log('proof bytes:', artifacts.proofBytes.length);
   console.log('proof fields:', getProofFields(artifacts));
@@ -192,12 +180,7 @@ function printSummary(artifacts: PackedArtifacts): void {
 
 async function commandPrepare(args: any): Promise<number> {
   try {
-    const artifacts = loadArtifacts(
-      args.dataset,
-      args.vk,
-      args.public_inputs,
-      args.proof
-    );
+    const artifacts = loadArtifacts(args.dataset, args.public_inputs, args.proof);
     printSummary(artifacts);
 
     return 0;
@@ -209,12 +192,7 @@ async function commandPrepare(args: any): Promise<number> {
 
 async function commandInvoke(args: any): Promise<number> {
   try {
-    const artifacts = loadArtifacts(
-      args.dataset,
-      args.vk,
-      args.public_inputs,
-      args.proof
-    );
+    const artifacts = loadArtifacts(args.dataset, args.public_inputs, args.proof);
     printSummary(artifacts);
 
     const baseCmd: string[] = [
@@ -237,16 +215,12 @@ async function commandInvoke(args: any): Promise<number> {
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultrahonk-'));
     try {
-      const vkFile = path.join(tmpDir, 'vk.bin');
-      fs.writeFileSync(vkFile, artifacts.vkBytes);
       const publicInputsFile = path.join(tmpDir, 'public_inputs.bin');
       fs.writeFileSync(publicInputsFile, artifacts.publicInputsBytes);
       const proofFile = path.join(tmpDir, 'proof.bin');
       fs.writeFileSync(proofFile, artifacts.proofBytes);
 
       const verifyArgs = [
-        '--vk_bytes-file-path',
-        vkFile,
         '--public_inputs-file-path',
         publicInputsFile,
         '--proof_bytes-file-path',
@@ -261,50 +235,6 @@ async function commandInvoke(args: any): Promise<number> {
     }
 
     return 0;
-  } catch (exc: any) {
-    console.error(`error: ${exc.message}`);
-    return 1;
-  }
-}
-
-async function commandSetVk(args: any): Promise<number> {
-  try {
-    const artifacts = loadArtifacts(
-      args.dataset,
-      args.vk,
-      args.public_inputs,
-      args.proof
-    );
-
-    console.log('vk:', artifacts.vkPath);
-    const baseCmd: string[] = [
-      'stellar',
-      'contract',
-      'invoke',
-      '--id',
-      args.contract_id,
-      '--source-account',
-      args.source,
-      '--network',
-      args.network,
-    ];
-    if (args.send !== 'default') {
-      baseCmd.push('--send', args.send);
-    }
-    if (args.cost) {
-      baseCmd.push('--cost');
-    }
-
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ultrahonk-'));
-    try {
-      const vkFile = path.join(tmpDir, 'vk.bin');
-      fs.writeFileSync(vkFile, artifacts.vkBytes);
-      const setVkArgs = ['--vk_bytes-file-path', vkFile];
-      const result = await invokeWithVariants(baseCmd, 'set_vk', setVkArgs, args.dry_run);
-      return result.returncode;
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
   } catch (exc: any) {
     console.error(`error: ${exc.message}`);
     return 1;
@@ -326,12 +256,7 @@ function buildParser(): ArgumentParser {
   const addArtifactArgs = (p: ArgumentParser): void => {
     p.add_argument('--dataset', {
       type: 'str',
-      help: `Directory containing vk, public_inputs, and proof. Defaults to ${DEFAULT_DATASET_DIR}`,
-      default: null,
-    });
-    p.add_argument('--vk', {
-      type: 'str',
-      help: 'Override vk binary path.',
+      help: `Directory containing public_inputs and proof. Defaults to ${DEFAULT_DATASET_DIR}`,
       default: null,
     });
     p.add_argument('--public-inputs', {
@@ -382,37 +307,6 @@ function buildParser(): ArgumentParser {
     help: 'Print the CLI commands instead of executing them.',
   });
 
-  const setVk = subparsers.add_parser('set-vk', {
-    help: 'Invoke set_vk to store the verification key.',
-  });
-  addArtifactArgs(setVk);
-  setVk.add_argument('--contract-id', {
-    default: DEFAULT_CONTRACT_ID,
-    help: 'Contract ID to invoke.',
-  });
-  setVk.add_argument('--network', {
-    default: 'local',
-    help: 'Network profile or RPC alias (default: local).',
-  });
-  setVk.add_argument('--source-account', '--source', {
-    dest: 'source',
-    default: 'alice',
-    help: 'Source account/identity for the transaction (default: alice).',
-  });
-  setVk.add_argument('--send', {
-    default: 'default',
-    choices: ['default', 'no', 'yes'],
-    help: 'Forward to `stellar contract invoke --send` (default behavior matches CLI default).',
-  });
-  setVk.add_argument('--cost', {
-    action: 'store_true',
-    help: 'Include `--cost` when calling stellar CLI.',
-  });
-  setVk.add_argument('--dry-run', {
-    action: 'store_true',
-    help: 'Print the CLI commands instead of executing them.',
-  });
-
   return parser;
 }
 
@@ -425,8 +319,6 @@ async function main(argv?: string[]): Promise<number> {
       return commandPrepare(args);
     case 'invoke':
       return commandInvoke(args);
-    case 'set-vk':
-      return commandSetVk(args);
     default:
       console.error(`Unknown command: ${args.command}`);
       return 1;

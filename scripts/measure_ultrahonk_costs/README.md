@@ -7,7 +7,7 @@ TypeScript utility that simulates UltraHonk contract methods via Soroban RPC and
 - Node.js and npm (`npm install` inside this directory)
 - Running Soroban network (local Quickstart/Futurenet)
 - Deployed UltraHonk contract
-- Dataset containing `vk`, `proof`, `public_inputs`
+- Dataset containing `proof`, `public_inputs`
 
 ## Usage
 
@@ -29,9 +29,5 @@ Options:
 - `--network-passphrase` – network passphrase (default Standalone)
 - `--dataset` – dataset directory (default `../../tests/simple_circuit/target`)
 
-The script simulates `set_vk` followed by `verify_proof` using the dataset’s `public_inputs` and `proof` files. If you want to call `verify_proof_with_stored_vk` yourself, make sure to store a VK first (e.g. via the invoke helper):
-
-```bash
-cd scripts/invoke_ultrahonk
-npm run invoke -- set-vk -- --contract-id <CONTRACT_ID> --network local --source-account alice
-```
+The script simulates `verify_proof` using the dataset’s `public_inputs` and `proof` files.
+Make sure the contract was deployed with a VK via the constructor first.
