@@ -1,14 +1,14 @@
 // Tornado Classic-style circuit
 // - Private inputs: nullifier, secret, Merkle path (siblings, path_bits)
 // - Public inputs: root, nullifier_hash, recipient
-// - Hash function uses Poseidon2 (via dep::poseidon2)
+// - Hash function uses Poseidon2 (via dep::poseidon)
 // - Aligns with on-chain frontier Merkle: H = Poseidon2_2to1 (first limb),
 //   zero[0] = 0; zero[i+1] = H(zero[i], zero[i])
 
-use dep::poseidon2;
+use dep::poseidon::poseidon2::Poseidon2;
 
 fn hash2(a: Field, b: Field) -> Field {
-    poseidon2::bn254::hash_2([a, b])
+    Poseidon2::hash([a, b], 2)
 }
 
 fn constrain_bit(bit: Field) {

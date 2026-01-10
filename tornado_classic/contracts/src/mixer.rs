@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::{vec, vec::Vec};
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
-    IntoVal, Symbol, Vec as SorobanVec, Val,
+    IntoVal, Symbol, U256, Vec as SorobanVec, Val,
 };
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
@@ -35,22 +35,18 @@ fn key_next_index() -> Symbol { symbol_short!("idx") }
 fn key_ci_prefix() -> Symbol { symbol_short!("ci") }
 fn key_admin() -> Symbol { symbol_short!("adm") }
 
-const TREE_DEPTH: u32 = 10; // match circuit depth for now
+const TREE_DEPTH: u32 = 20;
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
 
-fn bytesn_to_arr(b: &BytesN<32>) -> [u8; 32] {
-    let mut a = [0u8; 32];
-    b.copy_into_slice(&mut a);
-    a
-}
-
-fn arr_to_bytesn(env: &Env, a: [u8; 32]) -> BytesN<32> { BytesN::from_array(env, &a) }
-
 fn poseidon2_hash2(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
-    let aa = bytesn_to_arr(a);
-    let bb = bytesn_to_arr(b);
-    let out = crate::hash2::permute_2_bytes_be(&aa, &bb);
-    arr_to_bytesn(env, out)
+    let mut inputs = SorobanVec::new(env);
+    inputs.push_back(U256::from_be_bytes(env, a.as_ref()));
+    inputs.push_back(U256::from_be_bytes(env, b.as_ref()));
+    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    let out_bytes = out.to_be_bytes();
+    let mut out_arr = [0u8; 32];
+    out_bytes.copy_into_slice(&mut out_arr);
+    BytesN::from_array(env, &out_arr)
 }
 
 fn zero_at(env: &Env, level: u32) -> BytesN<32> {

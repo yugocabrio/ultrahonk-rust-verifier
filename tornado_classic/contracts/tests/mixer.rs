@@ -1,14 +1,16 @@
 use soroban_env_host::DiagnosticLevel;
-use soroban_sdk::{testutils::Address as TestAddress, Address, Bytes, BytesN, Env};
+use soroban_sdk::{
+    symbol_short, testutils::Address as TestAddress, Address, Bytes, BytesN, Env, U256,
+    Vec as SorobanVec,
+};
 
 use std::sync::{Mutex, OnceLock};
 
-use tornado_classic_contracts::hash2::permute_2_bytes_be;
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
-const TREE_DEPTH_TEST: u32 = 10;
+const TREE_DEPTH_TEST: u32 = 20;
 
 #[cfg(feature = "wasm-cost")]
 mod wasm_artifacts {
@@ -48,17 +50,28 @@ fn be32_from_u64(x: u64) -> [u8; 32] {
     a
 }
 
-fn hash2(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] { permute_2_bytes_be(a, b) }
+fn hash2(env: &Env, a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+    let a_bytes = Bytes::from_array(env, a);
+    let b_bytes = Bytes::from_array(env, b);
+    let mut inputs = SorobanVec::new(env);
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes));
+    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    let out_bytes = out.to_be_bytes();
+    let mut out_arr = [0u8; 32];
+    out_bytes.copy_into_slice(&mut out_arr);
+    out_arr
+}
 
-fn zero_at(level: u32) -> [u8; 32] {
+fn zero_at(env: &Env, level: u32) -> [u8; 32] {
     let mut z = [0u8; 32];
-    for _ in 0..level { let zz = z; z = hash2(&zz, &zz); }
+    for _ in 0..level { let zz = z; z = hash2(env, &zz, &zz); }
     z
 }
 
-fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
+fn frontier_root_from_leaves(env: &Env, leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
     let mut frontier: Vec<Option<[u8; 32]>> = vec![None; depth as usize];
-    let mut root = zero_at(depth);
+    let mut root = zero_at(env, depth);
     for (i, leaf) in leaves.iter().enumerate() {
         let idx = i as u32;
         let mut cur = *leaf;
@@ -67,11 +80,11 @@ fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
             let bit = (idx >> level) & 1;
             if bit == 0 {
                 frontier[level as usize] = Some(cur);
-                let z = zero_at(level);
-                cur = hash2(&cur, &z);
+                let z = zero_at(env, level);
+                cur = hash2(env, &cur, &z);
             } else {
-                let left = frontier[level as usize].as_ref().copied().unwrap_or_else(|| zero_at(level));
-                cur = hash2(&left, &cur);
+                let left = frontier[level as usize].as_ref().copied().unwrap_or_else(|| zero_at(env, level));
+                cur = hash2(env, &left, &cur);
             }
             level += 1;
         }
@@ -104,16 +117,21 @@ fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Cli
 #[test]
 fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
     let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 
     let mut leaves: Vec<[u8; 32]> = Vec::new();
-    for i in 0u64..8 { let a = be32_from_u64(i); let b = be32_from_u64(i+100); leaves.push(hash2(&a,&b)); }
+    for i in 0u64..8 {
+        let a = be32_from_u64(i);
+        let b = be32_from_u64(i + 100);
+        leaves.push(hash2(&env, &a, &b));
+    }
 
     for (n, leaf) in leaves.iter().enumerate() {
         env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), BytesN::from_array(&env, leaf))).unwrap();
         let onchain_root = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone())).unwrap();
-        let expected_root = frontier_root_from_leaves(&leaves[0..=n], TREE_DEPTH_TEST);
+        let expected_root = frontier_root_from_leaves(&env, &leaves[0..=n], TREE_DEPTH_TEST);
         assert_eq!(onchain_root, BytesN::from_array(&env, &expected_root));
         let got_cm = env.as_contract(&mixer_id, || MixerContract::get_commitment_by_index(env.clone(), n as u32)).unwrap();
         assert_eq!(got_cm, BytesN::from_array(&env, leaf));
@@ -381,6 +399,7 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
 #[test]
 fn deposit_rejects_duplicate_commitment() {
     let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 

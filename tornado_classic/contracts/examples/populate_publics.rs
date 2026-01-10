@@ -1,4 +1,5 @@
 use num_bigint::BigUint;
+use soroban_sdk::{symbol_short, Bytes, Env, U256, Vec as SorobanVec};
 use std::{fs, path::Path};
 
 fn be32_from_biguint(x: &BigUint) -> [u8; 32] {
@@ -16,29 +17,49 @@ fn biguint_from_dec(s: &str) -> BigUint {
     BigUint::parse_bytes(s.as_bytes(), 10).expect("invalid decimal")
 }
 
-fn field_hash2(a: &BigUint, b: &BigUint) -> BigUint {
+fn field_hash2(env: &Env, a: &BigUint, b: &BigUint) -> BigUint {
     let aa = be32_from_biguint(a);
     let bb = be32_from_biguint(b);
-    let out = tornado_classic_contracts::hash2::permute_2_bytes_be(&aa, &bb);
-    BigUint::from_bytes_be(&out)
+    let a_bytes = Bytes::from_array(env, &aa);
+    let b_bytes = Bytes::from_array(env, &bb);
+    let mut inputs = SorobanVec::new(env);
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes));
+    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    let out_bytes = out.to_be_bytes();
+    let mut out_arr = [0u8; 32];
+    out_bytes.copy_into_slice(&mut out_arr);
+    BigUint::from_bytes_be(&out_arr)
 }
 
-fn compute_root(leaf: &BigUint, siblings: &[BigUint], bits: &[u8]) -> BigUint {
+fn compute_root(env: &Env, leaf: &BigUint, siblings: &[BigUint], bits: &[u8]) -> BigUint {
     let mut cur = leaf.clone();
     for (i, sib) in siblings.iter().enumerate() {
         let b = bits[i];
         if b == 0 {
-            cur = field_hash2(&cur, sib);
+            cur = field_hash2(env, &cur, sib);
         } else {
-            cur = field_hash2(sib, &cur);
+            cur = field_hash2(env, sib, &cur);
         }
     }
     cur
 }
 
 fn main() {
+    let env = Env::default();
     let prover_path = Path::new("tornado_classic/circuit/Prover.toml");
     let content = fs::read_to_string(prover_path).expect("read Prover.toml");
+    let filtered: String = content
+        .lines()
+        .filter(|line| {
+            let t = line.trim_start();
+            !(t.starts_with("nullifier_hash = ")
+                || t.starts_with("root = ")
+                || t.starts_with("recipient = ")
+                || t.starts_with("path_index = "))
+        })
+        .map(|line| format!("{line}\n"))
+        .collect();
 
     // parse minimal fields we need
     let mut nullifier = BigUint::from(0u32);
@@ -96,9 +117,9 @@ fn main() {
     }
 
     assert_eq!(siblings.len(), bits.len(), "siblings/bits length mismatch");
-    let leaf = field_hash2(&nullifier, &secret);
-    let nf = field_hash2(&nullifier, &BigUint::from(0u32));
-    let root = compute_root(&leaf, &siblings, &bits);
+    let leaf = field_hash2(&env, &nullifier, &secret);
+    let nf = field_hash2(&env, &nullifier, &BigUint::from(0u32));
+    let root = compute_root(&env, &leaf, &siblings, &bits);
 
     let mut path_index = BigUint::from(0u32);
     for (i, &b) in bits.iter().enumerate() {
@@ -108,7 +129,7 @@ fn main() {
 
     // append updated fields at end (simple and explicit)
     let mut out = String::new();
-    out.push_str(&content);
+    out.push_str(&filtered);
     out.push_str(&format!("nullifier_hash = \"{}\"\n", nf));
     out.push_str(&format!("root = \"{}\"\n", root));
     out.push_str(&format!("recipient = \"{}\"\n", recipient));
