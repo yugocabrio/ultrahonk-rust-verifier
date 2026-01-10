@@ -186,7 +186,7 @@ impl MixerContract {
         let mut args: SorobanVec<Val> = SorobanVec::new(&env);
         args.push_back(public_inputs.into_val(&env));
         args.push_back(proof_bytes.into_val(&env));
-        env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof_with_stored_vk"), args)
+        env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof"), args)
             .map_err(|_| MixerError::VerificationFailed)?
             .map_err(|_| MixerError::VerificationFailed)?;
         // Mark nullifier as spent and emit withdraw event containing recipient.

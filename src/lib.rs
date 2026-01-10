@@ -28,13 +28,14 @@ impl UltraHonkVerifierContract {
         symbol_short!("vk")
     }
 
-    /// Verify an UltraHonk proof.
-    pub fn verify_proof(
-        env: Env,
-        vk_bytes: Bytes,
-        public_inputs: Bytes,
-        proof_bytes: Bytes,
-    ) -> Result<(), Error> {
+    /// Initialize the on-chain VK once at deploy time.
+    pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
+        env.storage().instance().set(&Self::key_vk(), &vk_bytes);
+        Ok(())
+    }
+
+    /// Verify an UltraHonk proof using the stored VK.
+    pub fn verify_proof(env: Env, public_inputs: Bytes, proof_bytes: Bytes) -> Result<(), Error> {
         hash::set_soroban_hash_backend(Box::new(SorobanKeccak::new(&env)));
         ec::set_soroban_bn254_backend(Box::new(SorobanBn254::new(&env)));
         let proof_vec: StdVec<u8> = proof_bytes.to_alloc_vec();
@@ -42,6 +43,11 @@ impl UltraHonkVerifierContract {
             return Err(Error::ProofParseError);
         }
 
+        let vk_bytes: Bytes = env
+            .storage()
+            .instance()
+            .get(&Self::key_vk())
+            .ok_or(Error::VkNotSet)?;
         // Deserialize verification key bytes
         let vk_vec: StdVec<u8> = vk_bytes.to_alloc_vec();
         let vk = load_vk_from_bytes(&vk_vec).ok_or(Error::VkParseError)?;
@@ -57,26 +63,5 @@ impl UltraHonkVerifierContract {
             .verify(&proof_vec, &pub_inputs_bytes)
             .map_err(|_| Error::VerificationFailed)?;
         Ok(())
-    }
-
-    /// Set verification key bytes.
-    /// Note: this is permissionless; integrators should add access control or immutability.
-    pub fn set_vk(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
-        env.storage().instance().set(&Self::key_vk(), &vk_bytes);
-        Ok(())
-    }
-
-    /// Verify using the on-chain stored VK. Permissionless; relies on whoever set VK.
-    pub fn verify_proof_with_stored_vk(
-        env: Env,
-        public_inputs: Bytes,
-        proof_bytes: Bytes,
-    ) -> Result<(), Error> {
-        let vk_bytes: Bytes = env
-            .storage()
-            .instance()
-            .get(&Self::key_vk())
-            .ok_or(Error::VkNotSet)?;
-        Self::verify_proof(env, vk_bytes, public_inputs, proof_bytes)
     }
 }

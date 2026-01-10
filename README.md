@@ -1,6 +1,6 @@
 # Noir(UltraHonk) Soroban Verifier Contract
 
-Soroban contract wrapper around the Noir(UltraHonk) verifier. Inputs are `vk`, `public_inputs`, and `proof`.
+Soroban contract wrapper around the Noir(UltraHonk) verifier. The VK is set at deploy time; proofs are verified with `public_inputs` and `proof`.
 
 ## Quickstart (localnet)
 
@@ -23,12 +23,14 @@ stellar keys generate --global alice
 stellar keys fund alice --network local
 stellar keys address alice
 
-# 3) Build + deploy
+# 3) Build + deploy (constructor requires a VK from tests/build_circuits.sh)
 rustup target add wasm32v1-none
 stellar contract build --optimize
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm \
-  --source alice
+  --source alice \
+  -- \
+  --vk_bytes-file-path tests/simple_circuit/target/vk
 ```
 
 ## Invoke verify_proof
@@ -43,7 +45,7 @@ tests/build_circuits.sh
 
 ### Use the helper script
 
-Expects a dataset folder with `vk`, `public_inputs`, `proof`:
+Expects a dataset folder with `public_inputs`, `proof` (the VK is already on-chain from deploy):
 
 ```bash
 cd scripts/invoke_ultrahonk
@@ -67,7 +69,6 @@ stellar contract invoke \
   --cost \
   -- \
   verify_proof \
-  --vk_bytes-file-path tests/simple_circuit/target/vk \
   --public_inputs-file-path tests/simple_circuit/target/public_inputs \
   --proof_bytes-file-path tests/simple_circuit/target/proof
 ```
@@ -75,11 +76,9 @@ stellar contract invoke \
 ## VK policy (important)
 
 This contract does not enforce access control:
-- `set_vk` is permissionless (anyone can update the stored VK).
-- `verify_proof` accepts a VK per call.
-- `verify_proof_with_stored_vk` trusts whoever last called `set_vk`.
+- `__constructor` stores the VK once at deploy time (immutable after first set).
+- `verify_proof` always uses the stored VK set at deploy.
 
-You MUST add access control (or make the VK immutable) in your integration for any real deployment.
 
 ## Tests
 

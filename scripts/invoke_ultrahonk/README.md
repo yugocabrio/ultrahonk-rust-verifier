@@ -24,8 +24,7 @@ npx ts-node invoke_ultrahonk.ts prepare
 ```
 
 Options:
-- `--dataset <path>`: Directory containing `vk`, `public_inputs`, and `proof` (default: `../../tests/simple_circuit/target`)
-- `--vk <path>`: Override vk (binary) path
+- `--dataset <path>`: Directory containing `public_inputs` and `proof` (default: `../../tests/simple_circuit/target`)
 - `--public-inputs <path>`: Override public_inputs path
 - `--proof <path>`: Override proof path
 
@@ -40,8 +39,8 @@ npx ts-node invoke_ultrahonk.ts invoke \
 
 When you run the command above the script will:
 
-1. Load the binary `vk` (from `bb write_vk`) plus `public_inputs` and `proof`.
-2. Write the blobs to temporary files and invoke `stellar contract invoke ... -- verify_proof --vk_bytes-file-path <vk> --public_inputs-file-path <inputs> --proof_bytes-file-path <proof>`.
+1. Load the `public_inputs` and `proof` artifacts.
+2. Write the blobs to temporary files and invoke `stellar contract invoke ... -- verify_proof --public_inputs-file-path <inputs> --proof_bytes-file-path <proof>`.
 
 Options:
 - `--contract-id <id>`: Contract ID to invoke (required)
@@ -50,7 +49,7 @@ Options:
 - `--send <yes|no|default>`: Control transaction submission
 - `--cost`: Include `--cost` flag when calling stellar CLI
 - `--dry-run`: Print CLI commands without executing them
-- `--dataset/--vk/...`: Same artifact overrides as `prepare`. You normally only need `--dataset` pointing to the folder containing `vk`, `public_inputs`, and `proof`.
+- `--dataset/...`: Same artifact overrides as `prepare`. You normally only need `--dataset` pointing to the folder containing `public_inputs` and `proof`.
 
 Example (dry run):
 ```bash
@@ -66,9 +65,10 @@ npx ts-node invoke_ultrahonk.ts invoke \
   --send yes
 ```
 
+Note: the contract must be deployed with a VK via the constructor before invoking `verify_proof`.
+
 ## Output
 
 The script will:
-1. Load the verification key bytes from `vk`
-2. Load the proof artifacts (`public_inputs` and `proof`)
-3. Call `verify_proof` on the contract using the `stellar` CLI
+1. Load the proof artifacts (`public_inputs` and `proof`)
+2. Call `verify_proof` on the contract using the `stellar` CLI

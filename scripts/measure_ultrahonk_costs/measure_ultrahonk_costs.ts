@@ -34,7 +34,6 @@ const DEFAULT_NETWORK_PASSPHRASE = Networks.STANDALONE;
 const FIELD_BYTES = 32;
 
 interface Artifacts {
-  vkBytes: Buffer;
   publicInputs: Buffer;
   proofBytes: Buffer;
 }
@@ -46,15 +45,13 @@ interface MeasureResult {
 }
 
 function loadArtifacts(datasetDir: string): Artifacts {
-  const vkPath = path.resolve(datasetDir, 'vk');
   const proofPath = path.resolve(datasetDir, 'proof');
   const publicInputsPath = path.resolve(datasetDir, 'public_inputs');
-  for (const file of [vkPath, proofPath, publicInputsPath]) {
+  for (const file of [proofPath, publicInputsPath]) {
     if (!fs.existsSync(file)) {
       throw new Error(`Missing artifact: ${file}`);
     }
   }
-  const vkBytes = fs.readFileSync(vkPath);
   const proofBytes = fs.readFileSync(proofPath);
   const publicInputs = fs.readFileSync(publicInputsPath);
   if (publicInputs.length % FIELD_BYTES !== 0) {
@@ -63,7 +60,7 @@ function loadArtifacts(datasetDir: string): Artifacts {
   if (proofBytes.length % FIELD_BYTES !== 0) {
     throw new Error('proof length is not a multiple of 32 bytes');
   }
-  return { vkBytes, publicInputs, proofBytes };
+  return { publicInputs, proofBytes };
 }
 
 function bigIntFromXdr(value?: xdr.Int64 | xdr.Uint64 | number | string | null): bigint {
@@ -132,7 +129,7 @@ async function main() {
   });
   parser.add_argument('--dataset', {
     default: DEFAULT_DATASET_DIR,
-    help: 'Directory with vk, public_inputs, proof',
+    help: 'Directory with public_inputs and proof',
   });
   parser.add_argument('--rpc-url', {
     default: DEFAULT_RPC_URL,
@@ -147,7 +144,6 @@ async function main() {
   const artifacts = loadArtifacts(args.dataset);
   const server = new SorobanRpc.Server(args.rpc_url, { allowHttp: true });
   const keypair = Keypair.fromSecret(args.source_secret);
-  const vkScVal = nativeToScVal(artifacts.vkBytes, { type: 'bytes' });
   const publicInputsScVal = nativeToScVal(artifacts.publicInputs, { type: 'bytes' });
   const proofBytesScVal = nativeToScVal(artifacts.proofBytes, { type: 'bytes' });
 
@@ -155,23 +151,13 @@ async function main() {
   console.log(`Contract ID   : ${args.contract_id}`);
   console.log(`Source account: ${keypair.publicKey()}`);
 
-  const setVkResult = await measureMethod(
-    server,
-    keypair,
-    args.network_passphrase,
-    args.contract_id,
-    'set_vk',
-    [vkScVal]
-  );
-  printResult('set_vk', setVkResult);
-
   const verifyResult = await measureMethod(
     server,
     keypair,
     args.network_passphrase,
     args.contract_id,
     'verify_proof',
-    [vkScVal, publicInputsScVal, proofBytesScVal]
+    [publicInputsScVal, proofBytesScVal]
   );
   printResult('verify_proof', verifyResult);
 }
