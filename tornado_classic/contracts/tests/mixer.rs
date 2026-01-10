@@ -80,13 +80,18 @@ fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
     root
 }
 
-fn register_verifier(env: &Env) -> Address { env.register(UltraHonkVerifierContract, ()) }
+fn register_verifier(env: &Env, vk_bytes: &Bytes) -> Address {
+    env.register(UltraHonkVerifierContract, (vk_bytes.clone(),))
+}
 fn register_mixer(env: &Env) -> Address { env.register(MixerContract, ()) }
 
 #[cfg(feature = "wasm-cost")]
-fn register_wasm_verifier<'a>(env: &'a Env) -> (wasm_artifacts::ultrahonk_contract::Client<'a>, Address) {
+fn register_wasm_verifier<'a>(
+    env: &'a Env,
+    vk_bytes: &Bytes,
+) -> (wasm_artifacts::ultrahonk_contract::Client<'a>, Address) {
     let wasm_bytes = Bytes::from_slice(env, wasm_artifacts::VERIFIER_WASM);
-    let contract_id = env.register_contract_wasm(None, wasm_bytes);
+    let contract_id = env.register(wasm_bytes, (vk_bytes.clone(),));
     (wasm_artifacts::ultrahonk_contract::Client::new(env, &contract_id), contract_id)
 }
 
@@ -130,9 +135,10 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     // Register contracts
-    let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
-    let mixer_id: Address = env.register(MixerContract, ());
+    let verifier_id: Address = register_verifier(&env, &vk_bytes);
+    let mixer_id: Address = register_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
     let _auth = env.mock_all_auths();
@@ -156,9 +162,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    // Store VK and withdraw
-    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
-    env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone())).expect("set_vk ok");
+    // Withdraw after deploy-time VK initialization
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
     let nf = BytesN::from_array(&env, &nf_arr);
@@ -208,8 +212,9 @@ fn withdraw_rejects_nullifier_mismatch() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
-    let mixer_id: Address = env.register(MixerContract, ());
+    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
+    let verifier_id: Address = register_verifier(&env, &vk_bytes);
+    let mixer_id: Address = register_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
     let _auth = env.mock_all_auths();
@@ -230,10 +235,6 @@ fn withdraw_rejects_nullifier_mismatch() {
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
-    env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
-        .expect("set_vk ok");
 
     let wrong_nf = BytesN::from_array(&env, &[0xAA; 32]);
     let err = env
@@ -289,8 +290,9 @@ fn withdraw_rejects_root_mismatch() {
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
-    let verifier_id: Address = env.register(UltraHonkVerifierContract, ());
-    let mixer_id: Address = env.register(MixerContract, ());
+    let vk_bytes: Bytes = vk_bytes(&env);
+    let verifier_id: Address = register_verifier(&env, &vk_bytes);
+    let mixer_id: Address = register_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
     let _auth = env.mock_all_auths();
@@ -310,10 +312,6 @@ fn withdraw_rejects_root_mismatch() {
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let vk_bytes: Bytes = vk_bytes(&env);
-    env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
-        .expect("set_vk ok");
 
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -345,10 +343,11 @@ fn print_budget_for_deposit_and_withdraw() {
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
 
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
+    let vk_bytes: Bytes = vk_bytes(&env);
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
     // Register real WASM contracts so WasmInsnExec is included in the budget.
-    let verifier_id = register_verifier(&env);
+    let verifier_id = register_verifier(&env, &vk_bytes);
     let mixer_id = register_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
@@ -376,10 +375,6 @@ fn print_budget_for_deposit_and_withdraw() {
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let vk_bytes: Bytes = vk_bytes(&env);
-    env.as_contract(&verifier_id, || UltraHonkVerifierContract::set_vk(env.clone(), vk_bytes.clone()))
-        .expect("set_vk ok");
 
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -411,8 +406,9 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
 
     let proof_bin: &[u8] = include_bytes!("../../circuit/target/proof");
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
+    let vk_bytes: Bytes = vk_bytes(&env);
 
-    let (verifier, verifier_id) = register_wasm_verifier(&env);
+    let (verifier, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
     let (mixer, _) = register_wasm_mixer(&env);
 
     let admin = <Address as TestAddress>::generate(&env);
