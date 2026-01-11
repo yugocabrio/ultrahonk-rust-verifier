@@ -2,8 +2,8 @@ extern crate alloc;
 
 use alloc::{vec, vec::Vec};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, InvokeError,
-    IntoVal, Symbol, U256, Vec as SorobanVec, Val,
+    contract, contracterror, contractevent, contractimpl, symbol_short, Address, Bytes, BytesN, Env,
+    InvokeError, IntoVal, Symbol, U256, Vec as SorobanVec, Val,
 };
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
@@ -24,6 +24,18 @@ pub enum MixerError {
     TreeFull = 8,
     RootNotSet = 9,
     RootOverrideDisabled = 10,
+}
+
+#[contractevent(topics = ["deposit"], data_format = "map")]
+pub struct DepositEvent<'a> {
+    #[topic]
+    pub idx: &'a u32,
+    pub commitment: &'a BytesN<32>,
+}
+
+#[contractevent(topics = ["withdraw"], data_format = "single-value")]
+pub struct WithdrawEvent<'a> {
+    pub nullifier_hash: &'a BytesN<32>,
 }
 
 fn key_count() -> Symbol { symbol_short!("cnt") }
@@ -90,7 +102,11 @@ impl MixerContract {
         // save idx => commitment mapping and emit event
         let ci_key = (key_ci_prefix(), idx);
         env.storage().instance().set(&ci_key, &commitment);
-        env.events().publish((symbol_short!("deposit"), idx), commitment.clone());
+        DepositEvent {
+            idx: &idx,
+            commitment: &commitment,
+        }
+        .publish(&env);
 
         // Incremental Merkle: frontier + next_index
         let mut next_index: u32 = env
@@ -134,7 +150,7 @@ impl MixerContract {
     }
 
     /// Verifies a proof with the stored verification key and marks the nullifier spent.
-    /// The public inputs are ordered as `[root, nullifier_hash, recipient]`.
+    /// The public inputs are ordered as `[root, nullifier_hash]`.
     pub fn withdraw(
         env: Env,
         verifier: Address,
@@ -148,10 +164,10 @@ impl MixerContract {
         let mut pis_buf = vec![0u8; public_inputs.len() as usize];
         public_inputs.copy_into_slice(&mut pis_buf);
         let pub_inputs = parse_public_inputs(&pis_buf)?;
-        if pub_inputs.len() < 3 {
+        if pub_inputs.len() < 2 {
             return Err(MixerError::VerificationFailed);
         }
-        // Interpret public inputs as `[root, nullifier_hash, recipient]`.
+        // Interpret public inputs as `[root, nullifier_hash]`.
         let mut root_arr = [0u8; 32];
         root_arr.copy_from_slice(&pub_inputs[0]);
         let mut nf_arr = [0u8; 32];
@@ -166,8 +182,6 @@ impl MixerContract {
         if env.storage().instance().has(&nf_key) {
             return Err(MixerError::NullifierUsed);
         }
-        let mut rcpt_arr = [0u8; 32];
-        rcpt_arr.copy_from_slice(&pub_inputs[2]);
         let root_from_proof = BytesN::from_array(&env, &root_arr);
         // Proof must bind to the current Merkle root.
         let stored_root: BytesN<32> = env
@@ -185,11 +199,12 @@ impl MixerContract {
         env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof"), args)
             .map_err(|_| MixerError::VerificationFailed)?
             .map_err(|_| MixerError::VerificationFailed)?;
-        // Mark nullifier as spent and emit withdraw event containing recipient.
+        // Mark nullifier as spent and emit withdraw event containing nullifier hash.
         env.storage().instance().set(&nf_key, &true);
-        let rcpt = BytesN::from_array(&env, &rcpt_arr);
-        env.events()
-            .publish((symbol_short!("withdraw"), nf_from_proof.clone()), rcpt);
+        WithdrawEvent {
+            nullifier_hash: &nf_from_proof,
+        }
+        .publish(&env);
         Ok(())
     }
 
@@ -221,6 +236,17 @@ impl MixerContract {
     }
 
     /// Test-only helper to override the stored root when running under debug builds.
+    /// Returns the current Poseidon tree root.
+    pub fn get_root(env: Env) -> Option<BytesN<32>> {
+        env.storage().instance().get(&key_root())
+    }
+
+}
+
+#[cfg(any(test, feature = "testutils"))]
+#[contractimpl]
+impl MixerContract {
+    /// Test-only helper to override the stored root when running under debug builds.
     pub fn set_root(env: Env, root: BytesN<32>) -> Result<(), MixerError> {
         let admin: Address = env
             .storage()
@@ -233,11 +259,6 @@ impl MixerContract {
         }
         env.storage().instance().set(&key_root(), &root);
         Ok(())
-    }
-
-    /// Returns the current Poseidon tree root.
-    pub fn get_root(env: Env) -> Option<BytesN<32>> {
-        env.storage().instance().get(&key_root())
     }
 
     /// Retrieves the commitment stored at a given leaf index.

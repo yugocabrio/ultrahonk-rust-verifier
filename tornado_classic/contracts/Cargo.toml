@@ -19,7 +19,8 @@ path = "lib.rs"
 
 [features]
 std = []
-wasm-cost = []
+testutils = []
+wasm-cost = ["testutils"]
 
 [[example]]
 name = "populate_publics"

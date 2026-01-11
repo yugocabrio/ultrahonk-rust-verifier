@@ -115,6 +115,7 @@ fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Cli
 
 /// Deposits a sequence of leaves and checks the contract frontier updates match a reference implementation.
 #[test]
+#[cfg(feature = "testutils")]
 fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
@@ -140,6 +141,7 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
 
 /// Happy-path withdraw followed by a double-spend attempt confirms the nullifier is enforced.
 #[test]
+#[cfg(feature = "testutils")]
 fn mixer_withdraw_and_double_spend_rejected() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
@@ -204,6 +206,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
 
 /// Ensures `set_root` cannot be called before the admin is configured.
 #[test]
+#[cfg(feature = "testutils")]
 fn set_root_requires_admin_configuration() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -218,6 +221,7 @@ fn set_root_requires_admin_configuration() {
 
 /// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
 #[test]
+#[cfg(feature = "testutils")]
 fn withdraw_rejects_nullifier_mismatch() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
@@ -297,6 +301,7 @@ fn configure_twice_is_rejected() {
 
 /// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
+#[cfg(feature = "testutils")]
 fn withdraw_rejects_root_mismatch() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();

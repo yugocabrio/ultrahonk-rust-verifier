@@ -2,7 +2,7 @@ Tornado Classic–style Mixer (Soroban + Noir)
 
 Scope
 - Deposit stores commitments and rolls an on-chain Poseidon2 Merkle tree (depth 20).
-- Withdraw verifies a Noir UltraHonk proof against the stored root, enforces single-use nullifiers, and emits the verified recipient.
+- Withdraw verifies a Noir UltraHonk proof against the stored root and enforces single-use nullifiers.
 - Educational sample: no token flow, trusted setup, and bn254 precompile missing on Soroban networks (devnet deploy still blocked).
 
 Layout
@@ -23,11 +23,11 @@ scripts/gen_artifacts.sh   # produces target/{vk,proof,public_inputs,…}
 
 Run Contract Tests (includes real proof verification)
 ```bash
-cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
+cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
 ```
 Key checks:
 - `deposit` appends to the frontier and updates the on-chain root.
-- `withdraw` takes separate `public_inputs` (three 32-byte values ordered `[root, nullifier_hash, recipient]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
+- `withdraw` takes separate `public_inputs` (two 32-byte values ordered `[root, nullifier_hash]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
 - Nullifier mismatches or double spends fail; overwriting the root requires a configured admin actor.
 
 Quick Usage Notes
