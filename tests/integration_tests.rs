@@ -80,26 +80,3 @@ fn print_budget_for_deploy_and_verify() {
     println!("=== verify_proof budget usage ===");
     env.cost_estimate().budget().print();
 }
-
-#[test]
-fn basic_verify_budget_test() {
-    let vk_bytes_raw: &[u8] = include_bytes!("simple_circuit/target/vk");
-    let proof_bin: &[u8] = include_bytes!("simple_circuit/target/proof");
-    let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
-
-    let env = Env::default();
-    env.cost_estimate().budget().reset_unlimited();
-
-    let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
-    let client = register_client(&env, &vk_bytes);
-
-    // Prepare proof inputs
-    assert_eq!(proof_bin.len(), PROOF_BYTES);
-    let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
-    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-    let proof_for_direct = proof_bytes.clone();
-    let public_inputs_for_direct = public_inputs.clone();
-
-    client.verify_proof(&public_inputs_for_direct, &proof_for_direct);
-    env.cost_estimate().budget().print();
-}
