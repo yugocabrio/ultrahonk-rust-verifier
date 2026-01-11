@@ -28,7 +28,7 @@ cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testu
 Key checks:
 - `deposit` appends to the frontier and updates the on-chain root.
 - `withdraw` takes separate `public_inputs` (two 32-byte values ordered `[root, nullifier_hash]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
-- Nullifier mismatches or double spends fail; root overrides are only exposed in test builds.
+- Invalid proofs or double spends fail; root overrides are only exposed in test builds.
 
 Quick Usage Notes
 - Normal deposits keep the root up to date automatically.

@@ -1,6 +1,8 @@
 use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, U256, Vec as SorobanVec};
 
+use std::sync::{Mutex, OnceLock};
+
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
@@ -28,6 +30,11 @@ mod wasm_artifacts {
             file = "target/wasm32v1-none/release/tornado_classic_contracts.wasm"
         );
     }
+}
+
+fn verify_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn vk_bytes(env: &Env) -> Bytes {
@@ -131,6 +138,7 @@ fn merkle_frontier_updates_root_matches_reference() {
 #[test]
 #[cfg(feature = "testutils")]
 fn mixer_withdraw_and_double_spend_rejected() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -162,17 +170,11 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    // Withdraw after deploy-time VK initialization
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     env.as_contract(&mixer_id, || MixerContract::withdraw(
         env.clone(),
         verifier_id.clone(),
         public_inputs.clone(),
-        proof_bytes.clone(),
-        nf.clone()
+        proof_bytes.clone()
     )).expect("withdraw ok");
 
     // Double-spend attempt with same nullifier must fail
@@ -180,8 +182,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
         env.clone(),
         verifier_id.clone(),
         public_inputs.clone(),
-        proof_bytes.clone(),
-        nf.clone()
+        proof_bytes.clone()
     )).err().expect("expected error");
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
@@ -201,10 +202,11 @@ fn set_root_overrides_root() {
     assert_eq!(stored, Some(root));
 }
 
-/// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
+/// Verifies that tampering with public inputs causes the withdraw to fail and leaves the nullifier unused.
 #[test]
 #[cfg(feature = "testutils")]
-fn withdraw_rejects_nullifier_mismatch() {
+fn withdraw_rejects_invalid_public_inputs() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -230,9 +232,9 @@ fn withdraw_rejects_nullifier_mismatch() {
 
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
-    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let wrong_nf = BytesN::from_array(&env, &[0xAA; 32]);
+    let mut corrupted_inputs = pub_inputs_bin.to_vec();
+    corrupted_inputs[63] ^= 0x01;
+    let public_inputs: Bytes = Bytes::from_slice(&env, &corrupted_inputs);
     let err = env
         .as_contract(&mixer_id, || {
             MixerContract::withdraw(
@@ -240,12 +242,11 @@ fn withdraw_rejects_nullifier_mismatch() {
                 verifier_id.clone(),
                 public_inputs.clone(),
                 proof_bytes.clone(),
-                wrong_nf.clone(),
             )
         })
         .err()
-        .expect("expected nullifier mismatch");
-    assert_eq!(err as u32, MixerError::NullifierMismatch as u32);
+        .expect("expected verification failure");
+    assert_eq!(err as u32, MixerError::VerificationFailed as u32);
 
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -253,13 +254,14 @@ fn withdraw_rejects_nullifier_mismatch() {
     let used = env.as_contract(&mixer_id, || {
         MixerContract::is_nullifier_used(env.clone(), nf_from_proof.clone())
     });
-    assert!(!used, "nullifier should remain unused after mismatch");
+    assert!(!used, "nullifier should remain unused after invalid inputs");
 }
 
 /// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
 #[cfg(feature = "testutils")]
 fn withdraw_rejects_root_mismatch() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -285,10 +287,6 @@ fn withdraw_rejects_root_mismatch() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     let err = env
         .as_contract(&mixer_id, || {
             MixerContract::withdraw(
@@ -296,13 +294,15 @@ fn withdraw_rejects_root_mismatch() {
                 verifier_id.clone(),
                 public_inputs.clone(),
                 proof_bytes.clone(),
-                nf.clone(),
             )
         })
         .err()
         .expect("expected root mismatch");
     assert_eq!(err as u32, MixerError::RootMismatch as u32);
 
+    let mut nf_arr = [0u8; 32];
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    let nf = BytesN::from_array(&env, &nf_arr);
     let spent = env.as_contract(&mixer_id, || MixerContract::is_nullifier_used(env.clone(), nf.clone()));
     assert!(!spent, "nullifier should remain unused after root mismatch");
 }
@@ -311,6 +311,7 @@ fn withdraw_rejects_root_mismatch() {
 #[cfg(feature = "wasm-cost")]
 #[test]
 fn print_wasm_budget_for_deposit_and_withdraw() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -337,12 +338,8 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     env.cost_estimate().budget().reset_unlimited();
-    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes, &nf);
+    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes);
     println!("=== wasm withdraw budget usage ===");
     env.cost_estimate().budget().print();
 }

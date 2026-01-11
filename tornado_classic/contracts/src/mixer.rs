@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, symbol_short, Address, Bytes, BytesN, Env,
     InvokeError, IntoVal, Symbol, U256, Vec as SorobanVec, Val,
@@ -18,7 +18,6 @@ pub enum MixerError {
     NullifierUsed = 2,
     VerificationFailed = 3,
     RootMismatch = 4,
-    NullifierMismatch = 7,
     TreeFull = 8,
     RootNotSet = 9,
 }
@@ -55,28 +54,43 @@ fn poseidon2_hash2(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
     BytesN::from_array(env, &out_arr)
 }
 
-fn zero_at(env: &Env, level: u32) -> BytesN<32> {
+fn zeroes_for_tree(env: &Env) -> Vec<BytesN<32>> {
     // zero[0] = 0; zero[i+1] = H(zero[i], zero[i])
-    let mut z = BytesN::from_array(env, &[0u8; 32]);
-    if level == 0 { return z; }
-    for _ in 0..level {
-        let zz = z.clone();
-        z = poseidon2_hash2(env, &zz, &zz);
+    let mut zeroes = Vec::with_capacity(TREE_DEPTH as usize + 1);
+    let mut cur = BytesN::from_array(env, &[0u8; 32]);
+    zeroes.push(cur.clone());
+    for _ in 0..TREE_DEPTH {
+        cur = poseidon2_hash2(env, &cur, &cur);
+        zeroes.push(cur.clone());
     }
-    z
+    zeroes
 }
 
-fn parse_public_inputs(bytes: &[u8]) -> Result<Vec<[u8; 32]>, MixerError> {
-    if bytes.len() % 32 != 0 {
+fn parse_public_inputs(bytes: &Bytes) -> Result<([u8; 32], [u8; 32]), MixerError> {
+    if bytes.len() != 64 {
         return Err(MixerError::VerificationFailed);
     }
-    let mut out = Vec::with_capacity(bytes.len() / 32);
-    for chunk in bytes.chunks(32) {
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(chunk);
-        out.push(arr);
-    }
-    Ok(out)
+    let mut buf = [0u8; 64];
+    bytes.copy_into_slice(&mut buf);
+    let mut root = [0u8; 32];
+    root.copy_from_slice(&buf[..32]);
+    let mut nullifier_hash = [0u8; 32];
+    nullifier_hash.copy_from_slice(&buf[32..]);
+    Ok((root, nullifier_hash))
+}
+
+fn verify_proof(
+    env: &Env,
+    verifier: &Address,
+    public_inputs: Bytes,
+    proof_bytes: Bytes,
+) -> Result<(), MixerError> {
+    let mut args: SorobanVec<Val> = SorobanVec::new(env);
+    args.push_back(public_inputs.into_val(env));
+    args.push_back(proof_bytes.into_val(env));
+    env.try_invoke_contract::<(), InvokeError>(verifier, &Symbol::new(env, "verify_proof"), args)
+        .map_err(|_| MixerError::VerificationFailed)?
+        .map_err(|_| MixerError::VerificationFailed)
 }
 
 #[contractimpl]
@@ -88,6 +102,7 @@ impl MixerContract {
             return Err(MixerError::CommitmentExists);
         }
         // Incremental Merkle: frontier + next_index
+        let zeroes = zeroes_for_tree(&env);
         let mut next_index: u32 = env
             .storage()
             .instance()
@@ -113,8 +128,8 @@ impl MixerContract {
                 // save left sibling at this level, pair with zero
                 let fk = (key_frontier_prefix(), i);
                 env.storage().instance().set(&fk, &cur);
-                let z = zero_at(&env, i);
-                cur = poseidon2_hash2(&env, &cur, &z);
+                let z = &zeroes[i as usize];
+                cur = poseidon2_hash2(&env, &cur, z);
             } else {
                 // combine with existing left sibling
                 let fk = (key_frontier_prefix(), i);
@@ -122,7 +137,7 @@ impl MixerContract {
                     .storage()
                     .instance()
                     .get(&fk)
-                    .unwrap_or_else(|| zero_at(&env, i));
+                    .unwrap_or_else(|| zeroes[i as usize].clone());
                 cur = poseidon2_hash2(&env, &left, &cur);
             }
             i += 1;
@@ -142,27 +157,13 @@ impl MixerContract {
         verifier: Address,
         public_inputs: Bytes,
         proof_bytes: Bytes,
-        nullifier_hash: BytesN<32>,
     ) -> Result<(), MixerError> {
         if proof_bytes.len() as usize != PROOF_BYTES {
             return Err(MixerError::VerificationFailed);
         }
-        let mut pis_buf = vec![0u8; public_inputs.len() as usize];
-        public_inputs.copy_into_slice(&mut pis_buf);
-        let pub_inputs = parse_public_inputs(&pis_buf)?;
-        if pub_inputs.len() < 2 {
-            return Err(MixerError::VerificationFailed);
-        }
         // Interpret public inputs as `[root, nullifier_hash]`.
-        let mut root_arr = [0u8; 32];
-        root_arr.copy_from_slice(&pub_inputs[0]);
-        let mut nf_arr = [0u8; 32];
-        nf_arr.copy_from_slice(&pub_inputs[1]);
+        let (root_arr, nf_arr) = parse_public_inputs(&public_inputs)?;
         let nf_from_proof = BytesN::from_array(&env, &nf_arr);
-        // Caller must pass the same nullifier hash as the proof to prevent hijacking another leaf’s proof.
-        if nf_from_proof != nullifier_hash {
-            return Err(MixerError::NullifierMismatch);
-        }
         // Nullifier indicates a spent note; fail if already seen.
         let nf_key = (key_nullifier_prefix(), nf_from_proof.clone());
         if env.storage().instance().has(&nf_key) {
@@ -179,12 +180,7 @@ impl MixerContract {
             return Err(MixerError::RootMismatch);
         }
         // Verify proof against the stored VK on the external verifier contract.
-        let mut args: SorobanVec<Val> = SorobanVec::new(&env);
-        args.push_back(public_inputs.into_val(&env));
-        args.push_back(proof_bytes.into_val(&env));
-        env.try_invoke_contract::<(), InvokeError>(&verifier, &Symbol::new(&env, "verify_proof"), args)
-            .map_err(|_| MixerError::VerificationFailed)?
-            .map_err(|_| MixerError::VerificationFailed)?;
+        verify_proof(&env, &verifier, public_inputs, proof_bytes)?;
         // Mark nullifier as spent and emit withdraw event containing nullifier hash.
         env.storage().instance().set(&nf_key, &true);
         WithdrawEvent {

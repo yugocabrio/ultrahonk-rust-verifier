@@ -1,11 +1,19 @@
 use soroban_env_host::DiagnosticLevel;
 use soroban_sdk::{Address, Bytes, Env};
 
+use std::sync::{Mutex, OnceLock};
+
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
+fn verify_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 #[test]
 fn verify_proof_with_constructor_vk() {
+    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
