@@ -18,12 +18,9 @@ pub enum MixerError {
     NullifierUsed = 2,
     VerificationFailed = 3,
     RootMismatch = 4,
-    AdminNotConfigured = 5,
-    AdminAlreadyConfigured = 6,
     NullifierMismatch = 7,
     TreeFull = 8,
     RootNotSet = 9,
-    RootOverrideDisabled = 10,
 }
 
 #[contractevent(topics = ["deposit"], data_format = "map")]
@@ -38,14 +35,11 @@ pub struct WithdrawEvent<'a> {
     pub nullifier_hash: &'a BytesN<32>,
 }
 
-fn key_count() -> Symbol { symbol_short!("cnt") }
 fn key_commitment_prefix() -> Symbol { symbol_short!("cm") }
 fn key_nullifier_prefix() -> Symbol { symbol_short!("nf") }
 fn key_root() -> Symbol { symbol_short!("root") }
 fn key_frontier_prefix() -> Symbol { symbol_short!("fr") }
 fn key_next_index() -> Symbol { symbol_short!("idx") }
-fn key_ci_prefix() -> Symbol { symbol_short!("ci") }
-fn key_admin() -> Symbol { symbol_short!("adm") }
 
 const TREE_DEPTH: u32 = 20;
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
@@ -93,21 +87,6 @@ impl MixerContract {
         if env.storage().instance().has(&cm_key) {
             return Err(MixerError::CommitmentExists);
         }
-        let count_key = key_count();
-        let mut count: u32 = env.storage().instance().get(&count_key).unwrap_or(0u32);
-        let idx = count;
-        count = count.saturating_add(1);
-        env.storage().instance().set(&count_key, &count);
-        env.storage().instance().set(&cm_key, &true);
-        // save idx => commitment mapping and emit event
-        let ci_key = (key_ci_prefix(), idx);
-        env.storage().instance().set(&ci_key, &commitment);
-        DepositEvent {
-            idx: &idx,
-            commitment: &commitment,
-        }
-        .publish(&env);
-
         // Incremental Merkle: frontier + next_index
         let mut next_index: u32 = env
             .storage()
@@ -117,6 +96,13 @@ impl MixerContract {
         if next_index >= MAX_LEAVES {
             return Err(MixerError::TreeFull);
         }
+        let idx = next_index;
+        env.storage().instance().set(&cm_key, &true);
+        DepositEvent {
+            idx: &idx,
+            commitment: &commitment,
+        }
+        .publish(&env);
         // leaf index used for insertion
         let ins_idx = next_index;
         let mut cur = commitment.clone();
@@ -208,34 +194,12 @@ impl MixerContract {
         Ok(())
     }
 
-    /// Returns true if the commitment has been seen in the tree.
-    pub fn has_commitment(env: Env, commitment: BytesN<32>) -> bool {
-        let cm_key = (key_commitment_prefix(), commitment);
-        env.storage().instance().has(&cm_key)
-    }
-
     /// Returns true if the nullifier hash has already been consumed.
     pub fn is_nullifier_used(env: Env, nullifier_hash: BytesN<32>) -> bool {
         let nf_key = (key_nullifier_prefix(), nullifier_hash);
         env.storage().instance().has(&nf_key)
     }
 
-    /// Sets the admin and seeds the tree with the empty Poseidon root; only callable once.
-    pub fn configure(env: Env, admin: Address) -> Result<(), MixerError> {
-        let key = key_admin();
-        if env.storage().instance().has(&key) {
-            return Err(MixerError::AdminAlreadyConfigured);
-        }
-        admin.require_auth();
-        env.storage().instance().set(&key, &admin);
-        let empty_root = zero_at(&env, TREE_DEPTH);
-        env.storage().instance().set(&key_root(), &empty_root);
-        env.storage().instance().set(&key_next_index(), &0u32);
-        env.storage().instance().set(&key_count(), &0u32);
-        Ok(())
-    }
-
-    /// Test-only helper to override the stored root when running under debug builds.
     /// Returns the current Poseidon tree root.
     pub fn get_root(env: Env) -> Option<BytesN<32>> {
         env.storage().instance().get(&key_root())
@@ -248,22 +212,7 @@ impl MixerContract {
 impl MixerContract {
     /// Test-only helper to override the stored root when running under debug builds.
     pub fn set_root(env: Env, root: BytesN<32>) -> Result<(), MixerError> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&key_admin())
-            .ok_or(MixerError::AdminNotConfigured)?;
-        admin.require_auth();
-        if !cfg!(debug_assertions) && !cfg!(feature = "wasm-cost") {
-            return Err(MixerError::RootOverrideDisabled);
-        }
         env.storage().instance().set(&key_root(), &root);
         Ok(())
-    }
-
-    /// Retrieves the commitment stored at a given leaf index.
-    pub fn get_commitment_by_index(env: Env, index: u32) -> Option<BytesN<32>> {
-        let ci_key = (key_ci_prefix(), index);
-        env.storage().instance().get(&ci_key)
     }
 }

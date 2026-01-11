@@ -28,9 +28,9 @@ cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testu
 Key checks:
 - `deposit` appends to the frontier and updates the on-chain root.
 - `withdraw` takes separate `public_inputs` (two 32-byte values ordered `[root, nullifier_hash]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
-- Nullifier mismatches or double spends fail; overwriting the root requires a configured admin actor.
+- Nullifier mismatches or double spends fail; root overrides are only exposed in test builds.
 
 Quick Usage Notes
-- Call `MixerContract::configure(admin)` once (the tests use `mock_all_auths`) before any `set_root` overrides; normal deposits keep the root up to date automatically.
+- Normal deposits keep the root up to date automatically.
 - Ensure the public inputs match the Poseidon2 tree built off committed leaves.
 - This repo is instructional. For production you need audited hashes, token custody, and a native bn254 verifier.

@@ -1,10 +1,5 @@
 use soroban_env_host::DiagnosticLevel;
-use soroban_sdk::{
-    symbol_short, testutils::Address as TestAddress, Address, Bytes, BytesN, Env, U256,
-    Vec as SorobanVec,
-};
-
-use std::sync::{Mutex, OnceLock};
+use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, U256, Vec as SorobanVec};
 
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
@@ -33,11 +28,6 @@ mod wasm_artifacts {
             file = "target/wasm32v1-none/release/tornado_classic_contracts.wasm"
         );
     }
-}
-
-fn verify_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn vk_bytes(env: &Env) -> Bytes {
@@ -116,7 +106,7 @@ fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Cli
 /// Deposits a sequence of leaves and checks the contract frontier updates match a reference implementation.
 #[test]
 #[cfg(feature = "testutils")]
-fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
+fn merkle_frontier_updates_root_matches_reference() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -134,8 +124,6 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
         let onchain_root = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone())).unwrap();
         let expected_root = frontier_root_from_leaves(&env, &leaves[0..=n], TREE_DEPTH_TEST);
         assert_eq!(onchain_root, BytesN::from_array(&env, &expected_root));
-        let got_cm = env.as_contract(&mixer_id, || MixerContract::get_commitment_by_index(env.clone(), n as u32)).unwrap();
-        assert_eq!(got_cm, BytesN::from_array(&env, leaf));
     }
 }
 
@@ -143,7 +131,6 @@ fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
 #[test]
 #[cfg(feature = "testutils")]
 fn mixer_withdraw_and_double_spend_rejected() {
-    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -157,11 +144,6 @@ fn mixer_withdraw_and_double_spend_rejected() {
     // Register contracts
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     // Deposit a commitment (placeholder) so root is non-zero
     let commitment = BytesN::from_array(&env, &[0x11; 32]);
@@ -204,26 +186,25 @@ fn mixer_withdraw_and_double_spend_rejected() {
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
 
-/// Ensures `set_root` cannot be called before the admin is configured.
+/// Confirms the test-only root override updates the stored root.
 #[test]
 #[cfg(feature = "testutils")]
-fn set_root_requires_admin_configuration() {
+fn set_root_overrides_root() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 
-    let result = env.as_contract(&mixer_id, || {
-        MixerContract::set_root(env.clone(), BytesN::from_array(&env, &[1u8; 32]))
-    });
-    let err = result.err().expect("expected admin not configured error");
-    assert_eq!(err as u32, MixerError::AdminNotConfigured as u32);
+    let root = BytesN::from_array(&env, &[0xAB; 32]);
+    env.as_contract(&mixer_id, || MixerContract::set_root(env.clone(), root.clone()))
+        .expect("set_root ok");
+    let stored = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone()));
+    assert_eq!(stored, Some(root));
 }
 
 /// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
 #[test]
 #[cfg(feature = "testutils")]
 fn withdraw_rejects_nullifier_mismatch() {
-    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -235,11 +216,6 @@ fn withdraw_rejects_nullifier_mismatch() {
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     let commitment = BytesN::from_array(&env, &[0x22; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment)).unwrap();
@@ -280,30 +256,10 @@ fn withdraw_rejects_nullifier_mismatch() {
     assert!(!used, "nullifier should remain unused after mismatch");
 }
 
-/// Checks that `configure` may only be invoked once.
-#[test]
-fn configure_twice_is_rejected() {
-    let env = Env::default();
-    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-    let mixer_id: Address = env.register(MixerContract, ());
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("first configure ok");
-
-    let err = env
-        .as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .err()
-        .expect("expected duplicate configure error");
-    assert_eq!(err as u32, MixerError::AdminAlreadyConfigured as u32);
-}
-
 /// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
 #[cfg(feature = "testutils")]
 fn withdraw_rejects_root_mismatch() {
-    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -314,11 +270,6 @@ fn withdraw_rejects_root_mismatch() {
     let vk_bytes: Bytes = vk_bytes(&env);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     // Deposit one leaf to seed tree
     let commitment = BytesN::from_array(&env, &[0x33; 32]);
@@ -360,7 +311,6 @@ fn withdraw_rejects_root_mismatch() {
 #[cfg(feature = "wasm-cost")]
 #[test]
 fn print_wasm_budget_for_deposit_and_withdraw() {
-    let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
@@ -371,10 +321,6 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
 
     let (_, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
     let (mixer, _) = register_wasm_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    mixer.configure(&admin);
 
     env.cost_estimate().budget().reset_unlimited();
     let commitment = BytesN::from_array(&env, &[0x55; 32]);
