@@ -1,14 +1,13 @@
 use soroban_env_host::DiagnosticLevel;
-use soroban_sdk::{testutils::Address as TestAddress, Address, Bytes, BytesN, Env};
+use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, U256, Vec as SorobanVec};
 
 use std::sync::{Mutex, OnceLock};
 
-use tornado_classic_contracts::hash2::permute_2_bytes_be;
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
 use ultrahonk_soroban_contract::UltraHonkVerifierContract;
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
-const TREE_DEPTH_TEST: u32 = 10;
+const TREE_DEPTH_TEST: u32 = 20;
 
 #[cfg(feature = "wasm-cost")]
 mod wasm_artifacts {
@@ -48,17 +47,28 @@ fn be32_from_u64(x: u64) -> [u8; 32] {
     a
 }
 
-fn hash2(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] { permute_2_bytes_be(a, b) }
+fn hash2(env: &Env, a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+    let a_bytes = Bytes::from_array(env, a);
+    let b_bytes = Bytes::from_array(env, b);
+    let mut inputs = SorobanVec::new(env);
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes));
+    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    let out_bytes = out.to_be_bytes();
+    let mut out_arr = [0u8; 32];
+    out_bytes.copy_into_slice(&mut out_arr);
+    out_arr
+}
 
-fn zero_at(level: u32) -> [u8; 32] {
+fn zero_at(env: &Env, level: u32) -> [u8; 32] {
     let mut z = [0u8; 32];
-    for _ in 0..level { let zz = z; z = hash2(&zz, &zz); }
+    for _ in 0..level { let zz = z; z = hash2(env, &zz, &zz); }
     z
 }
 
-fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
+fn frontier_root_from_leaves(env: &Env, leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
     let mut frontier: Vec<Option<[u8; 32]>> = vec![None; depth as usize];
-    let mut root = zero_at(depth);
+    let mut root = zero_at(env, depth);
     for (i, leaf) in leaves.iter().enumerate() {
         let idx = i as u32;
         let mut cur = *leaf;
@@ -67,11 +77,11 @@ fn frontier_root_from_leaves(leaves: &[[u8; 32]], depth: u32) -> [u8; 32] {
             let bit = (idx >> level) & 1;
             if bit == 0 {
                 frontier[level as usize] = Some(cur);
-                let z = zero_at(level);
-                cur = hash2(&cur, &z);
+                let z = zero_at(env, level);
+                cur = hash2(env, &cur, &z);
             } else {
-                let left = frontier[level as usize].as_ref().copied().unwrap_or_else(|| zero_at(level));
-                cur = hash2(&left, &cur);
+                let left = frontier[level as usize].as_ref().copied().unwrap_or_else(|| zero_at(env, level));
+                cur = hash2(env, &left, &cur);
             }
             level += 1;
         }
@@ -102,26 +112,31 @@ fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Cli
 
 /// Deposits a sequence of leaves and checks the contract frontier updates match a reference implementation.
 #[test]
-fn merkle_frontier_updates_root_matches_reference_and_mapping_ok() {
+#[cfg(feature = "testutils")]
+fn merkle_frontier_updates_root_matches_reference() {
     let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 
     let mut leaves: Vec<[u8; 32]> = Vec::new();
-    for i in 0u64..8 { let a = be32_from_u64(i); let b = be32_from_u64(i+100); leaves.push(hash2(&a,&b)); }
+    for i in 0u64..8 {
+        let a = be32_from_u64(i);
+        let b = be32_from_u64(i + 100);
+        leaves.push(hash2(&env, &a, &b));
+    }
 
     for (n, leaf) in leaves.iter().enumerate() {
         env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), BytesN::from_array(&env, leaf))).unwrap();
         let onchain_root = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone())).unwrap();
-        let expected_root = frontier_root_from_leaves(&leaves[0..=n], TREE_DEPTH_TEST);
+        let expected_root = frontier_root_from_leaves(&env, &leaves[0..=n], TREE_DEPTH_TEST);
         assert_eq!(onchain_root, BytesN::from_array(&env, &expected_root));
-        let got_cm = env.as_contract(&mixer_id, || MixerContract::get_commitment_by_index(env.clone(), n as u32)).unwrap();
-        assert_eq!(got_cm, BytesN::from_array(&env, leaf));
     }
 }
 
 /// Happy-path withdraw followed by a double-spend attempt confirms the nullifier is enforced.
 #[test]
+#[cfg(feature = "testutils")]
 fn mixer_withdraw_and_double_spend_rejected() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
@@ -137,11 +152,6 @@ fn mixer_withdraw_and_double_spend_rejected() {
     // Register contracts
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     // Deposit a commitment (placeholder) so root is non-zero
     let commitment = BytesN::from_array(&env, &[0x11; 32]);
@@ -160,17 +170,11 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    // Withdraw after deploy-time VK initialization
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     env.as_contract(&mixer_id, || MixerContract::withdraw(
         env.clone(),
         verifier_id.clone(),
         public_inputs.clone(),
-        proof_bytes.clone(),
-        nf.clone()
+        proof_bytes.clone()
     )).expect("withdraw ok");
 
     // Double-spend attempt with same nullifier must fail
@@ -178,29 +182,30 @@ fn mixer_withdraw_and_double_spend_rejected() {
         env.clone(),
         verifier_id.clone(),
         public_inputs.clone(),
-        proof_bytes.clone(),
-        nf.clone()
+        proof_bytes.clone()
     )).err().expect("expected error");
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
 
-/// Ensures `set_root` cannot be called before the admin is configured.
+/// Confirms the test-only root override updates the stored root.
 #[test]
-fn set_root_requires_admin_configuration() {
+#[cfg(feature = "testutils")]
+fn set_root_overrides_root() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 
-    let result = env.as_contract(&mixer_id, || {
-        MixerContract::set_root(env.clone(), BytesN::from_array(&env, &[1u8; 32]))
-    });
-    let err = result.err().expect("expected admin not configured error");
-    assert_eq!(err as u32, MixerError::AdminNotConfigured as u32);
+    let root = BytesN::from_array(&env, &[0xAB; 32]);
+    env.as_contract(&mixer_id, || MixerContract::set_root(env.clone(), root.clone()))
+        .expect("set_root ok");
+    let stored = env.as_contract(&mixer_id, || MixerContract::get_root(env.clone()));
+    assert_eq!(stored, Some(root));
 }
 
-/// Verifies that providing a mismatched nullifier causes the withdraw to fail and leaves the nullifier unused.
+/// Verifies that tampering with public inputs causes the withdraw to fail and leaves the nullifier unused.
 #[test]
-fn withdraw_rejects_nullifier_mismatch() {
+#[cfg(feature = "testutils")]
+fn withdraw_rejects_invalid_public_inputs() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
@@ -213,11 +218,6 @@ fn withdraw_rejects_nullifier_mismatch() {
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     let commitment = BytesN::from_array(&env, &[0x22; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment)).unwrap();
@@ -232,9 +232,9 @@ fn withdraw_rejects_nullifier_mismatch() {
 
     assert_eq!(proof_bin.len(), PROOF_BYTES);
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
-    let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
-
-    let wrong_nf = BytesN::from_array(&env, &[0xAA; 32]);
+    let mut corrupted_inputs = pub_inputs_bin.to_vec();
+    corrupted_inputs[63] ^= 0x01;
+    let public_inputs: Bytes = Bytes::from_slice(&env, &corrupted_inputs);
     let err = env
         .as_contract(&mixer_id, || {
             MixerContract::withdraw(
@@ -242,12 +242,11 @@ fn withdraw_rejects_nullifier_mismatch() {
                 verifier_id.clone(),
                 public_inputs.clone(),
                 proof_bytes.clone(),
-                wrong_nf.clone(),
             )
         })
         .err()
-        .expect("expected nullifier mismatch");
-    assert_eq!(err as u32, MixerError::NullifierMismatch as u32);
+        .expect("expected verification failure");
+    assert_eq!(err as u32, MixerError::VerificationFailed as u32);
 
     let mut nf_arr = [0u8; 32];
     nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
@@ -255,30 +254,12 @@ fn withdraw_rejects_nullifier_mismatch() {
     let used = env.as_contract(&mixer_id, || {
         MixerContract::is_nullifier_used(env.clone(), nf_from_proof.clone())
     });
-    assert!(!used, "nullifier should remain unused after mismatch");
-}
-
-/// Checks that `configure` may only be invoked once.
-#[test]
-fn configure_twice_is_rejected() {
-    let env = Env::default();
-    let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-    let mixer_id: Address = env.register(MixerContract, ());
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("first configure ok");
-
-    let err = env
-        .as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .err()
-        .expect("expected duplicate configure error");
-    assert_eq!(err as u32, MixerError::AdminAlreadyConfigured as u32);
+    assert!(!used, "nullifier should remain unused after invalid inputs");
 }
 
 /// Confirms withdraw fails if the proof root differs from the stored root and does not consume the nullifier.
 #[test]
+#[cfg(feature = "testutils")]
 fn withdraw_rejects_root_mismatch() {
     let _guard = verify_lock().lock().unwrap();
     let env = Env::default();
@@ -291,11 +272,6 @@ fn withdraw_rejects_root_mismatch() {
     let vk_bytes: Bytes = vk_bytes(&env);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
-
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    env.as_contract(&mixer_id, || MixerContract::configure(env.clone(), admin.clone()))
-        .expect("configure ok");
 
     // Deposit one leaf to seed tree
     let commitment = BytesN::from_array(&env, &[0x33; 32]);
@@ -311,10 +287,6 @@ fn withdraw_rejects_root_mismatch() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     let err = env
         .as_contract(&mixer_id, || {
             MixerContract::withdraw(
@@ -322,13 +294,15 @@ fn withdraw_rejects_root_mismatch() {
                 verifier_id.clone(),
                 public_inputs.clone(),
                 proof_bytes.clone(),
-                nf.clone(),
             )
         })
         .err()
         .expect("expected root mismatch");
     assert_eq!(err as u32, MixerError::RootMismatch as u32);
 
+    let mut nf_arr = [0u8; 32];
+    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
+    let nf = BytesN::from_array(&env, &nf_arr);
     let spent = env.as_contract(&mixer_id, || MixerContract::is_nullifier_used(env.clone(), nf.clone()));
     assert!(!spent, "nullifier should remain unused after root mismatch");
 }
@@ -349,10 +323,6 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     let (_, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
     let (mixer, _) = register_wasm_mixer(&env);
 
-    let admin = <Address as TestAddress>::generate(&env);
-    let _auth = env.mock_all_auths();
-    mixer.configure(&admin);
-
     env.cost_estimate().budget().reset_unlimited();
     let commitment = BytesN::from_array(&env, &[0x55; 32]);
     mixer.deposit(&commitment);
@@ -368,12 +338,8 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    let mut nf_arr = [0u8; 32];
-    nf_arr.copy_from_slice(&pub_inputs_bin[32..64]);
-    let nf = BytesN::from_array(&env, &nf_arr);
-
     env.cost_estimate().budget().reset_unlimited();
-    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes, &nf);
+    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes);
     println!("=== wasm withdraw budget usage ===");
     env.cost_estimate().budget().print();
 }
@@ -381,6 +347,7 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
 #[test]
 fn deposit_rejects_duplicate_commitment() {
     let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
     let mixer_id: Address = env.register(MixerContract, ());
 

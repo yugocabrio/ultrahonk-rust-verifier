@@ -1,14 +1,14 @@
 // Tornado Classic-style circuit
 // - Private inputs: nullifier, secret, Merkle path (siblings, path_bits)
-// - Public inputs: root, nullifier_hash, recipient
-// - Hash function uses Poseidon2 (via dep::poseidon2)
+// - Public inputs: root, nullifier_hash
+// - Hash function uses Poseidon2 (via dep::poseidon)
 // - Aligns with on-chain frontier Merkle: H = Poseidon2_2to1 (first limb),
 //   zero[0] = 0; zero[i+1] = H(zero[i], zero[i])
 
-use dep::poseidon2;
+use dep::poseidon::poseidon2::Poseidon2;
 
 fn hash2(a: Field, b: Field) -> Field {
-    poseidon2::bn254::hash_2([a, b])
+    Poseidon2::hash([a, b], 2)
 }
 
 fn constrain_bit(bit: Field) {
@@ -35,7 +35,6 @@ fn compute_root(leaf: Field, path_siblings: [Field; 20], path_bits: [Field; 20])
 pub fn main(
     root: pub Field,
     nullifier_hash: pub Field,
-    recipient: pub Field,
     nullifier: Field,
     secret: Field,
     path_siblings: [Field; 20],
@@ -52,6 +51,4 @@ pub fn main(
     let computed_root = compute_root(leaf, path_siblings, path_bits);
     assert(computed_root == root);
 
-    let recipient_square = recipient * recipient;
-    assert(recipient_square == recipient * recipient);
 }

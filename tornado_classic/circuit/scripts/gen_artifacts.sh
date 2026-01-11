@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${PROJECT_ROOT}/../.." && pwd)"
 export PATH="$HOME/.nargo/bin:$HOME/.bb/bin:${SCRIPT_DIR}:${PATH}"
 cd "${PROJECT_ROOT}"
 
@@ -78,6 +79,12 @@ fi
 
 echo "[1/4] nargo compile"
 "${NARGO_BIN}" compile
+
+if [[ "${GENERATE_PROVER:-1}" != "0" ]]; then
+  echo "[i] Generating Prover.toml inputs (seed=${TORNADO_SEED:-1})"
+  (cd "${REPO_ROOT}" && TORNADO_GENERATE=1 TORNADO_SEED="${TORNADO_SEED:-1}" \
+    cargo run --example populate_publics --manifest-path tornado_classic/contracts/Cargo.toml --features std)
+fi
 
 echo "[2/4] nargo execute (solve witness)"
 "${NARGO_BIN}" execute

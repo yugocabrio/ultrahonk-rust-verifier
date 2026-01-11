@@ -2,7 +2,7 @@ Tornado Classic–style Mixer (Soroban + Noir)
 
 Scope
 - Deposit stores commitments and rolls an on-chain Poseidon2 Merkle tree (depth 20).
-- Withdraw verifies a Noir UltraHonk proof against the stored root, enforces single-use nullifiers, and emits the verified recipient.
+- Withdraw verifies a Noir UltraHonk proof against the stored root and enforces single-use nullifiers.
 - Educational sample: no token flow, trusted setup, and bn254 precompile missing on Soroban networks (devnet deploy still blocked).
 
 Layout
@@ -23,14 +23,14 @@ scripts/gen_artifacts.sh   # produces target/{vk,proof,public_inputs,…}
 
 Run Contract Tests (includes real proof verification)
 ```bash
-cargo test --manifest-path tornado_classic/contracts/Cargo.toml -- --nocapture
+cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
 ```
 Key checks:
 - `deposit` appends to the frontier and updates the on-chain root.
-- `withdraw` takes separate `public_inputs` (three 32-byte values ordered `[root, nullifier_hash, recipient]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
-- Nullifier mismatches or double spends fail; overwriting the root requires a configured admin actor.
+- `withdraw` takes separate `public_inputs` (two 32-byte values ordered `[root, nullifier_hash]`) and a `proof` blob (456 fields). The verifier contract now also expects `vk_bytes` as a distinct argument.
+- Invalid proofs or double spends fail; root overrides are only exposed in test builds.
 
 Quick Usage Notes
-- Call `MixerContract::configure(admin)` once (the tests use `mock_all_auths`) before any `set_root` overrides; normal deposits keep the root up to date automatically.
+- Normal deposits keep the root up to date automatically.
 - Ensure the public inputs match the Poseidon2 tree built off committed leaves.
 - This repo is instructional. For production you need audited hashes, token custody, and a native bn254 verifier.
