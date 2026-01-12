@@ -1,5 +1,8 @@
 use soroban_env_host::DiagnosticLevel;
-use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, U256, Vec as SorobanVec};
+use soroban_sdk::{
+    symbol_short, testutils::Address as TestAddress, Address, Bytes, BytesN, Env, U256,
+    Vec as SorobanVec,
+};
 
 use std::sync::{Mutex, OnceLock};
 
@@ -93,7 +96,9 @@ fn frontier_root_from_leaves(env: &Env, leaves: &[[u8; 32]], depth: u32) -> [u8;
 fn register_verifier(env: &Env, vk_bytes: &Bytes) -> Address {
     env.register(UltraHonkVerifierContract, (vk_bytes.clone(),))
 }
-fn register_mixer(env: &Env) -> Address { env.register(MixerContract, ()) }
+fn register_mixer(env: &Env, verifier: Address) -> Address {
+    env.register(MixerContract, (verifier,))
+}
 
 #[cfg(feature = "wasm-cost")]
 fn register_wasm_verifier<'a>(
@@ -105,8 +110,11 @@ fn register_wasm_verifier<'a>(
 }
 
 #[cfg(feature = "wasm-cost")]
-fn register_wasm_mixer<'a>(env: &'a Env) -> (wasm_artifacts::mixer_contract::Client<'a>, Address) {
-    let contract_id = env.register(wasm_artifacts::MIXER_WASM, ());
+fn register_wasm_mixer<'a>(
+    env: &'a Env,
+    verifier: Address,
+) -> (wasm_artifacts::mixer_contract::Client<'a>, Address) {
+    let contract_id = env.register(wasm_artifacts::MIXER_WASM, (verifier,));
     (wasm_artifacts::mixer_contract::Client::new(env, &contract_id), contract_id)
 }
 
@@ -117,7 +125,8 @@ fn merkle_frontier_updates_root_matches_reference() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-    let mixer_id: Address = env.register(MixerContract, ());
+    let verifier_id = <Address as TestAddress>::generate(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id);
 
     let mut leaves: Vec<[u8; 32]> = Vec::new();
     for i in 0u64..8 {
@@ -151,7 +160,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     // Register contracts
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
-    let mixer_id: Address = register_mixer(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id.clone());
 
     // Deposit a commitment so root is non-zero
     let commitment = BytesN::from_array(&env, &[0x11; 32]);
@@ -170,20 +179,18 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let proof_bytes: Bytes = Bytes::from_slice(&env, proof_bin);
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
-    env.as_contract(&mixer_id, || MixerContract::withdraw(
-        env.clone(),
-        verifier_id.clone(),
-        public_inputs.clone(),
-        proof_bytes.clone()
-    )).expect("withdraw ok");
+    env.as_contract(&mixer_id, || {
+        MixerContract::withdraw(env.clone(), public_inputs.clone(), proof_bytes.clone())
+    })
+    .expect("withdraw ok");
 
     // Double-spend attempt with same nullifier must fail
-    let err = env.as_contract(&mixer_id, || MixerContract::withdraw(
-        env.clone(),
-        verifier_id.clone(),
-        public_inputs.clone(),
-        proof_bytes.clone()
-    )).err().expect("expected error");
+    let err = env
+        .as_contract(&mixer_id, || {
+            MixerContract::withdraw(env.clone(), public_inputs.clone(), proof_bytes.clone())
+        })
+        .err()
+        .expect("expected error");
     assert_eq!(err as u32, MixerError::NullifierUsed as u32);
 }
 
@@ -193,7 +200,8 @@ fn mixer_withdraw_and_double_spend_rejected() {
 fn set_root_overrides_root() {
     let env = Env::default();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-    let mixer_id: Address = env.register(MixerContract, ());
+    let verifier_id = <Address as TestAddress>::generate(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id);
 
     let root = BytesN::from_array(&env, &[0xAB; 32]);
     env.as_contract(&mixer_id, || MixerContract::set_root(env.clone(), root.clone()))
@@ -217,7 +225,7 @@ fn withdraw_rejects_invalid_public_inputs() {
 
     let vk_bytes: Bytes = Bytes::from_slice(&env, vk_bin);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
-    let mixer_id: Address = register_mixer(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id.clone());
 
     let commitment = BytesN::from_array(&env, &[0x22; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment)).unwrap();
@@ -237,12 +245,7 @@ fn withdraw_rejects_invalid_public_inputs() {
     let public_inputs: Bytes = Bytes::from_slice(&env, &corrupted_inputs);
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw(
-                env.clone(),
-                verifier_id.clone(),
-                public_inputs.clone(),
-                proof_bytes.clone(),
-            )
+            MixerContract::withdraw(env.clone(), public_inputs.clone(), proof_bytes.clone())
         })
         .err()
         .expect("expected verification failure");
@@ -271,7 +274,7 @@ fn withdraw_rejects_root_mismatch() {
 
     let vk_bytes: Bytes = vk_bytes(&env);
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
-    let mixer_id: Address = register_mixer(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id.clone());
 
     // Deposit one leaf to seed tree
     let commitment = BytesN::from_array(&env, &[0x33; 32]);
@@ -289,12 +292,7 @@ fn withdraw_rejects_root_mismatch() {
 
     let err = env
         .as_contract(&mixer_id, || {
-            MixerContract::withdraw(
-                env.clone(),
-                verifier_id.clone(),
-                public_inputs.clone(),
-                proof_bytes.clone(),
-            )
+            MixerContract::withdraw(env.clone(), public_inputs.clone(), proof_bytes.clone())
         })
         .err()
         .expect("expected root mismatch");
@@ -321,7 +319,7 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     let pub_inputs_bin: &[u8] = include_bytes!("../../circuit/target/public_inputs");
 
     let (_, verifier_id) = register_wasm_verifier(&env, &vk_bytes);
-    let (mixer, _) = register_wasm_mixer(&env);
+    let (mixer, _) = register_wasm_mixer(&env, verifier_id.clone());
 
     env.cost_estimate().budget().reset_unlimited();
     let commitment = BytesN::from_array(&env, &[0x55; 32]);
@@ -339,7 +337,7 @@ fn print_wasm_budget_for_deposit_and_withdraw() {
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     env.cost_estimate().budget().reset_unlimited();
-    mixer.withdraw(&verifier_id, &public_inputs, &proof_bytes);
+    mixer.withdraw(&public_inputs, &proof_bytes);
     println!("=== wasm withdraw budget usage ===");
     env.cost_estimate().budget().print();
 }
@@ -349,7 +347,8 @@ fn deposit_rejects_duplicate_commitment() {
     let env = Env::default();
     env.cost_estimate().budget().reset_unlimited();
     let _ = env.host().set_diagnostic_level(DiagnosticLevel::None);
-    let mixer_id: Address = env.register(MixerContract, ());
+    let verifier_id = <Address as TestAddress>::generate(&env);
+    let mixer_id: Address = register_mixer(&env, verifier_id);
 
     let cm = BytesN::from_array(&env, &[0x55; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), cm.clone()))
