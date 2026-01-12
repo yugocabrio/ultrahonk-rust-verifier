@@ -153,7 +153,7 @@ fn mixer_withdraw_and_double_spend_rejected() {
     let verifier_id: Address = register_verifier(&env, &vk_bytes);
     let mixer_id: Address = register_mixer(&env);
 
-    // Deposit a commitment (placeholder) so root is non-zero
+    // Deposit a commitment so root is non-zero
     let commitment = BytesN::from_array(&env, &[0x11; 32]);
     env.as_contract(&mixer_id, || MixerContract::deposit(env.clone(), commitment)).unwrap();
 
@@ -307,7 +307,7 @@ fn withdraw_rejects_root_mismatch() {
     assert!(!spent, "nullifier should remain unused after root mismatch");
 }
 
-/// Measure deposit/withdraw budget using WASM contracts (requires built artifacts).
+/// Measure deposit/withdraw budget using WASM contracts.
 #[cfg(feature = "wasm-cost")]
 #[test]
 fn print_wasm_budget_for_deposit_and_withdraw() {
