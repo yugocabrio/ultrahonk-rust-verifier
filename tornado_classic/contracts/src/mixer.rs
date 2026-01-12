@@ -18,6 +18,7 @@ pub enum MixerError {
     NullifierUsed = 2,
     VerificationFailed = 3,
     RootMismatch = 4,
+    VerifierNotSet = 5,
     TreeFull = 8,
     RootNotSet = 9,
 }
@@ -39,6 +40,7 @@ fn key_nullifier_prefix() -> Symbol { symbol_short!("nf") }
 fn key_root() -> Symbol { symbol_short!("root") }
 fn key_frontier_prefix() -> Symbol { symbol_short!("fr") }
 fn key_next_index() -> Symbol { symbol_short!("idx") }
+fn key_verifier() -> Symbol { symbol_short!("ver") }
 
 const TREE_DEPTH: u32 = 20;
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
@@ -95,6 +97,12 @@ fn verify_proof(
 
 #[contractimpl]
 impl MixerContract {
+    /// Initialize the contract with the verifier address.
+    pub fn __constructor(env: Env, verifier: Address) -> Result<(), MixerError> {
+        env.storage().instance().set(&key_verifier(), &verifier);
+        Ok(())
+    }
+
     /// Inserts a new leaf into the Poseidon2 Merkle tree and returns its index.
     pub fn deposit(env: Env, commitment: BytesN<32>) -> Result<u32, MixerError> {
         let cm_key = (key_commitment_prefix(), commitment.clone());
@@ -154,7 +162,6 @@ impl MixerContract {
     /// The public inputs are ordered as `[root, nullifier_hash]`.
     pub fn withdraw(
         env: Env,
-        verifier: Address,
         public_inputs: Bytes,
         proof_bytes: Bytes,
     ) -> Result<(), MixerError> {
@@ -180,6 +187,11 @@ impl MixerContract {
             return Err(MixerError::RootMismatch);
         }
         // Verify proof against the stored VK on the external verifier contract.
+        let verifier: Address = env
+            .storage()
+            .instance()
+            .get(&key_verifier())
+            .ok_or(MixerError::VerifierNotSet)?;
         verify_proof(&env, &verifier, public_inputs, proof_bytes)?;
         // Mark nullifier as spent and emit withdraw event containing nullifier hash.
         env.storage().instance().set(&nf_key, &true);
