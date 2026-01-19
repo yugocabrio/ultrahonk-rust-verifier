@@ -5,9 +5,6 @@ use crate::{
     types::{Transcript, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH},
 };
 
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
-
 #[cfg(feature = "std")]
 use lazy_static::lazy_static;
 
@@ -57,7 +54,10 @@ fn check_sum(round_univariate: &[Fr], round_target: Fr) -> bool {
 
 /// Calculate next target value for the sum-check
 #[inline(always)]
-fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Result<Fr, String> {
+fn compute_next_target_sum(
+    round_univariate: &[Fr],
+    round_challenge: Fr,
+) -> Result<Fr, &'static str> {
     // B(χ) = ∏ (χ - i)
     let mut b_poly = Fr::one();
     for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
@@ -73,7 +73,7 @@ fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Resu
         let bary_val = get_bary()[i];
 
         let denom = bary_val * (round_challenge - Fr::from_u64(i as u64));
-        let inv = denom.inverse().ok_or_else(|| String::from("denom zero"))?;
+        let inv = denom.inverse().ok_or("denom zero")?;
         acc = acc + (round_univariate[i] * inv);
     }
 
@@ -93,7 +93,7 @@ pub fn verify_sumcheck(
     proof: &crate::types::Proof,
     tp: &Transcript,
     vk: &VerificationKey,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     let log_n = vk.log_circuit_size as usize;
     let mut round_target = Fr::zero();
     let mut pow_partial_evaluation = Fr::one();
@@ -103,7 +103,7 @@ pub fn verify_sumcheck(
         let round_univariate = &proof.sumcheck_univariates[round];
 
         if !check_sum(round_univariate, round_target) {
-            return Err("round failed".into());
+            return Err("round failed");
         }
 
         let round_challenge = tp.sumcheck_u_challenges[round];
@@ -137,6 +137,6 @@ pub fn verify_sumcheck(
             hex::encode((grand_honk_relation_sum - round_target).to_bytes())
         );
         crate::trace!("======================================");
-        Err("sumcheck final mismatch".into())
+        Err("sumcheck final mismatch")
     }
 }

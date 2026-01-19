@@ -32,14 +32,19 @@ cargo test
 Add the dependency from a git path or local path. The crate exposes a small API:
 
 ```rust
+use soroban_sdk::{Bytes, Env};
 use ultrahonk_rust_verifier::UltraHonkVerifier;
 
+let env = Env::default();
 let vk_bytes = std::fs::read("vk").unwrap();
-let verifier = UltraHonkVerifier::new_from_bytes(&vk_bytes).ok_or("vk parse")?;
+let vk = Bytes::from_slice(&env, &vk_bytes);
+let verifier = UltraHonkVerifier::new(&env, &vk).ok_or("vk parse")?;
 let proof_bytes = std::fs::read("proof").unwrap();
 let public_inputs_bytes = std::fs::read("public_inputs").unwrap();
+let proof = Bytes::from_slice(&env, &proof_bytes);
+let public_inputs = Bytes::from_slice(&env, &public_inputs_bytes);
 
-verifier.verify(&proof_bytes, &public_inputs_bytes).unwrap();
+verifier.verify(&proof, &public_inputs).unwrap();
 ```
 
 Notes:
@@ -52,58 +57,6 @@ Notes:
 - `std`: enables std I/O helpers for convenient loading.
 - `trace`: prints detailed verifier internals (for debugging); off by default.
 - `alloc` (default): required for `no_std` collections.
-- `soroban-precompile`: routes MSM + pairing calls through a backend facade intended for a Soroban host precompile.
-  For now, it falls back to Arkworks so behavior is unchanged, but gives a stable call site to switch to host calls later.
-
-### Soroban precompile
-- Purpose: Provide seams to swap the EC hot paths (G1 MSM and pairing) and the transcript hash to Soroban host precompiles.
-- Enable: `--features soroban-precompile`. If no backend is registered, it transparently falls back to the Arkworks/Keccak implementations.
-- Scope: Public API remains unchanged (`ec::g1_msm`, `ec::pairing_check`, `hash::hash32`). Register backends once during contract initialization.
-
-Backend contract
-- Trait: `ec::Bn254Ops` (intended to be `Send + Sync`)
-  - `fn g1_msm(&self, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String>`
-    - Requirements: `coms.len() == scalars.len()`. G1 inputs are affine. Reject off-curve or wrong-subgroup points.
-  - `fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool`
-    - Must verify `e(p0, rhs_g2) * e(p1, lhs_g2) == 1` using the fixed G2 constants defined in `ec.rs`.
-
-```
-#[cfg(feature = "soroban-precompile")]
-{
-    use ultrahonk_rust_verifier::{
-        ec::{self, Bn254Ops},
-        hash::{self, HashOps},
-        types::G1Point,
-        field::Fr,
-    };
-    use ark_bn254::G1Affine;
-
-    // Example backend that calls the Soroban host precompile (pseudo-code)
-    struct SorobanEcOps { /* env: soroban_sdk::Env, ... */ }
-    impl Bn254Ops for SorobanEcOps {
-        fn g1_msm(&self, coms: &[G1Point], scalars: &[Fr]) -> Result<G1Affine, String> {
-            // host_msm(env, coms, scalars).map_err(|e| e.to_string())
-            unimplemented!("call Soroban MSM precompile")
-        }
-        fn pairing_check(&self, p0: &G1Affine, p1: &G1Affine) -> bool {
-            // host_pairing_check(env, p0, p1)
-            unimplemented!("call Soroban pairing precompile")
-        }
-    }
-    struct SorobanHashOps { /* env, ... */ }
-    impl HashOps for SorobanHashOps {
-        fn hash(&self, data: &[u8]) -> [u8; 32] {
-            // host_poseidon(env, data)
-            unimplemented!("call Soroban hash precompile")
-        }
-    }
-
-    ec::set_soroban_bn254_backend(Box::new(SorobanEcOps { /* env, ... */ }));
-    hash::set_soroban_hash_backend(Box::new(SorobanHashOps { /* env, ... */ }));
-}
-```
-
----
 
 ## References
 - Aztec Packages (barretenberg and tooling): https://github.com/AztecProtocol/aztec-packages

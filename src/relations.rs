@@ -6,9 +6,6 @@
 use crate::field::Fr;
 use crate::types::{RelationParameters, Wire, NUMBER_OF_SUBRELATIONS};
 
-#[cfg(not(feature = "std"))]
-use alloc::vec;
-
 #[cfg(feature = "std")]
 macro_rules! println {
     ($($args:tt)*) => { std::println!($($args)*) };
@@ -399,7 +396,7 @@ pub fn accumulate_relation_evaluations(
     alphas: &[Fr],
     pow_partial_eval: Fr,
 ) -> Fr {
-    let mut evaluations = vec![Fr::zero(); NUMBER_OF_SUBRELATIONS];
+    let mut evaluations = [Fr::zero(); NUMBER_OF_SUBRELATIONS];
 
     accumulate_arithmetic_relation(purported_evaluations, &mut evaluations, pow_partial_eval);
     accumulate_permutation_relation(

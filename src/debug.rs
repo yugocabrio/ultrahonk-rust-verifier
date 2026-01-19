@@ -1,9 +1,8 @@
 use crate::field::Fr;
 use crate::types::G1Point;
-use ark_ff::{BigInteger256, PrimeField};
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String};
+use alloc::string::String;
 
 /// trace! macro is a lightweight debug print macro that only outputs when the `trace` feature is enabled.
 /// you can use it like this: cargo test --features trace -- --nocapture / cargo run --features trace
@@ -17,30 +16,22 @@ macro_rules! trace {
     };
 }
 
-/// BigInteger256 → BE fixed-width hex (0x + 64 nibbles)
-/// This is used to convert the internal representation of Fr to a hex string.
-#[inline(always)]
-fn bigint256_to_hex(b: &BigInteger256) -> String {
-    let mut s = String::from("0x");
-    for limb in b.0.iter().rev() {
-        s.push_str(&format!("{:016x}", limb));
-    }
-    s
-}
-
 /// ark_bn254::Fr → BE fixed-width hex (0x + 64 nibbles)
 #[inline(always)]
 pub fn fr_to_hex(fr: &Fr) -> String {
-    bigint256_to_hex(&fr.0.into_bigint())
+    let mut s = String::from("0x");
+    s.push_str(&hex::encode(fr.to_bytes()));
+    s
 }
 
 /// G1Point → (x_hex, y_hex)
 #[inline(always)]
 pub fn g1_to_hex(pt: &G1Point) -> (String, String) {
-    (
-        bigint256_to_hex(&pt.x.into_bigint()),
-        bigint256_to_hex(&pt.y.into_bigint()),
-    )
+    let mut x = String::from("0x");
+    let mut y = String::from("0x");
+    x.push_str(&hex::encode(pt.x));
+    y.push_str(&hex::encode(pt.y));
+    (x, y)
 }
 
 /// Outputs commitment/scalar pairs

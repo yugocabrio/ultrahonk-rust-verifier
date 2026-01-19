@@ -1,5 +1,4 @@
 use crate::field::Fr;
-use ark_bn254::{Fq, G1Affine};
 
 pub const CONST_PROOF_SIZE_LOG_N: usize = 28;
 pub const NUMBER_OF_SUBRELATIONS: usize = 26;
@@ -62,21 +61,51 @@ impl Wire {
 }
 
 /// A G1 point in affine coordinates.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct G1Point {
-    pub x: Fq,
-    pub y: Fq,
+    pub x: [u8; 32],
+    pub y: [u8; 32],
 }
 
 impl G1Point {
-    /// Convert an ark_ec-affine point into our wrapper.
-    pub fn from_affine(pt: &G1Affine) -> Self {
-        G1Point { x: pt.x, y: pt.y }
+    pub fn from_xy(x: [u8; 32], y: [u8; 32]) -> Self {
+        G1Point { x, y }
     }
 
-    /// Convert back to ark_ec-affine for pairing.
-    pub fn to_affine(&self) -> G1Affine {
-        G1Affine::new(self.x, self.y)
+    pub fn from_bytes(bytes: [u8; 64]) -> Self {
+        let mut x = [0u8; 32];
+        let mut y = [0u8; 32];
+        x.copy_from_slice(&bytes[..32]);
+        y.copy_from_slice(&bytes[32..]);
+        G1Point { x, y }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut out = [0u8; 64];
+        out[..32].copy_from_slice(&self.x);
+        out[32..].copy_from_slice(&self.y);
+        out
+    }
+
+    pub fn infinity() -> Self {
+        G1Point {
+            x: [0u8; 32],
+            y: [0u8; 32],
+        }
+    }
+
+    pub fn generator() -> Self {
+        let mut x = [0u8; 32];
+        let mut y = [0u8; 32];
+        x[31] = 1;
+        y[31] = 2;
+        G1Point { x, y }
+    }
+}
+
+impl Default for G1Point {
+    fn default() -> Self {
+        G1Point::infinity()
     }
 }
 
