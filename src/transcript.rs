@@ -12,10 +12,7 @@ use crate::{
 };
 use soroban_sdk::{Bytes, Env};
 
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
-fn push_point(buf: &mut Vec<u8>, pt: &G1Point) {
+fn push_point(buf: &mut Bytes, pt: &G1Point) {
     // Serialize a coordinate into two bn254::Fr limbs (lo136, hi<=118)
     let (x_lo, x_hi) = coord_to_halves_be(&pt.x);
     let (y_lo, y_hi) = coord_to_halves_be(&pt.y);
@@ -35,8 +32,8 @@ fn split_challenge(challenge: Fr) -> (Fr, Fr) {
 }
 
 #[inline(always)]
-fn hash_to_fr(env: &Env, bytes: &[u8]) -> Fr {
-    Fr::from_bytes(&hash32(env, bytes))
+fn hash_to_fr(bytes: &Bytes) -> Fr {
+    Fr::from_bytes(&hash32(bytes))
 }
 
 fn u64_to_be32(x: u64) -> [u8; 32] {
@@ -53,15 +50,11 @@ fn generate_eta_challenge(
     public_inputs_size: u64,
     pub_inputs_offset: u64,
 ) -> (Fr, Fr, Fr, Fr) {
-    let mut data = Vec::with_capacity(
-        96 + public_inputs.len() as usize + (PAIRING_POINTS_SIZE * 32) + (3 * 128),
-    );
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&u64_to_be32(circuit_size));
     data.extend_from_slice(&u64_to_be32(public_inputs_size));
     data.extend_from_slice(&u64_to_be32(pub_inputs_offset));
-    for i in 0..public_inputs.len() {
-        data.push(public_inputs.get_unchecked(i));
-    }
+    data.append(public_inputs);
     for fr in &proof.pairing_point_object {
         data.extend_from_slice(&fr.to_bytes());
     }
@@ -69,9 +62,10 @@ fn generate_eta_challenge(
         push_point(&mut data, w);
     }
 
-    let previous_challenge = hash_to_fr(env, &data);
+    let previous_challenge = hash_to_fr(&data);
     let (eta, eta_two) = split_challenge(previous_challenge);
-    let previous_challenge = hash_to_fr(env, &previous_challenge.to_bytes());
+    let prev_bytes = Bytes::from_array(env, &previous_challenge.to_bytes());
+    let previous_challenge = hash_to_fr(&prev_bytes);
     let (eta_three, _) = split_challenge(previous_challenge);
 
     (eta, eta_two, eta_three, previous_challenge)
@@ -82,7 +76,7 @@ fn generate_beta_and_gamma_challenges(
     previous_challenge: Fr,
     proof: &Proof,
 ) -> (Fr, Fr, Fr) {
-    let mut data = Vec::with_capacity(32 + 3 * 128);
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     for w in &[
         &proof.lookup_read_counts,
@@ -91,7 +85,7 @@ fn generate_beta_and_gamma_challenges(
     ] {
         push_point(&mut data, w);
     }
-    let next_previous_challenge = hash_to_fr(env, &data);
+    let next_previous_challenge = hash_to_fr(&data);
     let (beta, gamma) = split_challenge(next_previous_challenge);
     (beta, gamma, next_previous_challenge)
 }
@@ -101,12 +95,12 @@ fn generate_alpha_challenges(
     previous_challenge: Fr,
     proof: &Proof,
 ) -> ([Fr; NUMBER_OF_ALPHAS], Fr) {
-    let mut data = Vec::with_capacity(32 + 2 * 128);
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     for w in &[&proof.lookup_inverses, &proof.z_perm] {
         push_point(&mut data, w);
     }
-    let mut next_previous_challenge = hash_to_fr(env, &data);
+    let mut next_previous_challenge = hash_to_fr(&data);
 
     let mut alphas = [Fr::zero(); NUMBER_OF_ALPHAS];
     let (a0, a1) = split_challenge(next_previous_challenge);
@@ -114,14 +108,16 @@ fn generate_alpha_challenges(
     alphas[1] = a1;
 
     for i in 1..(NUMBER_OF_ALPHAS / 2) {
-        next_previous_challenge = hash_to_fr(env, &next_previous_challenge.to_bytes());
+        let next_bytes = Bytes::from_array(env, &next_previous_challenge.to_bytes());
+        next_previous_challenge = hash_to_fr(&next_bytes);
         let (lo, hi) = split_challenge(next_previous_challenge);
         alphas[2 * i] = lo;
         alphas[2 * i + 1] = hi;
     }
 
     if (NUMBER_OF_ALPHAS & 1) == 1 && NUMBER_OF_ALPHAS > 2 {
-        next_previous_challenge = hash_to_fr(env, &next_previous_challenge.to_bytes());
+        let next_bytes = Bytes::from_array(env, &next_previous_challenge.to_bytes());
+        next_previous_challenge = hash_to_fr(&next_bytes);
         let (last, _) = split_challenge(next_previous_challenge);
         alphas[NUMBER_OF_ALPHAS - 1] = last;
     }
@@ -165,7 +161,8 @@ fn generate_gate_challenges(
     let mut next_previous_challenge = previous_challenge;
     let mut gate_challenges = [Fr::zero(); CONST_PROOF_SIZE_LOG_N];
     for i in 0..CONST_PROOF_SIZE_LOG_N {
-        next_previous_challenge = hash_to_fr(env, &next_previous_challenge.to_bytes());
+        let next_bytes = Bytes::from_array(env, &next_previous_challenge.to_bytes());
+        next_previous_challenge = hash_to_fr(&next_bytes);
         gate_challenges[i] = split_challenge(next_previous_challenge).0;
     }
     (gate_challenges, next_previous_challenge)
@@ -179,55 +176,55 @@ fn generate_sumcheck_challenges(
     let mut next_previous_challenge = previous_challenge;
     let mut sumcheck_challenges = [Fr::zero(); CONST_PROOF_SIZE_LOG_N];
     for r in 0..CONST_PROOF_SIZE_LOG_N {
-        let mut data = Vec::with_capacity(32 + (BATCHED_RELATION_PARTIAL_LENGTH * 32));
+        let mut data = Bytes::new(env);
         data.extend_from_slice(&next_previous_challenge.to_bytes());
         for &c in proof.sumcheck_univariates[r].iter() {
             data.extend_from_slice(&c.to_bytes());
         }
-        next_previous_challenge = hash_to_fr(env, &data);
+        next_previous_challenge = hash_to_fr(&data);
         sumcheck_challenges[r] = split_challenge(next_previous_challenge).0;
     }
     (sumcheck_challenges, next_previous_challenge)
 }
 
 fn generate_rho_challenge(env: &Env, proof: &Proof, previous_challenge: Fr) -> (Fr, Fr) {
-    let mut data = Vec::with_capacity(32 + (NUMBER_OF_ENTITIES * 32));
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     for &e in proof.sumcheck_evaluations.iter() {
         data.extend_from_slice(&e.to_bytes());
     }
-    let next_previous_challenge = hash_to_fr(env, &data);
+    let next_previous_challenge = hash_to_fr(&data);
     let rho = split_challenge(next_previous_challenge).0;
     (rho, next_previous_challenge)
 }
 
 fn generate_gemini_r_challenge(env: &Env, proof: &Proof, previous_challenge: Fr) -> (Fr, Fr) {
-    let mut data = Vec::with_capacity(32 + ((CONST_PROOF_SIZE_LOG_N - 1) * 128));
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     for pt in proof.gemini_fold_comms.iter() {
         push_point(&mut data, pt);
     }
-    let next_previous_challenge = hash_to_fr(env, &data);
+    let next_previous_challenge = hash_to_fr(&data);
     let gemini_r = split_challenge(next_previous_challenge).0;
     (gemini_r, next_previous_challenge)
 }
 
 fn generate_shplonk_nu_challenge(env: &Env, proof: &Proof, previous_challenge: Fr) -> (Fr, Fr) {
-    let mut data = Vec::with_capacity(32 + (CONST_PROOF_SIZE_LOG_N * 32));
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     for &a in proof.gemini_a_evaluations.iter() {
         data.extend_from_slice(&a.to_bytes());
     }
-    let next_previous_challenge = hash_to_fr(env, &data);
+    let next_previous_challenge = hash_to_fr(&data);
     let shplonk_nu = split_challenge(next_previous_challenge).0;
     (shplonk_nu, next_previous_challenge)
 }
 
 fn generate_shplonk_z_challenge(env: &Env, proof: &Proof, previous_challenge: Fr) -> (Fr, Fr) {
-    let mut data = Vec::with_capacity(32 + 128);
+    let mut data = Bytes::new(env);
     data.extend_from_slice(&previous_challenge.to_bytes());
     push_point(&mut data, &proof.shplonk_q);
-    let next_previous_challenge = hash_to_fr(env, &data);
+    let next_previous_challenge = hash_to_fr(&data);
     let shplonk_z = split_challenge(next_previous_challenge).0;
     (shplonk_z, next_previous_challenge)
 }

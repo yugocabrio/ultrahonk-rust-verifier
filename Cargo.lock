@@ -1541,6 +1541,7 @@ dependencies = [
 [[package]]
 name = "soroban-ledger-snapshot"
 version = "25.0.0-rc.2"
+source = "git+https://github.com/stellar/rs-soroban-sdk.git?rev=acffbbd45be6a0a551146eebfc268d6f95078246#acffbbd45be6a0a551146eebfc268d6f95078246"
 dependencies = [
  "serde",
  "serde_json",
@@ -1553,6 +1554,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk"
 version = "25.0.0-rc.2"
+source = "git+https://github.com/stellar/rs-soroban-sdk.git?rev=acffbbd45be6a0a551146eebfc268d6f95078246#acffbbd45be6a0a551146eebfc268d6f95078246"
 dependencies = [
  "arbitrary",
  "bytes-lit",
@@ -1575,6 +1577,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk-macros"
 version = "25.0.0-rc.2"
+source = "git+https://github.com/stellar/rs-soroban-sdk.git?rev=acffbbd45be6a0a551146eebfc268d6f95078246#acffbbd45be6a0a551146eebfc268d6f95078246"
 dependencies = [
  "darling 0.20.11",
  "heck",
@@ -1593,6 +1596,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "25.0.0-rc.2"
+source = "git+https://github.com/stellar/rs-soroban-sdk.git?rev=acffbbd45be6a0a551146eebfc268d6f95078246#acffbbd45be6a0a551146eebfc268d6f95078246"
 dependencies = [
  "base64",
  "stellar-xdr",
@@ -1603,6 +1607,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec-rust"
 version = "25.0.0-rc.2"
+source = "git+https://github.com/stellar/rs-soroban-sdk.git?rev=acffbbd45be6a0a551146eebfc268d6f95078246#acffbbd45be6a0a551146eebfc268d6f95078246"
 dependencies = [
  "prettyplease",
  "proc-macro2",
