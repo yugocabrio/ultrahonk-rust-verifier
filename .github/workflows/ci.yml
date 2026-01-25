@@ -48,6 +48,3 @@ jobs:
 
       - name: Run tests (std)
         run: cargo test --features std --verbose
-
-      - name: Run tests (std + soroban-precompile)
-        run: cargo test --features "std soroban-precompile" --verbose

@@ -5,48 +5,48 @@ use crate::{
     types::{Transcript, VerificationKey, BATCHED_RELATION_PARTIAL_LENGTH},
 };
 
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
-
-#[cfg(feature = "std")]
-use lazy_static::lazy_static;
-
-#[cfg(not(feature = "std"))]
-use once_cell::race::OnceBox;
-
-#[cfg(feature = "std")]
-lazy_static! {
-    /// Barycentric coefficients
-    static ref BARY: [Fr; BATCHED_RELATION_PARTIAL_LENGTH] = [
-        "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51",
-        "0x00000000000000000000000000000000000000000000000000000000000002d0",
-        "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11",
-        "0x0000000000000000000000000000000000000000000000000000000000000090",
-        "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff71",
-        "0x00000000000000000000000000000000000000000000000000000000000000f0",
-        "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31",
-        "0x00000000000000000000000000000000000000000000000000000000000013b0",
-    ].map(Fr::from_str);
-}
-
-#[cfg(not(feature = "std"))]
-static BARY_BOX: OnceBox<[Fr; BATCHED_RELATION_PARTIAL_LENGTH]> = OnceBox::new();
-
-#[cfg(not(feature = "std"))]
-fn get_bary() -> &'static [Fr; BATCHED_RELATION_PARTIAL_LENGTH] {
-    BARY_BOX.get_or_init(|| {
-        alloc::boxed::Box::new([
-            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffec51"),
-            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000002d0"),
-            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff11"),
-            Fr::from_str("0x0000000000000000000000000000000000000000000000000000000000000090"),
-            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593efffff71"),
-            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000000f0"),
-            Fr::from_str("0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593effffd31"),
-            Fr::from_str("0x00000000000000000000000000000000000000000000000000000000000013b0"),
-        ])
-    })
-}
+const BARY_BYTES: [[u8; 32]; BATCHED_RELATION_PARTIAL_LENGTH] = [
+    [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xef, 0xff,
+        0xec, 0x51,
+    ],
+    [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x02, 0xd0,
+    ],
+    [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xef, 0xff,
+        0xff, 0x11,
+    ],
+    [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x90,
+    ],
+    [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xef, 0xff,
+        0xff, 0x71,
+    ],
+    [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0xf0,
+    ],
+    [
+        0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29, 0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58,
+        0x5d, 0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xef, 0xff,
+        0xfd, 0x31,
+    ],
+    [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x13, 0xb0,
+    ],
+];
 
 /// Check if the sum of two univariates equals the target value
 #[inline(always)]
@@ -57,7 +57,10 @@ fn check_sum(round_univariate: &[Fr], round_target: Fr) -> bool {
 
 /// Calculate next target value for the sum-check
 #[inline(always)]
-fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Result<Fr, String> {
+fn compute_next_target_sum(
+    round_univariate: &[Fr],
+    round_challenge: Fr,
+) -> Result<Fr, &'static str> {
     // B(χ) = ∏ (χ - i)
     let mut b_poly = Fr::one();
     for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
@@ -67,13 +70,10 @@ fn compute_next_target_sum(round_univariate: &[Fr], round_challenge: Fr) -> Resu
     // Σ u_i / (BARY[i] * (χ - i))
     let mut acc = Fr::zero();
     for i in 0..BATCHED_RELATION_PARTIAL_LENGTH {
-        #[cfg(feature = "std")]
-        let bary_val = BARY[i];
-        #[cfg(not(feature = "std"))]
-        let bary_val = get_bary()[i];
+        let bary_val = Fr::from_bytes(&BARY_BYTES[i]);
 
         let denom = bary_val * (round_challenge - Fr::from_u64(i as u64));
-        let inv = denom.inverse().ok_or_else(|| String::from("denom zero"))?;
+        let inv = denom.inverse().ok_or("denom zero")?;
         acc = acc + (round_univariate[i] * inv);
     }
 
@@ -93,7 +93,7 @@ pub fn verify_sumcheck(
     proof: &crate::types::Proof,
     tp: &Transcript,
     vk: &VerificationKey,
-) -> Result<(), String> {
+) -> Result<(), &'static str> {
     let log_n = vk.log_circuit_size as usize;
     let mut round_target = Fr::zero();
     let mut pow_partial_evaluation = Fr::one();
@@ -103,7 +103,7 @@ pub fn verify_sumcheck(
         let round_univariate = &proof.sumcheck_univariates[round];
 
         if !check_sum(round_univariate, round_target) {
-            return Err("round failed".into());
+            return Err("round failed");
         }
 
         let round_challenge = tp.sumcheck_u_challenges[round];
@@ -137,6 +137,6 @@ pub fn verify_sumcheck(
             hex::encode((grand_honk_relation_sum - round_target).to_bytes())
         );
         crate::trace!("======================================");
-        Err("sumcheck final mismatch".into())
+        Err("sumcheck final mismatch")
     }
 }
