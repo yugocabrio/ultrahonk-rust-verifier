@@ -54,7 +54,7 @@ jobs:
         run: tests/build_circuits.sh
 
       - name: Build tornado circuits
-       run: tornado_classic/circuit/scripts/gen_artifacts.sh
+        run: tornado_classic/circuit/scripts/gen_artifacts.sh
 
       - name: Run integration tests
         run: RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
