@@ -79,7 +79,7 @@ fn field_hash2(env: &Env, a: &BigUint, b: &BigUint) -> BigUint {
     let mut inputs = SorobanVec::new(env);
     inputs.push_back(U256::from_be_bytes(env, &a_bytes).rem_euclid(&modulus));
     inputs.push_back(U256::from_be_bytes(env, &b_bytes).rem_euclid(&modulus));
-    let out = poseidon2_hash::<3, BnScalar>(env, &inputs);
+    let out = poseidon2_hash::<4, BnScalar>(env, &inputs);
     let out_bytes = out.to_be_bytes();
     let mut out_arr = [0u8; 32];
     out_bytes.copy_into_slice(&mut out_arr);
