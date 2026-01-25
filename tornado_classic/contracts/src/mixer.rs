@@ -20,8 +20,8 @@ pub enum MixerError {
     VerificationFailed = 3,
     RootMismatch = 4,
     VerifierNotSet = 5,
-    TreeFull = 8,
-    RootNotSet = 9,
+    TreeFull = 6,
+    RootNotSet = 7,
 }
 
 #[contractevent(topics = ["deposit"], data_format = "map")]

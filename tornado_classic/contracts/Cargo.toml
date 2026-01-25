@@ -7,7 +7,7 @@ edition = "2021"
 ultrahonk_soroban_contract = { path = "../.." }
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false, features = ["alloc"] }
 soroban-poseidon = "25.0.0-rc.1"
-ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", rev = "93f6e1fbd23181d33ed99201b67e23fd4bdce68f", default-features = false }
+ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", default-features = false }
 
 [dev-dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", features = ["testutils", "alloc"] }
