@@ -1,6 +1,7 @@
 use soroban_env_host::DiagnosticLevel;
+use soroban_poseidon::{poseidon2_hash, Field};
 use soroban_sdk::{
-    symbol_short, testutils::Address as TestAddress, Address, Bytes, BytesN, Env, U256,
+    crypto::BnScalar, testutils::Address as TestAddress, Address, Bytes, BytesN, Env, U256,
     Vec as SorobanVec,
 };
 
@@ -53,10 +54,11 @@ fn be32_from_u64(x: u64) -> [u8; 32] {
 fn hash2(env: &Env, a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
     let a_bytes = Bytes::from_array(env, a);
     let b_bytes = Bytes::from_array(env, b);
+    let modulus = <BnScalar as Field>::modulus(env);
     let mut inputs = SorobanVec::new(env);
-    inputs.push_back(U256::from_be_bytes(env, &a_bytes));
-    inputs.push_back(U256::from_be_bytes(env, &b_bytes));
-    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes).rem_euclid(&modulus));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes).rem_euclid(&modulus));
+    let out = poseidon2_hash::<4, BnScalar>(env, &inputs);
     let out_bytes = out.to_be_bytes();
     let mut out_arr = [0u8; 32];
     out_bytes.copy_into_slice(&mut out_arr);
