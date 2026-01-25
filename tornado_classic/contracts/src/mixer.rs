@@ -1,9 +1,10 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use soroban_poseidon::{poseidon2_hash, Field};
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, symbol_short, Address, Bytes, BytesN, Env,
-    InvokeError, IntoVal, Symbol, U256, Vec as SorobanVec, Val,
+    contract, contracterror, contractevent, contractimpl, crypto::BnScalar, symbol_short, Address,
+    Bytes, BytesN, Env, InvokeError, IntoVal, Symbol, U256, Vec as SorobanVec, Val,
 };
 use ultrahonk_rust_verifier::PROOF_BYTES;
 
@@ -46,10 +47,13 @@ const TREE_DEPTH: u32 = 20;
 const MAX_LEAVES: u32 = 1u32 << TREE_DEPTH;
 
 fn poseidon2_hash2(env: &Env, a: &BytesN<32>, b: &BytesN<32>) -> BytesN<32> {
+    let modulus = <BnScalar as Field>::modulus(env);
+    let a_bytes = Bytes::from_array(env, &a.to_array());
+    let b_bytes = Bytes::from_array(env, &b.to_array());
     let mut inputs = SorobanVec::new(env);
-    inputs.push_back(U256::from_be_bytes(env, a.as_ref()));
-    inputs.push_back(U256::from_be_bytes(env, b.as_ref()));
-    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes).rem_euclid(&modulus));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes).rem_euclid(&modulus));
+    let out = poseidon2_hash::<3, BnScalar>(env, &inputs);
     let out_bytes = out.to_be_bytes();
     let mut out_arr = [0u8; 32];
     out_bytes.copy_into_slice(&mut out_arr);

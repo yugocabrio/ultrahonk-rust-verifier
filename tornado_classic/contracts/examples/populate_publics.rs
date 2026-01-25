@@ -1,5 +1,6 @@
 use num_bigint::BigUint;
-use soroban_sdk::{symbol_short, Bytes, Env, U256, Vec as SorobanVec};
+use soroban_poseidon::{poseidon2_hash, Field};
+use soroban_sdk::{crypto::BnScalar, Bytes, Env, U256, Vec as SorobanVec};
 use std::{env, fs, path::Path};
 
 const TREE_DEPTH: usize = 20;
@@ -74,10 +75,11 @@ fn field_hash2(env: &Env, a: &BigUint, b: &BigUint) -> BigUint {
     let bb = be32_from_biguint(b);
     let a_bytes = Bytes::from_array(env, &aa);
     let b_bytes = Bytes::from_array(env, &bb);
+    let modulus = <BnScalar as Field>::modulus(env);
     let mut inputs = SorobanVec::new(env);
-    inputs.push_back(U256::from_be_bytes(env, &a_bytes));
-    inputs.push_back(U256::from_be_bytes(env, &b_bytes));
-    let out = env.crypto().poseidon2_hash(&inputs, symbol_short!("BN254"));
+    inputs.push_back(U256::from_be_bytes(env, &a_bytes).rem_euclid(&modulus));
+    inputs.push_back(U256::from_be_bytes(env, &b_bytes).rem_euclid(&modulus));
+    let out = poseidon2_hash::<3, BnScalar>(env, &inputs);
     let out_bytes = out.to_be_bytes();
     let mut out_arr = [0u8; 32];
     out_bytes.copy_into_slice(&mut out_arr);

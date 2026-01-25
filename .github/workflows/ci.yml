@@ -46,24 +46,24 @@ jobs:
       - name: Build optimized contract Wasm
         run: stellar contract build --optimize
 
-      # - name: Build tornado contracts Wasm (wasm-cost)
-      #   run: stellar contract build --optimize --features wasm-cost
-      #   working-directory: tornado_classic/contracts
+      - name: Build tornado contracts Wasm (wasm-cost)
+        run: stellar contract build --optimize --features wasm-cost
+        working-directory: tornado_classic/contracts
 
       - name: Build root circuits
         run: tests/build_circuits.sh
 
-      # - name: Build tornado circuits
-      #   run: tornado_classic/circuit/scripts/gen_artifacts.sh
+      - name: Build tornado circuits
+       run: tornado_classic/circuit/scripts/gen_artifacts.sh
 
       - name: Run integration tests
         run: RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
 
-      # - name: Run tornado classic tests
-      #   run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
+      - name: Run tornado classic tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
 
-      # - name: Run tornado classic wasm-cost tests
-      #   run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features wasm-cost -- --nocapture
+      - name: Run tornado classic wasm-cost tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features wasm-cost -- --nocapture
 
       - name: Install Node.js
         uses: actions/setup-node@v4
