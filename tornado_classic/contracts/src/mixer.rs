@@ -6,7 +6,7 @@ use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, crypto::BnScalar, symbol_short, Address,
     Bytes, BytesN, Env, InvokeError, IntoVal, Symbol, U256, Vec as SorobanVec, Val,
 };
-use ultrahonk_rust_verifier::PROOF_BYTES;
+use ultrahonk_soroban_verifier::PROOF_BYTES;
 
 #[contract]
 pub struct MixerContract;

@@ -1,4 +1,4 @@
-# UltraHonk Rust Verifier 🦀
+# UltraHonk Rust Verifier
 Rust verifier library for proofs generated from Noir (UltraHonk) on BN254, with minimal dependencies. Its purpose is to verify Noir/UltraHonk proofs produced by Nargo 1.0.0-beta.9 + barretenberg (bb v0.87.0). A small Noir asset is included only for testing the verifier.
 
 ---
@@ -33,7 +33,7 @@ Add the dependency from a git path or local path. The crate exposes a small API:
 
 ```rust
 use soroban_sdk::{Bytes, Env};
-use ultrahonk_rust_verifier::UltraHonkVerifier;
+use ultrahonk_soroban_verifier::UltraHonkVerifier;
 
 let env = Env::default();
 let vk_bytes = std::fs::read("vk").unwrap();

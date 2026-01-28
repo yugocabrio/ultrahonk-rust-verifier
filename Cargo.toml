@@ -1,5 +1,5 @@
 [package]
-name = "ultrahonk_soroban_contract"
+name = "rs-soroban-ultrahonk"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false, features = ["alloc"] }
-ultrahonk_rust_verifier = { path = "ultrahonk-soroban-verifier", default-features = false }
+ultrahonk_soroban_verifier = { path = "ultrahonk-soroban-verifier", default-features = false }
 
 [dev-dependencies]
 # Enable test helpers for local unit tests

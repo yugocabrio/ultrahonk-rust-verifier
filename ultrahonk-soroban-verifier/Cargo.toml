@@ -1,5 +1,5 @@
 [package]
-name = "ultrahonk_rust_verifier"
+name = "ultrahonk_soroban_verifier"
 version = "0.1.0"
 edition = "2021"
 

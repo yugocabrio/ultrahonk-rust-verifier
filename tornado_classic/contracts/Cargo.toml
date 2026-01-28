@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ultrahonk_soroban_contract = { path = "../.." }
+rs-soroban-ultrahonk = { path = "../.." }
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false, features = ["alloc"] }
 soroban-poseidon = "25.0.0-rc.1"
-ultrahonk_rust_verifier = { path = "../../ultrahonk-soroban-verifier", default-features = false }
+ultrahonk_soroban_verifier = { path = "../../ultrahonk-soroban-verifier", default-features = false }
 
 [dev-dependencies]
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", features = ["testutils", "alloc"] }

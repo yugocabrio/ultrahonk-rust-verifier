@@ -66,7 +66,7 @@ stellar contract build --optimize
 
 echo "Deploying contract..."
 DEPLOY_OUTPUT=$(stellar contract deploy \
-  --wasm "$ROOT_DIR/target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm" \
+  --wasm "$ROOT_DIR/target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm" \
   --source "$SOURCE_ACCOUNT" \
   --network "$NETWORK_NAME" \
   -- \

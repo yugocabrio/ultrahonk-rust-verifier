@@ -1,4 +1,4 @@
-# Noir(UltraHonk) Soroban Verifier Contract
+# rs-soroban-ultrahonk
 
 Soroban contract wrapper around the Noir(UltraHonk) verifier. The VK is set at deploy time; proofs are verified with `public_inputs` and `proof`.
 
@@ -27,7 +27,7 @@ stellar keys address alice
 rustup target add wasm32v1-none
 stellar contract build --optimize
 stellar contract deploy \
-  --wasm target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm \
+  --wasm target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm \
   --source alice \
   -- \
   --vk_bytes-file-path tests/simple_circuit/target/vk

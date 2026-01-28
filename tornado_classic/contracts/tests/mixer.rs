@@ -8,8 +8,8 @@ use soroban_sdk::{
 use std::sync::{Mutex, OnceLock};
 
 use tornado_classic_contracts::mixer::{MixerContract, MixerError};
-use ultrahonk_soroban_contract::UltraHonkVerifierContract;
-use ultrahonk_rust_verifier::PROOF_BYTES;
+use rs_soroban_ultrahonk::UltraHonkVerifierContract;
+use ultrahonk_soroban_verifier::PROOF_BYTES;
 
 const TREE_DEPTH_TEST: u32 = 20;
 
@@ -17,7 +17,7 @@ const TREE_DEPTH_TEST: u32 = 20;
 mod wasm_artifacts {
     pub const VERIFIER_WASM: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+        "/../../target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm"
     ));
     pub const MIXER_WASM: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -26,7 +26,7 @@ mod wasm_artifacts {
 
     pub mod ultrahonk_contract {
         soroban_sdk::contractimport!(
-            file = "../../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+            file = "../../target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm"
         );
     }
     pub mod mixer_contract {

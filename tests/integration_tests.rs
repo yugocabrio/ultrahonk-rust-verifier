@@ -1,12 +1,12 @@
 use soroban_sdk::{Bytes, Env};
-use ultrahonk_rust_verifier::PROOF_BYTES;
+use ultrahonk_soroban_verifier::PROOF_BYTES;
 
 const CONTRACT_WASM: &[u8] =
-    include_bytes!("../target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm");
+    include_bytes!("../target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm");
 
 mod ultrahonk_contract {
     soroban_sdk::contractimport!(
-        file = "target/wasm32v1-none/release/ultrahonk_soroban_contract.wasm"
+        file = "target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm"
     );
 }
 
