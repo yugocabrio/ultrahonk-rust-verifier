@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: main
+  pull_request:
+    branches: main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm32v1 target
+        run: rustup target add wasm32v1-none
+
+      - name: Cache cargo directories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Stellar CLI
+        run: |
+          curl -Ls https://github.com/stellar/stellar-cli/releases/download/v23.3.0/stellar-cli-23.3.0-x86_64-unknown-linux-gnu.tar.gz -o /tmp/stellar-cli.tar.gz
+          mkdir -p $HOME/.local/bin
+          tar -xzf /tmp/stellar-cli.tar.gz -C $HOME/.local/bin stellar
+          chmod +x $HOME/.local/bin/stellar
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Build optimized contract Wasm
+        run: stellar contract build --optimize
+
+      - name: Build tornado contracts Wasm (wasm-cost)
+        run: stellar contract build --optimize --features wasm-cost
+        working-directory: tornado_classic/contracts
+
+      - name: Build root circuits
+        run: tests/build_circuits.sh
+
+      - name: Build tornado circuits
+        run: tornado_classic/circuit/scripts/gen_artifacts.sh
+
+      - name: Run integration tests
+        run: RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
+
+      - name: Run tornado classic tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
+
+      - name: Run tornado classic wasm-cost tests
+        run: cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features wasm-cost -- --nocapture
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install invoke helper dependencies
+        run: npm ci
+        working-directory: scripts/invoke_ultrahonk
+
+      - name: Install measurement helper dependencies
+        run: npm ci
+        working-directory: scripts/measure_ultrahonk_costs
+
+      - name: Run localnet end-to-end verify_proof + measurement
+        env:
+          STELLAR_NETWORK_NAME: local
+          STELLAR_SOURCE_ACCOUNT: alice
+        run: scripts/run_localnet_e2e.sh

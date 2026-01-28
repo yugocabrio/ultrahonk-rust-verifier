@@ -1,0 +1,23 @@
+[package]
+name = "ultrahonk_soroban_contract"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false, features = ["alloc"] }
+ultrahonk_rust_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", default-features = false }
+
+[dev-dependencies]
+# Enable test helpers for local unit tests
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", features = ["testutils", "alloc"] }
+soroban-env-host = { git = "https://github.com/stellar/rs-soroban-env", rev = "cf58d535ab05d02802a5e804a95524650f8c62c7" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
