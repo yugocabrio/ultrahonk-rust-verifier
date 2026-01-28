@@ -1,20 +1,51 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
+use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Bytes, Env, Symbol};
+use ultrahonk_soroban_verifier::{UltraHonkVerifier, PROOF_BYTES};
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
+/// Contract
+#[contract]
+pub struct UltraHonkVerifierContract;
 
-pub mod debug;
-pub mod ec;
-pub mod field;
-pub mod hash;
-pub mod relations;
-pub mod shplemini;
-pub mod sumcheck;
-pub mod transcript;
-pub mod types;
-pub mod utils;
-pub mod verifier;
-pub const PROOF_FIELDS: usize = 456;
-pub const PROOF_BYTES: usize = PROOF_FIELDS * 32;
+#[contracterror]
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Error {
+    VkParseError = 1,
+    ProofParseError = 2,
+    VerificationFailed = 3,
+    VkNotSet = 4,
+}
 
-pub use verifier::UltraHonkVerifier;
+#[contractimpl]
+impl UltraHonkVerifierContract {
+    fn key_vk() -> Symbol {
+        symbol_short!("vk")
+    }
+
+    /// Initialize the on-chain VK once at deploy time.
+    pub fn __constructor(env: Env, vk_bytes: Bytes) -> Result<(), Error> {
+        env.storage().instance().set(&Self::key_vk(), &vk_bytes);
+        Ok(())
+    }
+
+    /// Verify an UltraHonk proof using the stored VK.
+    pub fn verify_proof(env: Env, public_inputs: Bytes, proof_bytes: Bytes) -> Result<(), Error> {
+        if proof_bytes.len() as usize != PROOF_BYTES {
+            return Err(Error::ProofParseError);
+        }
+
+        let vk_bytes: Bytes = env
+            .storage()
+            .instance()
+            .get(&Self::key_vk())
+            .ok_or(Error::VkNotSet)?;
+        // Deserialize verification key bytes
+        let verifier = UltraHonkVerifier::new(&env, &vk_bytes).map_err(|_| Error::VkParseError)?;
+
+        // Verify
+        verifier
+            .verify(&proof_bytes, &public_inputs)
+            .map_err(|_| Error::VerificationFailed)?;
+        Ok(())
+    }
+}

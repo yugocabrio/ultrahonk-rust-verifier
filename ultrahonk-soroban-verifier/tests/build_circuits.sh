@@ -4,8 +4,6 @@ set -euo pipefail
 NOIR_VERSION="1.0.0-beta.9"
 BB_VERSION="v0.87.0"
 
-export PATH="$HOME/.nargo/bin:$HOME/.bb/bin:$PATH"
-
 install_nargo() {
   if ! command -v nargo >/dev/null 2>&1; then
     echo "• installing nargo $NOIR_VERSION"
@@ -14,7 +12,7 @@ install_nargo() {
     export PATH="$HOME/.nargo/bin:$PATH"
     [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
 
-    noirup -v "$NOIR_VERSION"
+    NOIR_VERSION="$NOIR_VERSION" noirup
   fi
 }
 
@@ -24,6 +22,7 @@ install_bb() {
   echo "• installing bb $BB_VERSION"
   mkdir -p "$HOME/.bb/bin"
 
+  # OS / Arch
   uname_s=$(uname -s | tr '[:upper:]' '[:lower:]')
   uname_m=$(uname -m)
   case "${uname_s}_${uname_m}" in
@@ -41,17 +40,12 @@ install_bb() {
   [ -n "${GITHUB_PATH:-}" ] && echo "$HOME/.bb/bin" >> "$GITHUB_PATH"
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
-
 install_nargo
 install_bb
 
-for dir in tests/* ; do
+# ─── build every circuit ───
+for dir in circuits/* ; do
   [ -d "$dir" ] || continue
-  [ -f "$dir/Nargo.toml" ] || continue
-
   name=$(basename "$dir")
   echo "► building $name"
   pushd "$dir" >/dev/null
@@ -68,11 +62,7 @@ for dir in tests/* ; do
   bb write_vk -b "$json" -o target \
     --scheme ultra_honk --oracle_hash keccak --output_format bytes_and_fields
 
-  if [[ -d target/vk && -f target/vk/vk ]]; then
-    mv target/vk/vk target/vk.tmp
-    rmdir target/vk
-    mv target/vk.tmp target/vk
-  fi
+  bb write_solidity_verifier -s ultra_honk -k target/vk -o target/Verifier.sol
 
   popd >/dev/null
 done

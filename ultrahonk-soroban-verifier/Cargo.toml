@@ -1,0 +1,38 @@
+[package]
+name = "ultrahonk_soroban_verifier"
+version = "0.1.0"
+edition = "2021"
+
+license     = "MIT"
+description = "Rust verifier for UltraHonk proofs"
+repository  = "https://github.com/yugocabrio/rs-soroban-ultrahonk"
+
+[dependencies]
+
+ark-ff = { version = "0.5", default-features = false }
+ark-bn254 = { version = "0.5", default-features = false, features = ["curve"] }
+
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+
+lazy_static = { version = "1.4", optional = true }
+once_cell = { version = "1.19", default-features = false, features = ["alloc", "race"] }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false }
+
+[dev-dependencies]
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk.git", rev = "acffbbd45be6a0a551146eebfc268d6f95078246", default-features = false, features = ["testutils"] }
+
+[features]
+default = ["alloc"]
+std = [
+    "ark-ff/std",
+    "ark-bn254/std",
+    "hex/std",
+    "lazy_static",
+    "once_cell/std"
+]
+trace = []
+
+alloc = [
+    "hex/alloc",
+    "once_cell/alloc",
+]

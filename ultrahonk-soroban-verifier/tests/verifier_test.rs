@@ -1,6 +1,6 @@
 use soroban_sdk::{testutils::Ledger, Bytes, Env};
 use std::{fs, path::Path};
-use ultrahonk_rust_verifier::UltraHonkVerifier;
+use ultrahonk_soroban_verifier::UltraHonkVerifier;
 
 fn run(dir: &str) -> Result<(), String> {
     let path = Path::new(dir);

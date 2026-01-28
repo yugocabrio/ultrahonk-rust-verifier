@@ -1,69 +1,103 @@
-# UltraHonk Rust Verifier 🦀
-Rust verifier library for proofs generated from Noir (UltraHonk) on BN254, with minimal dependencies. Its purpose is to verify Noir/UltraHonk proofs produced by Nargo 1.0.0-beta.9 + barretenberg (bb v0.87.0). A small Noir asset is included only for testing the verifier.
+# rs-soroban-ultrahonk
 
----
+Soroban contract wrapper around the Noir(UltraHonk) verifier. The VK is set at deploy time; proofs are verified with `public_inputs` and `proof`.
 
-## Features
-- Verifies proofs generated from Noir (UltraHonk) using Nargo 1.0.0-beta.9 / barretenberg v0.87.0  
-- Pure Rust core; `no_std` + `alloc` friendly  
-- Expects `bb write_vk`
-- Example verification artifacts under `circuits/simple_circuit/target` (for tests)
+## Quickstart (localnet)
 
----
+Prereqs:
+- `stellar` CLI (stellar-cli)
+- Rust + `wasm32v1-none` target
+- Docker (for localnet)
 
-## Quick Start
 ```bash
-cargo test --features "std"
+# 1) Start localnet
+stellar container start -t future --name local --limits unlimited
 
-cargo test
+# 2) Configure network + identity
+stellar network add local \
+  --rpc-url http://localhost:8000/soroban/rpc \
+  --network-passphrase "Standalone Network ; February 2017"
+stellar network use local
+stellar network health --output json
+stellar keys generate --global alice
+stellar keys fund alice --network local
+stellar keys address alice
+
+# 3) Build + deploy (constructor requires a VK from tests/build_circuits.sh)
+rustup target add wasm32v1-none
+stellar contract build --optimize
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm \
+  --source alice \
+  -- \
+  --vk_bytes-file-path tests/simple_circuit/target/vk
 ```
 
-## How It Works
-- Typical pipeline: Noir circuit → Nargo prove → bb emits `proof`, `public_inputs`, and `vk` → this library verifies the proof.
-- Test data (already checked in) lives at `circuits/simple_circuit/target` and includes:
-  - `proof`
-  - `public_inputs`
-  - `vk`
+## Invoke verify_proof
 
----
+### Build ZK artifacts (vk/proof/public_inputs)
 
-## Crate Usage
+From the repo root. You need Noir tooling (`nargo`) and `bb` (barretenberg). Artifacts are generated with `--oracle_hash keccak`.
 
-Add the dependency from a git path or local path. The crate exposes a small API:
-
-```rust
-use soroban_sdk::{Bytes, Env};
-use ultrahonk_rust_verifier::UltraHonkVerifier;
-
-let env = Env::default();
-let vk_bytes = std::fs::read("vk").unwrap();
-let vk = Bytes::from_slice(&env, &vk_bytes);
-let verifier = UltraHonkVerifier::new(&env, &vk).ok_or("vk parse")?;
-let proof_bytes = std::fs::read("proof").unwrap();
-let public_inputs_bytes = std::fs::read("public_inputs").unwrap();
-let proof = Bytes::from_slice(&env, &proof_bytes);
-let public_inputs = Bytes::from_slice(&env, &public_inputs_bytes);
-
-verifier.verify(&proof, &public_inputs).unwrap();
+```bash
+tests/build_circuits.sh
 ```
 
-Notes:
-- Library scope: verification only (not a prover or circuit compiler). Input files must be produced by Noir/Nargo 1.0.0-beta.9 + bb v0.87.0.
-- The verifier internally re-derives the Fiat–Shamir transcript and checks both Sum‑check and Shplonk batch openings over BN254.
-- `std` feature enables file I/O helpers; the core logic is `no_std` + `alloc` friendly.
-- Enable the `trace` feature to print step-by-step internals for cross‑checking with Solidity outputs.
+### Use the helper script
 
-## Cargo Features
-- `std`: enables std I/O helpers for convenient loading.
-- `trace`: prints detailed verifier internals (for debugging); off by default.
-- `alloc` (default): required for `no_std` collections.
+Expects a dataset folder with `public_inputs`, `proof` (the VK is already on-chain from deploy):
+
+```bash
+cd scripts/invoke_ultrahonk
+npm install
+npx ts-node invoke_ultrahonk.ts invoke \
+  --dataset ../../tests/simple_circuit/target \
+  --contract-id <CONTRACT_ID> \
+  --network local \
+  --source-account alice \
+  --send yes
+```
+
+### Direct CLI invoke
+
+```bash
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --source alice \
+  --network local \
+  --send yes \
+  --cost \
+  -- \
+  verify_proof \
+  --public_inputs-file-path tests/simple_circuit/target/public_inputs \
+  --proof_bytes-file-path tests/simple_circuit/target/proof
+```
+
+## VK policy (important)
+
+This contract does not enforce access control:
+- `__constructor` stores the VK once at deploy time (immutable after first set).
+- `verify_proof` always uses the stored VK set at deploy.
+
+## Tests
+
+```bash
+RUST_TEST_THREADS=1 cargo test --test integration_tests -- --nocapture
+cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testutils -- --nocapture
+```
 
 ## References
-- Aztec Packages (barretenberg and tooling): https://github.com/AztecProtocol/aztec-packages
-- Noir language: https://noir-lang.org/
-- Noir compiler (Nargo): https://github.com/noir-lang/noir#nargo
 
----
+- Noir language: https://noir-lang.org/
+- Barretenberg (bb): https://github.com/AztecProtocol/aztec-packages
+- rs-soroban-ultrahonk: https://github.com/yugocabrio/rs-soroban-ultrahonk
+- Soroban documentation: https://developers.stellar.org/docs/build/smart-contracts
+- Soroban SDK (Rust): https://github.com/stellar/rs-soroban-sdk
+
+## Audit status
+
+This project has not been audited.
 
 ## License
-**MIT** – see [`LICENSE`](LICENSE) for details.
+
+MIT
