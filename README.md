@@ -79,7 +79,6 @@ This contract does not enforce access control:
 - `__constructor` stores the VK once at deploy time (immutable after first set).
 - `verify_proof` always uses the stored VK set at deploy.
 
-
 ## Tests
 
 ```bash
@@ -91,9 +90,13 @@ cargo test --manifest-path tornado_classic/contracts/Cargo.toml --features testu
 
 - Noir language: https://noir-lang.org/
 - Barretenberg (bb): https://github.com/AztecProtocol/aztec-packages
-- UltraHonk Rust verifier: https://github.com/yugocabrio/ultrahonk-rust-verifier
+- rs-soroban-ultrahonk: https://github.com/yugocabrio/rs-soroban-ultrahonk
 - Soroban documentation: https://developers.stellar.org/docs/build/smart-contracts
 - Soroban SDK (Rust): https://github.com/stellar/rs-soroban-sdk
+
+## Audit status
+
+This project has not been audited.
 
 ## License
 

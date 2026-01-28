@@ -1217,6 +1217,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rs-soroban-ultrahonk"
+version = "0.1.0"
+dependencies = [
+ "soroban-env-host 25.0.0 (git+https://github.com/stellar/rs-soroban-env?rev=cf58d535ab05d02802a5e804a95524650f8c62c7)",
+ "soroban-sdk",
+ "ultrahonk_soroban_verifier",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1843,7 +1852,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
-name = "ultrahonk_rust_verifier"
+name = "ultrahonk_soroban_verifier"
 version = "0.1.0"
 dependencies = [
  "ark-bn254 0.5.0",
@@ -1851,15 +1860,6 @@ dependencies = [
  "hex",
  "once_cell",
  "soroban-sdk",
-]
-
-[[package]]
-name = "ultrahonk_soroban_contract"
-version = "0.1.0"
-dependencies = [
- "soroban-env-host 25.0.0 (git+https://github.com/stellar/rs-soroban-env?rev=cf58d535ab05d02802a5e804a95524650f8c62c7)",
- "soroban-sdk",
- "ultrahonk_rust_verifier",
 ]
 
 [[package]]

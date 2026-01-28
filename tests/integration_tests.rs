@@ -20,7 +20,7 @@ fn verify_simple_circuit_proof_succeeds() {
     let pub_inputs_bin: &[u8] = include_bytes!("simple_circuit/target/public_inputs");
 
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
@@ -39,7 +39,7 @@ fn verify_fib_chain_proof_succeeds() {
     let pub_inputs_bin: &[u8] = include_bytes!("fib_chain/target/public_inputs");
 
     let env = Env::default();
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     assert_eq!(proof_bin.len(), PROOF_BYTES);
 
     // Prepare inputs
@@ -60,7 +60,7 @@ fn print_budget_for_deploy_and_verify() {
     let env = Env::default();
 
     // Measure deploy budget usage.
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     let vk_bytes = Bytes::from_slice(&env, vk_bytes_raw);
     let client = register_client(&env, &vk_bytes);
 
@@ -73,7 +73,7 @@ fn print_budget_for_deploy_and_verify() {
     let public_inputs: Bytes = Bytes::from_slice(&env, pub_inputs_bin);
 
     // Measure verify_proof invocation budget usage in isolation.
-    env.budget().reset_unlimited();
+    env.cost_estimate().budget().reset_unlimited();
     client.verify_proof(&public_inputs, &proof_bytes);
     println!("=== verify_proof budget usage ===");
     env.cost_estimate().budget().print();

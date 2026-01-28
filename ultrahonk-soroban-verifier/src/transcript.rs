@@ -5,8 +5,7 @@ use crate::{
     field::Fr,
     hash::hash32,
     types::{
-        G1Point, Proof, RelationParameters, Transcript, BATCHED_RELATION_PARTIAL_LENGTH,
-        CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ALPHAS, NUMBER_OF_ENTITIES, PAIRING_POINTS_SIZE,
+        G1Point, Proof, RelationParameters, Transcript, CONST_PROOF_SIZE_LOG_N, NUMBER_OF_ALPHAS,
     },
     utils::coord_to_halves_be,
 };

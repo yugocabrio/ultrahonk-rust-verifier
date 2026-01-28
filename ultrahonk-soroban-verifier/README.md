@@ -1,9 +1,10 @@
-# UltraHonk Rust Verifier
-Rust verifier library for proofs generated from Noir (UltraHonk) on BN254, with minimal dependencies. Its purpose is to verify Noir/UltraHonk proofs produced by Nargo 1.0.0-beta.9 + barretenberg (bb v0.87.0). A small Noir asset is included only for testing the verifier.
+# UltraHonk Soroban Verifier
+Rust verifier library for proofs generated from Noir (UltraHonk) on BN254, designed to integrate with Soroban contracts and `soroban-sdk`. Its purpose is to verify Noir/UltraHonk proofs produced by Nargo 1.0.0-beta.9 + barretenberg (bb v0.87.0). A small Noir asset is included only for testing the verifier.
 
 ---
 
 ## Features
+- Soroban-focused verifier built on `soroban-sdk`  
 - Verifies proofs generated from Noir (UltraHonk) using Nargo 1.0.0-beta.9 / barretenberg v0.87.0  
 - Pure Rust core; `no_std` + `alloc` friendly  
 - Expects `bb write_vk`
