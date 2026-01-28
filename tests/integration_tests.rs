@@ -5,9 +5,7 @@ const CONTRACT_WASM: &[u8] =
     include_bytes!("../target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm");
 
 mod ultrahonk_contract {
-    soroban_sdk::contractimport!(
-        file = "target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm"
-    );
+    soroban_sdk::contractimport!(file = "target/wasm32v1-none/release/rs_soroban_ultrahonk.wasm");
 }
 
 fn register_client<'a>(env: &'a Env, vk_bytes: &Bytes) -> ultrahonk_contract::Client<'a> {
